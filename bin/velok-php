@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+EXT_ROOT="$ROOT_DIR/.local-php-ext/extracted"
+
+"$ROOT_DIR/bin/bootstrap-local-php" >/dev/null
+
+loaded_modules="$(php -m 2>/dev/null | tr '[:upper:]' '[:lower:]')"
+
+resolve_one() {
+    local pattern="$1"
+    local match
+
+    match="$(compgen -G "$pattern" | head -n 1 || true)"
+
+    if [[ -z "$match" ]]; then
+        echo "Missing required PHP extension path: $pattern" >&2
+        exit 1
+    fi
+
+    printf '%s\n' "$match"
+}
+
+module_loaded() {
+    local module="$1"
+
+    grep -qx "$module" <<<"$loaded_modules"
+}
+
+add_extension_if_missing() {
+    local module="$1"
+    local path="$2"
+
+    if ! module_loaded "$module"; then
+        args+=(-d "extension=${path}")
+    fi
+}
+
+xml_dir="$(resolve_one "$EXT_ROOT/php8.3-xml_*_amd64/usr/lib/php/20230831")"
+sqlite_dir="$(resolve_one "$EXT_ROOT/php8.3-sqlite3_*_amd64/usr/lib/php/20230831")"
+bcmath_dir="$(resolve_one "$EXT_ROOT/php8.3-bcmath_*_amd64/usr/lib/php/20230831")"
+mysql_dir="$(resolve_one "$EXT_ROOT/php8.3-mysql_*_amd64/usr/lib/php/20230831")"
+
+args=()
+
+add_extension_if_missing "xml" "${xml_dir}/xml.so"
+add_extension_if_missing "simplexml" "${xml_dir}/simplexml.so"
+add_extension_if_missing "dom" "${xml_dir}/dom.so"
+add_extension_if_missing "xmlreader" "${xml_dir}/xmlreader.so"
+add_extension_if_missing "xmlwriter" "${xml_dir}/xmlwriter.so"
+add_extension_if_missing "bcmath" "${bcmath_dir}/bcmath.so"
+add_extension_if_missing "sqlite3" "${sqlite_dir}/sqlite3.so"
+add_extension_if_missing "pdo_sqlite" "${sqlite_dir}/pdo_sqlite.so"
+add_extension_if_missing "mysqlnd" "${mysql_dir}/mysqlnd.so"
+add_extension_if_missing "mysqli" "${mysql_dir}/mysqli.so"
+add_extension_if_missing "pdo_mysql" "${mysql_dir}/pdo_mysql.so"
+
+exec php "${args[@]}" "$@"

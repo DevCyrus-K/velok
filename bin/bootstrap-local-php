@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PKG_DIR="$ROOT_DIR/.local-php-ext"
+EXTRACT_DIR="$PKG_DIR/extracted"
+PHP_PACKAGE_VERSION="$(dpkg-query -W -f='${Version}\n' php8.3-cli 2>/dev/null || true)"
+PACKAGES=(
+    php8.3-xml
+    php8.3-sqlite3
+    php8.3-bcmath
+    php8.3-mysql
+)
+
+have_file() {
+    compgen -G "$1" > /dev/null
+}
+
+if have_file "$EXTRACT_DIR/php8.3-xml_*_amd64/usr/lib/php/20230831/dom.so" \
+    && have_file "$EXTRACT_DIR/php8.3-sqlite3_*_amd64/usr/lib/php/20230831/pdo_sqlite.so" \
+    && have_file "$EXTRACT_DIR/php8.3-bcmath_*_amd64/usr/lib/php/20230831/bcmath.so"; then
+    exit 0
+fi
+
+mkdir -p "$PKG_DIR" "$EXTRACT_DIR"
+cd "$PKG_DIR"
+
+# Download unpacked PHP modules locally so Laravel can run without root access.
+for package in "${PACKAGES[@]}"; do
+    if ! compgen -G "$PKG_DIR/${package}_*.deb" > /dev/null; then
+        if [[ -n "$PHP_PACKAGE_VERSION" ]] && apt-cache policy "$package" | grep -Fq "$PHP_PACKAGE_VERSION"; then
+            apt-get download "${package}=${PHP_PACKAGE_VERSION}"
+        else
+            apt-get download "$package"
+        fi
+    fi
+done
+
+for deb in "$PKG_DIR"/*.deb; do
+    package_name="${deb##*/}"
+    package_name="${package_name%.deb}"
+    target_dir="$EXTRACT_DIR/$package_name"
+    rm -rf "$target_dir"
+    mkdir -p "$target_dir"
+    dpkg-deb -x "$deb" "$target_dir"
+done

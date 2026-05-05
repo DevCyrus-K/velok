@@ -1,0 +1,98 @@
+#!/usr/bin/env php
+<?php
+
+use Illuminate\Foundation\Application;
+use Symfony\Component\Console\Input\ArgvInput;
+
+define('LARAVEL_START', microtime(true));
+
+function velokNeedsLocalPhpWrapper(): bool
+{
+    return !extension_loaded('pdo_mysql') || !extension_loaded('pdo_sqlite');
+}
+
+function velokServeViaLocalPhp(array $argv): never
+{
+    $wrapper = __DIR__.'/bin/velok-php';
+    $router = __DIR__.'/vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php';
+
+    $host = '127.0.0.1';
+    $port = '8000';
+
+    for ($i = 2; $i < count($argv); $i++) {
+        $argument = $argv[$i];
+
+        if (str_starts_with($argument, '--host=')) {
+            $host = substr($argument, 7);
+            continue;
+        }
+
+        if (str_starts_with($argument, '--port=')) {
+            $port = substr($argument, 7);
+            continue;
+        }
+
+        if ($argument === '--host' && isset($argv[$i + 1])) {
+            $host = $argv[++$i];
+            continue;
+        }
+
+        if ($argument === '--port' && isset($argv[$i + 1])) {
+            $port = $argv[++$i];
+        }
+    }
+
+    @unlink(__DIR__.'/public/hot');
+    chdir(__DIR__.'/public');
+
+    $command = escapeshellarg($wrapper)
+        .' -S '
+        .escapeshellarg($host.':'.$port)
+        .' '
+        .escapeshellarg($router);
+
+    passthru($command, $status);
+
+    exit($status);
+}
+
+if (
+    PHP_SAPI === 'cli'
+    && ($_SERVER['argv'][1] ?? null) === 'serve'
+    && velokNeedsLocalPhpWrapper()
+) {
+    velokServeViaLocalPhp($_SERVER['argv']);
+}
+
+if (
+    PHP_SAPI === 'cli'
+    && getenv('VELOK_LOCAL_PHP_WRAPPED') !== '1'
+    && velokNeedsLocalPhpWrapper()
+) {
+    $wrapper = __DIR__.'/bin/velok-php';
+
+    if (is_file($wrapper) && is_executable($wrapper)) {
+        putenv('VELOK_LOCAL_PHP_WRAPPED=1');
+
+        $command = escapeshellarg($wrapper).' '.escapeshellarg(__FILE__);
+
+        foreach (array_slice($_SERVER['argv'] ?? [], 1) as $argument) {
+            $command .= ' '.escapeshellarg($argument);
+        }
+
+        passthru($command, $status);
+
+        exit($status);
+    }
+}
+
+// Register the Composer autoloader...
+require __DIR__.'/vendor/autoload.php';
+
+// Bootstrap Laravel and handle the command...
+/** @var Application $app */
+$app = require_once __DIR__.'/bootstrap/app.php';
+
+$status = $app->handleCommand(new ArgvInput);
+
+exit($status);

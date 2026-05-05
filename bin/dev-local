@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROUTER="$ROOT_DIR/vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"
+
+cd "$ROOT_DIR"
+
+exec npx concurrently \
+    -c "#93c5fd,#fdba74" \
+    "cd $ROOT_DIR/public && $ROOT_DIR/bin/velok-php -S 127.0.0.1:8000 $ROUTER" \
+    "npm run dev -- --host 127.0.0.1" \
+    --names=server,vite \
+    --kill-others
