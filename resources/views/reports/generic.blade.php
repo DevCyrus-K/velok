@@ -62,6 +62,22 @@
     </div>
 </div>
 
+@if(!empty($report['alerts']))
+<div class="row">
+    <div class="col-12">
+        @foreach($report['alerts'] as $alert)
+        <div class="alert alert-{{ $alert['type'] ?? 'info' }} d-flex align-items-start gap-2" role="alert">
+            <i data-lucide="info" class="flex-shrink-0 mt-1"></i>
+            <div>
+                <strong>{{ $alert['title'] ?? 'Notice' }}</strong>
+                <div>{{ $alert['message'] ?? '' }}</div>
+            </div>
+        </div>
+        @endforeach
+    </div>
+</div>
+@endif
+
 @if(!empty($report['cards']))
 <div class="row">
     @foreach($report['cards'] as $index => $card)

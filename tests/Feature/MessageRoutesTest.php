@@ -1,8 +1,11 @@
 <?php
 
+use App\Mail\MessageMail;
+use App\Models\EmailLog;
 use App\Models\Message;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 
 uses(RefreshDatabase::class);
 
@@ -47,7 +50,67 @@ it('deletes a message from the inbox', function () {
         ->delete(route('messages.destroy', $message))
         ->assertRedirect(route('messages.index'));
 
-    $this->assertDatabaseMissing('messages', [
+    $this->assertSoftDeleted('messages', [
         'id' => $message->id,
     ]);
+});
+
+it('sends composed emails through a mailable and logs delivery', function () {
+    Mail::fake();
+
+    $user = User::factory()->create();
+
+    $response = $this->actingAs($user)
+        ->postJson(route('messages.store'), [
+            'email' => 'buyer@example.com',
+            'subject' => 'Viewing request',
+            'message' => 'Please confirm the earliest viewing slot.',
+        ]);
+
+    $response->assertOk()
+        ->assertJson([
+            'success' => true,
+            'message' => 'Email sent',
+        ]);
+
+    $message = Message::query()->where('email', 'buyer@example.com')->firstOrFail();
+    $log = EmailLog::query()->where('recipient_email', 'buyer@example.com')->firstOrFail();
+
+    expect($message->status)->toBe('sent')
+        ->and($message->email_log_id)->toBe($log->id)
+        ->and($log->status)->toBe(EmailLog::STATUS_SENT)
+        ->and($log->attempts)->toBe(1)
+        ->and($log->tracking_token)->not->toBeNull();
+
+    Mail::assertSent(MessageMail::class, fn (MessageMail $mail) => $mail->hasTo('buyer@example.com'));
+});
+
+it('sends replies through a mailable and updates the message response', function () {
+    Mail::fake();
+
+    $user = User::factory()->create();
+    $message = Message::query()->create(messagePayload());
+
+    $response = $this->actingAs($user)
+        ->postJson(route('messages.respond', $message), [
+            'recipient_email' => 'buyer@example.com',
+            'subject' => 'Re: Listing inquiry',
+            'response' => 'Yes, the property is still available for viewing.',
+        ]);
+
+    $response->assertOk()
+        ->assertJson([
+            'success' => true,
+            'message' => 'Email sent',
+        ]);
+
+    $message->refresh();
+    $log = EmailLog::query()->where('recipient_email', 'buyer@example.com')->latest()->firstOrFail();
+
+    expect($message->status)->toBe('responded')
+        ->and($message->response)->toBe('Yes, the property is still available for viewing.')
+        ->and($message->email_log_id)->toBe($log->id)
+        ->and($log->status)->toBe(EmailLog::STATUS_SENT);
+
+    Mail::assertSent(MessageMail::class, fn (MessageMail $mail) => $mail->hasTo('buyer@example.com'));
 });

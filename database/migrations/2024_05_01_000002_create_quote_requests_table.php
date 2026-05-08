@@ -26,7 +26,7 @@ return new class extends Migration
             $table->string('source_page')->nullable();
             $table->string('ip_address')->nullable();
             $table->text('user_agent')->nullable();
-            $table->enum('status', ['new', 'emailed', 'email_failed', 'processing', 'quoted', 'closed', 'spam'])->default('new');
+            $table->enum('status', ['new', 'emailed', 'email_failed', 'processing', 'quoted', 'created', 'closed', 'spam'])->default('new');
             $table->timestamp('created_at')->nullable();
             $table->index('email');
             $table->index('phone');

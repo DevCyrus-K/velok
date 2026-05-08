@@ -95,7 +95,7 @@ class Customer extends Model
 
         return match ($quoteStatus) {
             'closed' => self::STATUS_COMPLETED,
-            'processing', 'emailed', 'quoted' => self::STATUS_ACTIVE_CLIENT,
+            'processing', 'emailed', 'quoted', 'created' => self::STATUS_ACTIVE_CLIENT,
             default => self::STATUS_LEAD,
         };
     }
@@ -109,7 +109,7 @@ class Customer extends Model
 
         return match ($normalized) {
             'lead', 'new' => self::STATUS_LEAD,
-            'active', 'active client', 'approved', 'quoted', 'processing', 'emailed' => self::STATUS_ACTIVE_CLIENT,
+            'active', 'active client', 'approved', 'quoted', 'created', 'processing', 'emailed' => self::STATUS_ACTIVE_CLIENT,
             'completed', 'complete', 'closed' => self::STATUS_COMPLETED,
             'inactive', 'declined', 'spam' => self::STATUS_INACTIVE,
             default => self::classifyStatus(null, $lastActivityAt),

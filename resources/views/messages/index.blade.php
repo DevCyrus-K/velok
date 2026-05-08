@@ -21,6 +21,7 @@
                             <a class="dropdown-item message-filter-option" data-filter="read" href="#!">Read</a>
                             <a class="dropdown-item message-filter-option" data-filter="responded" href="#!">Responded</a>
                             <a class="dropdown-item message-filter-option" data-filter="draft" href="#!">Draft</a>
+                            <a class="dropdown-item message-filter-option" data-filter="sent" href="#!">Sent</a>
                         </div>
                     </div>
 
@@ -74,11 +75,13 @@
                                 <th class="border-0 py-2 text-dark">Message</th>
                                 <th class="border-0 py-2 text-dark">Date</th>
                                 <th class="border-0 py-2 text-dark">Status</th>
+                                <th class="border-0 py-2 text-dark">Delivery</th>
                                 <th class="border-0 py-2 text-dark">Action</th>
                             </tr>
                         </thead>
                         <tbody id="message-table-body">
                             @forelse($messages as $message)
+                                @php($deliveryLog = $message->latestEmailLog)
                                 <tr data-created="{{ $message->created_at->format('Y-m-d\TH:i:s') }}"
                                     data-category="{{ Str::slug($message->categoryLabel()) }}"
                                     data-sender="{{ strtolower($message->name) }}"
@@ -119,6 +122,25 @@
                                             <span class="badge badge-soft-secondary">Read</span>
                                         @endif
                                     </td>
+                                    <td data-delivery-cell data-retry-url="{{ route('messages.retry', $message) }}">
+                                        @if($deliveryLog?->status === \App\Models\EmailLog::STATUS_SENT)
+                                            <span class="badge bg-success">✅ Sent</span>
+                                        @elseif($deliveryLog?->status === \App\Models\EmailLog::STATUS_OPENED)
+                                            <span class="badge bg-info">👁 Opened</span>
+                                        @elseif($deliveryLog?->status === \App\Models\EmailLog::STATUS_FAILED)
+                                            <div class="d-flex flex-wrap align-items-center gap-1">
+                                                <span class="badge bg-danger">❌ Failed</span>
+                                                <button class="btn btn-sm btn-outline-danger py-0" type="button" data-message-retry data-retry-url="{{ route('messages.retry', $message) }}">Retry</button>
+                                            </div>
+                                            @if($deliveryLog->failed_reason)
+                                                <small class="text-muted d-block">{{ Str::limit($deliveryLog->failed_reason, 60) }}</small>
+                                            @endif
+                                        @elseif($deliveryLog)
+                                            <span class="badge bg-warning">Sending</span>
+                                        @else
+                                            <span class="text-muted">-</span>
+                                        @endif
+                                    </td>
                                     <td>
                                         <div class="d-flex flex-wrap gap-1">
                                             <a class="btn btn-icon btn-sm btn-soft-primary" href="{{ route('messages.show', $message) }}" title="View">
@@ -129,9 +151,7 @@
                                                     <i class="align-middle" data-lucide="reply"></i>
                                                 </a>
                                             @endif
-                                            <form action="{{ route('messages.destroy', $message) }}" class="d-inline-flex" data-delete-confirm
-                                                data-delete-message="Do you want to delete this message?"
-                                                data-delete-title="Delete message?" method="POST">
+                                            <form action="{{ route('messages.destroy', $message) }}" class="d-inline-flex" data-message-delete-form method="POST">
                                                 @csrf
                                                 @method('DELETE')
                                                 <button class="btn btn-icon btn-sm btn-soft-danger" title="Delete" type="submit">
@@ -143,9 +163,14 @@
                                 </tr>
                             @empty
                                 <tr id="message-empty-state">
-                                    <td class="text-center text-muted py-4" colspan="7">No messages yet.</td>
+                                    <td class="text-center text-muted py-4" colspan="8">No messages yet.</td>
                                 </tr>
                             @endforelse
+                            @if($messages->count() > 0)
+                                <tr id="message-empty-state" style="display: none;">
+                                    <td class="text-center text-muted py-4" colspan="8">No messages match your filters.</td>
+                                </tr>
+                            @endif
                         </tbody>
                     </table>
                 </div>
@@ -177,6 +202,7 @@
         const filterLabel = document.getElementById('message-filter-label');
         const categoryFilterLabel = document.getElementById('message-category-filter-label');
         const sortLabel = document.getElementById('message-sort-label');
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
 
         if (!searchInput || !tbody || !countLabel) {
             return;
@@ -193,6 +219,7 @@
             read: 'Read',
             responded: 'Responded',
             draft: 'Draft',
+            sent: 'Sent',
         };
 
         const sortLabels = {
@@ -285,10 +312,8 @@
             visibleRows.forEach(row => tbody.appendChild(row));
 
             // Show/hide empty state
-            if (visibleCount === 0) {
-                emptyState.style.display = '';
-            } else {
-                emptyState.style.display = 'none';
+            if (emptyState) {
+                emptyState.style.display = visibleCount === 0 ? '' : 'none';
             }
 
             updateCount();
@@ -298,6 +323,121 @@
             const visibleRows = tbody.querySelectorAll('[data-message-row]:not([style*="display: none"])').length;
             countLabel.textContent = `Showing ${visibleRows} message${visibleRows !== 1 ? 's' : ''}`;
         }
+
+        function escapeHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function deliveryHtml(status, retryUrl, reason) {
+            if (status === 'sent') {
+                return '<span class="badge bg-success">✅ Sent</span>';
+            }
+
+            if (status === 'opened') {
+                return '<span class="badge bg-info">👁 Opened</span>';
+            }
+
+            if (status === 'failed') {
+                return `
+                    <div class="d-flex flex-wrap align-items-center gap-1">
+                        <span class="badge bg-danger">❌ Failed</span>
+                        <button class="btn btn-sm btn-outline-danger py-0" type="button" data-message-retry data-retry-url="${escapeHtml(retryUrl)}">Retry</button>
+                    </div>
+                    ${reason ? `<small class="text-muted d-block">${escapeHtml(reason).slice(0, 80)}</small>` : ''}
+                `;
+            }
+
+            if (status === 'sending') {
+                return '<span class="badge bg-warning">Sending</span>';
+            }
+
+            return '<span class="text-muted">-</span>';
+        }
+
+        tbody.addEventListener('submit', async function (event) {
+            const form = event.target.closest('[data-message-delete-form]');
+
+            if (!form) {
+                return;
+            }
+
+            event.preventDefault();
+
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: new FormData(form),
+                });
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Delete failed');
+                }
+
+                form.closest('[data-message-row]')?.remove();
+                filterAndSort();
+                showToast('Message deleted', 'success');
+            } catch (error) {
+                showToast('Failed to delete message', 'error');
+            }
+        });
+
+        tbody.addEventListener('click', async function (event) {
+            const button = event.target.closest('[data-message-retry]');
+
+            if (!button) {
+                return;
+            }
+
+            event.preventDefault();
+            const retryUrl = button.dataset.retryUrl;
+            const cell = button.closest('[data-delivery-cell]');
+
+            showToast('Retrying...', 'info');
+            button.disabled = true;
+
+            if (cell) {
+                cell.innerHTML = deliveryHtml('sending', retryUrl);
+            }
+
+            try {
+                const response = await fetch(retryUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Retry failed');
+                }
+
+                if (cell) {
+                    cell.innerHTML = deliveryHtml(data.delivery?.status || 'sent', retryUrl);
+                }
+
+                showToast('Email sent successfully', 'success');
+            } catch (error) {
+                if (cell) {
+                    cell.innerHTML = deliveryHtml('failed', retryUrl, error.message);
+                }
+
+                showToast('Failed: ' + error.message, 'error');
+            }
+        });
 
         // Initial count
         updateCount();

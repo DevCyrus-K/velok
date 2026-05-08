@@ -15,7 +15,7 @@ return new class extends Migration
         Schema::create('invoices', function (Blueprint $table) {
             $table->id();
             $table->string('invoice_number')->unique();
-            $table->unsignedInteger('quote_request_id')->nullable();
+            $table->unsignedBigInteger('quote_request_id')->nullable();
             $table->foreign('quote_request_id')
                 ->references('id')
                 ->on('quote_requests')
@@ -33,7 +33,7 @@ return new class extends Migration
             $table->decimal('subtotal', 10, 2);
             $table->decimal('tax', 10, 2);
             $table->decimal('total_amount', 10, 2);
-            $table->enum('status', ['draft', 'sent', 'paid', 'unpaid', 'overdue', 'cancelled'])->default('draft');
+            $table->enum('status', ['paid', 'unpaid', 'pending', 'draft', 'failed', 'sent'])->default('draft');
             $table->string('payment_method')->nullable();
             $table->timestamps();
             $table->index('invoice_number');

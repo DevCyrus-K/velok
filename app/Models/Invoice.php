@@ -3,25 +3,54 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class Invoice extends Model
 {
+	public const STATUS_PAID = 'paid';
+	public const STATUS_UNPAID = 'unpaid';
+	public const STATUS_PENDING = 'pending';
+	public const STATUS_DRAFT = 'draft';
+	public const STATUS_FAILED = 'failed';
+	public const STATUS_SENT = 'sent';
+	public const STATUS_OVERDUE = 'overdue';
+	public const STATUS_VOID = 'void';
+	public const STATUS_CANCELLED = 'cancelled';
+
 	protected $table = 'invoices';
 
 	public $timestamps = true;
 
 	protected $fillable = [
+		'invoice_number',
 		'quote_request_id',
+		'customer_name',
+		'customer_email',
+		'customer_phone',
+		'move_origin',
+		'move_destination',
+		'move_date',
+		'move_size',
+		'quote_reference',
 		'invoice_date',
 		'due_date',
+		'subtotal',
+		'tax',
 		'status',
+		'sent_at',
+		'sent_to_email',
+		'paid_at',
 		'total_amount',
+		'payment_method',
 		'notes',
 	];
 
 	protected $casts = [
 		'invoice_date' => 'date',
 		'due_date' => 'date',
+		'move_date' => 'date',
+		'sent_at' => 'datetime',
+		'paid_at' => 'datetime',
 		'created_at' => 'datetime',
 		'updated_at' => 'datetime',
 	];
@@ -34,5 +63,73 @@ class Invoice extends Model
 	public function quoteRequest()
 	{
 		return $this->belongsTo(QuoteRequest::class, 'quote_request_id');
+	}
+
+	public static function statusOptions(): array
+	{
+		return [
+			self::STATUS_PAID => 'Paid',
+			self::STATUS_UNPAID => 'Unpaid',
+			self::STATUS_PENDING => 'Pending',
+			self::STATUS_DRAFT => 'Draft',
+			self::STATUS_FAILED => 'Failed',
+			self::STATUS_SENT => 'Sent',
+			self::STATUS_OVERDUE => 'Overdue',
+			self::STATUS_VOID => 'Void',
+			self::STATUS_CANCELLED => 'Cancelled',
+		];
+	}
+
+	public static function paymentMethodOptions(): array
+	{
+		return [
+			'mobile_money' => 'Mobile Money',
+			'bank_transfer' => 'Bank Transfer',
+			'cash' => 'Cash',
+			'card' => 'Card',
+			'cheque' => 'Cheque',
+		];
+	}
+
+	public function statusLabel(): string
+	{
+		return self::statusOptions()[$this->status] ?? Str::headline((string) ($this->status ?: 'draft'));
+	}
+
+	public function statusBadgeClass(): string
+	{
+		return match ((string) $this->status) {
+			self::STATUS_PAID => 'success',
+			self::STATUS_SENT => 'info',
+			self::STATUS_OVERDUE => 'danger',
+			self::STATUS_VOID, self::STATUS_CANCELLED => 'secondary',
+			self::STATUS_PENDING, self::STATUS_UNPAID, self::STATUS_DRAFT => 'warning',
+			self::STATUS_FAILED => 'danger',
+			default => 'secondary',
+		};
+	}
+
+	public function emailLogs()
+	{
+		return $this->morphMany(EmailLog::class, 'emailable')->latest();
+	}
+
+	public function paymentMethodLabel(): string
+	{
+		$method = trim((string) $this->payment_method);
+
+		return self::paymentMethodOptions()[$method] ?? ($method !== '' ? Str::headline(str_replace('_', ' ', $method)) : 'To be agreed');
+	}
+
+	public function customerInitials(): string
+	{
+		$words = preg_split('/\s+/', trim((string) $this->customer_name)) ?: [];
+		$initials = collect($words)
+			->filter()
+			->take(2)
+			->map(fn (string $word) => Str::substr($word, 0, 1))
+			->implode('');
+
+		return Str::upper($initials !== '' ? $initials : 'IN');
 	}
 }

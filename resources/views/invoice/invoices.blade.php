@@ -1,172 +1,109 @@
 @extends('layouts.vertical', ['title' => 'Invoices'])
 
+@section('css')
+<style>
+    .invoice-list-toolbar > * {
+        flex: 0 1 auto;
+    }
+
+    .invoice-row-actions .dropdown-menu form {
+        margin: 0;
+    }
+
+    .invoice-row-actions .dropdown-item {
+        align-items: center;
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .invoice-row-actions .dropdown-item i {
+        flex: 0 0 auto;
+    }
+
+    @media (max-width: 767.98px) {
+        .invoice-list-toolbar > *,
+        .invoice-list-toolbar .dropdown,
+        .invoice-list-toolbar .dropdown > .btn,
+        .invoice-list-toolbar .search-bar,
+        .invoice-list-toolbar .search-bar input,
+        .invoice-list-toolbar > .btn {
+            width: 100%;
+        }
+
+        .invoice-list-toolbar .search-bar {
+            margin-left: 0 !important;
+        }
+
+        .invoice-table-wrap {
+            overflow: visible;
+        }
+
+        .invoice-table-wrap table,
+        .invoice-table-wrap thead,
+        .invoice-table-wrap tbody,
+        .invoice-table-wrap tr,
+        .invoice-table-wrap td {
+            display: block;
+            width: 100%;
+        }
+
+        .invoice-table-wrap thead {
+            display: none;
+        }
+
+        .invoice-table-wrap tr[data-invoice-row] {
+            background: var(--bs-body-bg);
+            border: 1px solid var(--bs-border-color);
+            border-radius: 8px;
+            margin: 0.75rem;
+            padding: 0.75rem;
+        }
+
+        .invoice-table-wrap td {
+            border: 0;
+            padding: 0.35rem 0;
+            white-space: normal;
+        }
+
+        .invoice-table-wrap td::before {
+            color: var(--bs-secondary-color);
+            content: attr(data-label);
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .invoice-row-actions {
+            justify-content: flex-start !important;
+        }
+    }
+
+    @media (min-width: 768px) and (max-width: 1024px) {
+        .invoice-table-wrap .invoice-due-col,
+        .invoice-table-wrap .invoice-payment-col {
+            display: none;
+        }
+    }
+</style>
+@endsection
+
 @section('content')
 @php
-    $invoiceDetailsRoute = route('second', ['invoice', 'invoice-details']);
-
-    $invoices = [
-        [
-            'id' => '#IN9023',
-            'customer' => 'Ethan Walker',
-            'avatar' => '/images/users/avatar-8.jpg',
-            'created_date' => '15 Mar, 2025',
-            'created_time' => '10:30 AM',
-            'created_sort' => '2025-03-15T10:30:00',
-            'due_date' => '22 Mar, 2025',
-            'due_sort' => '2025-03-22',
-            'amount' => 1250.75,
-            'status' => 'Unpaid',
-            'status_key' => 'unpaid',
-            'status_class' => 'warning',
-            'via' => 'Credit Card',
-        ],
-        [
-            'id' => '#IN3147',
-            'customer' => 'Sophia Adams',
-            'avatar' => '/images/users/avatar-9.jpg',
-            'created_date' => '07 Feb, 2025',
-            'created_time' => '02:45 PM',
-            'created_sort' => '2025-02-07T14:45:00',
-            'due_date' => '15 Feb, 2025',
-            'due_sort' => '2025-02-15',
-            'amount' => 980.00,
-            'status' => 'Overdue',
-            'status_key' => 'overdue',
-            'status_class' => 'danger',
-            'via' => 'PayPal',
-        ],
-        [
-            'id' => '#IN7654',
-            'customer' => 'Daniel Carter',
-            'avatar' => '/images/users/avatar-10.jpg',
-            'created_date' => '28 Jan, 2025',
-            'created_time' => '11:10 AM',
-            'created_sort' => '2025-01-28T11:10:00',
-            'due_date' => '05 Feb, 2025',
-            'due_sort' => '2025-02-05',
-            'amount' => 715.25,
-            'status' => 'Paid',
-            'status_key' => 'paid',
-            'status_class' => 'success',
-            'via' => 'Wire Transfer',
-        ],
-        [
-            'id' => '#IN5532',
-            'customer' => 'Mia Johnson',
-            'avatar' => '/images/users/avatar-1.jpg',
-            'created_date' => '10 Apr, 2025',
-            'created_time' => '09:50 AM',
-            'created_sort' => '2025-04-10T09:50:00',
-            'due_date' => '18 Apr, 2025',
-            'due_sort' => '2025-04-18',
-            'amount' => 560.90,
-            'status' => 'Unpaid',
-            'status_key' => 'unpaid',
-            'status_class' => 'warning',
-            'via' => 'Bank Transfer',
-        ],
-        [
-            'id' => '#IN7823',
-            'customer' => 'James Anderson',
-            'avatar' => '/images/users/avatar-2.jpg',
-            'created_date' => '20 Feb, 2025',
-            'created_time' => '02:15 PM',
-            'created_sort' => '2025-02-20T14:15:00',
-            'due_date' => '28 Feb, 2025',
-            'due_sort' => '2025-02-28',
-            'amount' => 1230.50,
-            'status' => 'Unpaid',
-            'status_key' => 'unpaid',
-            'status_class' => 'warning',
-            'via' => 'Stripe',
-        ],
-        [
-            'id' => '#IN9124',
-            'customer' => 'Charlotte Brown',
-            'avatar' => '/images/users/avatar-3.jpg',
-            'created_date' => '18 Feb, 2025',
-            'created_time' => '11:45 AM',
-            'created_sort' => '2025-02-18T11:45:00',
-            'due_date' => '28 Mar, 2025',
-            'due_sort' => '2025-03-28',
-            'amount' => 875.00,
-            'status' => 'Paid',
-            'status_key' => 'paid',
-            'status_class' => 'success',
-            'via' => 'Payoneer',
-        ],
-        [
-            'id' => '#IN2345',
-            'customer' => 'Benjamin Wilson',
-            'avatar' => '/images/users/avatar-4.jpg',
-            'created_date' => '15 Feb, 2025',
-            'created_time' => '03:30 PM',
-            'created_sort' => '2025-02-15T15:30:00',
-            'due_date' => '25 Feb, 2025',
-            'due_sort' => '2025-02-25',
-            'amount' => 650.75,
-            'status' => 'Overdue',
-            'status_key' => 'overdue',
-            'status_class' => 'danger',
-            'via' => 'Bank Transfer',
-        ],
-        [
-            'id' => '#IN5689',
-            'customer' => 'Amelia Clark',
-            'avatar' => '/images/users/avatar-5.jpg',
-            'created_date' => '10 Feb, 2025',
-            'created_time' => '01:10 PM',
-            'created_sort' => '2025-02-10T13:10:00',
-            'due_date' => '20 Feb, 2025',
-            'due_sort' => '2025-02-20',
-            'amount' => 350.00,
-            'status' => 'Unpaid',
-            'status_key' => 'unpaid',
-            'status_class' => 'warning',
-            'via' => 'Wise',
-        ],
-        [
-            'id' => '#IN7482',
-            'customer' => 'Lucas Harris',
-            'avatar' => '/images/users/avatar-6.jpg',
-            'created_date' => '08 Feb, 2025',
-            'created_time' => '09:20 AM',
-            'created_sort' => '2025-02-08T09:20:00',
-            'due_date' => '18 Feb, 2025',
-            'due_sort' => '2025-02-18',
-            'amount' => 780.99,
-            'status' => 'Paid',
-            'status_key' => 'paid',
-            'status_class' => 'success',
-            'via' => 'Stripe',
-        ],
-        [
-            'id' => '#IN9823',
-            'customer' => 'Mia Robinson',
-            'avatar' => '/images/users/avatar-7.jpg',
-            'created_date' => '05 Feb, 2025',
-            'created_time' => '05:45 PM',
-            'created_sort' => '2025-02-05T17:45:00',
-            'due_date' => '15 Feb, 2025',
-            'due_sort' => '2025-02-15',
-            'amount' => 920.00,
-            'status' => 'Overdue',
-            'status_key' => 'overdue',
-            'status_class' => 'danger',
-            'via' => 'PayPal',
-        ],
-    ];
-
-    $invoiceCount = count($invoices);
+    $invoices = collect($invoices ?? []);
+    $invoiceCount = $invoices->count();
+    $firstInvoice = $invoices->first();
+    $fallbackDetailsRoute = $firstInvoice ? route('invoice.details', ['invoice' => $firstInvoice->id]) : route('invoice.details');
 @endphp
 
 <div class="row">
     <div class="col">
         <div class="card">
             <div class="card-body">
-                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 invoice-list-toolbar">
                     <div>
                         <h5 class="card-title mb-1">My Invoices</h5>
+                        <p class="text-muted mb-0">Customer payment records</p>
                     </div>
 
                     <div class="dropdown">
@@ -176,9 +113,15 @@
                         </a>
                         <div class="dropdown-menu">
                             <a class="dropdown-item invoice-filter-option" data-filter="all" href="#!">All</a>
+                            <a class="dropdown-item invoice-filter-option" data-filter="draft" href="#!">Draft</a>
+                            <a class="dropdown-item invoice-filter-option" data-filter="pending" href="#!">Pending</a>
+                            <a class="dropdown-item invoice-filter-option" data-filter="sent" href="#!">Sent</a>
+                            <a class="dropdown-item invoice-filter-option" data-filter="overdue" href="#!">Overdue</a>
+                            <a class="dropdown-item invoice-filter-option" data-filter="void" href="#!">Void</a>
+                            <a class="dropdown-item invoice-filter-option" data-filter="cancelled" href="#!">Cancelled</a>
+                            <a class="dropdown-item invoice-filter-option" data-filter="failed" href="#!">Failed</a>
                             <a class="dropdown-item invoice-filter-option" data-filter="paid" href="#!">Paid</a>
                             <a class="dropdown-item invoice-filter-option" data-filter="unpaid" href="#!">Unpaid</a>
-                            <a class="dropdown-item invoice-filter-option" data-filter="overdue" href="#!">Overdue</a>
                         </div>
                     </div>
 
@@ -202,94 +145,178 @@
                         </div>
                     </div>
 
-                    <div class="dropdown">
-                        <a aria-expanded="false" class="dropdown-toggle btn btn-sm btn-outline-light rounded"
-                            data-bs-toggle="dropdown" href="#">
-                            Reports
-                        </a>
-                        <div class="dropdown-menu dropdown-menu-end">
-                            <a class="dropdown-item" href="#!">Export CSV</a>
-                            <a class="dropdown-item" href="#!">Download PDF</a>
-                            <a class="dropdown-item" href="#!">Send Reminders</a>
-                        </div>
-                    </div>
-
-                    <div>
-                        <a class="btn btn-sm btn-success" href="#!">
-                            New Invoice
-                        </a>
-                    </div>
+                    <a class="btn btn-sm btn-success" href="{{ route('invoice.create') }}">
+                        New Invoice
+                    </a>
                 </div>
             </div>
 
             <div>
-                <div class="table-responsive table-centered">
+                <div class="table-responsive table-centered invoice-table-wrap">
                     <table class="table table-striped text-nowrap mb-0">
                         <thead class="text-uppercase fs-12">
                             <tr>
                                 <th class="border-0 py-2 text-dark">Invoice ID</th>
                                 <th class="border-0 py-2 text-dark">Customer</th>
-                                <th class="border-0 py-2 text-dark">Created Date</th>
-                                <th class="border-0 py-2 text-dark">Due Date</th>
+                                <th class="border-0 py-2 text-dark">Invoice Date</th>
+                                <th class="border-0 py-2 text-dark invoice-due-col">Due Date</th>
                                 <th class="border-0 py-2 text-dark">Amount</th>
                                 <th class="border-0 py-2 text-dark">Payment Status</th>
-                                <th class="border-0 py-2 text-dark">Via</th>
+                                <th class="border-0 py-2 text-dark invoice-payment-col">Via</th>
                                 <th class="border-0 py-2 text-dark">Action</th>
                             </tr>
                         </thead>
                         <tbody id="invoice-table-body">
                             @foreach ($invoices as $invoice)
-                                <tr data-amount="{{ number_format($invoice['amount'], 2, '.', '') }}"
-                                    data-created="{{ $invoice['created_sort'] }}"
-                                    data-customer="{{ strtolower($invoice['customer']) }}"
-                                    data-due="{{ $invoice['due_sort'] }}"
+                                @php
+                                    $invoiceDate = $invoice->invoice_date ?? $invoice->created_at;
+                                    $createdLabel = $invoiceDate?->format('d M, Y') ?? 'N/A';
+                                    $createdTime = $invoice->created_at?->format('h:i A') ?? '';
+                                    $dueLabel = $invoice->due_date?->format('d M, Y') ?? 'N/A';
+                                    $detailRoute = route('invoice.details', ['invoice' => $invoice->id]);
+                                    $invoicePreviewId = 'invoice-' . $invoice->id;
+                                    $statusKey = Str::lower((string) ($invoice->status ?: 'draft'));
+                                    $paymentMethod = $invoice->paymentMethodLabel();
+                                    $canEditInvoice = $invoice->status === \App\Models\Invoice::STATUS_DRAFT;
+                                    $canDeleteInvoice = true;
+                                    $canMarkInvoicePaid = in_array($invoice->status, [
+                                        \App\Models\Invoice::STATUS_SENT,
+                                        \App\Models\Invoice::STATUS_OVERDUE,
+                                        \App\Models\Invoice::STATUS_UNPAID,
+                                        \App\Models\Invoice::STATUS_PENDING,
+                                        \App\Models\Invoice::STATUS_FAILED,
+                                    ], true);
+                                    $canMarkInvoiceUnpaid = ! in_array($invoice->status, [
+                                        \App\Models\Invoice::STATUS_DRAFT,
+                                        \App\Models\Invoice::STATUS_UNPAID,
+                                        \App\Models\Invoice::STATUS_VOID,
+                                        \App\Models\Invoice::STATUS_CANCELLED,
+                                    ], true);
+                                    $canSendInvoice = in_array($invoice->status, [
+                                        \App\Models\Invoice::STATUS_DRAFT,
+                                        \App\Models\Invoice::STATUS_SENT,
+                                        \App\Models\Invoice::STATUS_OVERDUE,
+                                        \App\Models\Invoice::STATUS_UNPAID,
+                                    ], true);
+                                    $printRoute = route('invoice.details', ['invoice' => $invoice->id, 'print' => 1]);
+                                    $searchText = Str::lower(implode(' ', array_filter([
+                                        $invoice->invoice_number,
+                                        $invoice->customer_name,
+                                        $invoice->customer_email,
+                                        $invoice->customer_phone,
+                                        $createdLabel,
+                                        $dueLabel,
+                                        $invoice->statusLabel(),
+                                        $paymentMethod,
+                                        number_format((float) $invoice->total_amount, 2),
+                                    ], fn ($value) => trim((string) $value) !== '')));
+                                @endphp
+                                <tr data-amount="{{ number_format((float) $invoice->total_amount, 2, '.', '') }}"
+                                    data-created="{{ $invoiceDate?->toDateString() ?? '1970-01-01' }}"
+                                    data-customer="{{ Str::lower((string) $invoice->customer_name) }}"
+                                    data-due="{{ $invoice->due_date?->toDateString() ?? '9999-12-31' }}"
                                     data-invoice-row
-                                    data-search="{{ strtolower(implode(' ', [$invoice['id'], $invoice['customer'], $invoice['created_date'], $invoice['due_date'], $invoice['status'], $invoice['via'], number_format($invoice['amount'], 2)])) }}"
-                                    data-status="{{ $invoice['status_key'] }}">
-                                    <td>
-                                        <a class="fw-medium" href="{{ $invoiceDetailsRoute }}">{{ $invoice['id'] }}</a>
+                                    data-search="{{ $searchText }}"
+                                    data-status="{{ $statusKey }}">
+                                    <td data-label="Invoice ID">
+                                        <a class="fw-medium" href="{{ $detailRoute }}">{{ $invoice->invoice_number }}</a>
                                     </td>
-                                    <td>
+                                    <td data-label="Customer">
                                         <div class="d-flex align-items-center">
-                                            <img alt="{{ $invoice['customer'] }}" class="avatar-xs rounded-circle me-2"
-                                                src="{{ $invoice['avatar'] }}" />
+                                            <span class="avatar-xs rounded-circle bg-primary-subtle text-primary fw-semibold d-inline-flex align-items-center justify-content-center me-2">
+                                                {{ $invoice->customerInitials() }}
+                                            </span>
                                             <div>
-                                                <h5 class="fs-14 m-0 fw-normal">{{ $invoice['customer'] }}</h5>
+                                                <h5 class="fs-14 m-0 fw-normal">{{ $invoice->customer_name }}</h5>
+                                                <small class="text-muted">{{ $invoice->customer_phone }}</small>
                                             </div>
                                         </div>
                                     </td>
-                                    <td>
-                                        {{ $invoice['created_date'] }}
-                                        <small class="text-muted">{{ $invoice['created_time'] }}</small>
+                                    <td data-label="Invoice Date">
+                                        {{ $createdLabel }}
+                                        @if ($createdTime !== '')
+                                            <small class="text-muted">{{ $createdTime }}</small>
+                                        @endif
                                     </td>
-                                    <td>{{ $invoice['due_date'] }}</td>
-                                    <td>KES {{ number_format($invoice['amount'], 2) }}</td>
-                                    <td>
-                                        <span class="badge badge-soft-{{ $invoice['status_class'] }}">{{ $invoice['status'] }}</span>
+                                    <td class="invoice-due-col" data-label="Due Date">{{ $dueLabel }}</td>
+                                    <td data-label="Amount">KES {{ number_format((float) $invoice->total_amount, 2) }}</td>
+                                    <td data-label="Status">
+                                        <span class="badge badge-soft-{{ $invoice->statusBadgeClass() }}">{{ $invoice->statusLabel() }}</span>
                                     </td>
-                                    <td>{{ $invoice['via'] }}</td>
-                                    <td>
-                                        <div class="d-flex flex-wrap gap-1">
-                                            <a class="btn btn-icon btn-sm btn-soft-primary" href="{{ $invoiceDetailsRoute }}" title="View">
+                                    <td class="invoice-payment-col" data-label="Via">{{ $paymentMethod }}</td>
+                                    <td data-label="Action">
+                                        <div class="d-flex flex-wrap gap-1 justify-content-end invoice-row-actions">
+                                            <a class="btn btn-icon btn-sm btn-soft-primary" href="{{ $detailRoute }}" data-bs-toggle="tooltip" data-bs-title="View"
+                                                    data-invoice-preview-id="{{ $invoicePreviewId }}"
+                                                    data-invoice-preview-number="{{ $invoice->invoice_number }}"
+                                                    data-invoice-preview-open
+                                                    data-invoice-preview-url="{{ $detailRoute }}"
+                                                    aria-label="View invoice {{ $invoice->invoice_number }}">
                                                 <i class="align-middle" data-lucide="eye"></i>
                                             </a>
-                                            <a class="btn btn-icon btn-sm btn-soft-secondary" href="#!" title="Edit">
-                                                <i class="align-middle" data-lucide="square-pen"></i>
+                                            @if($canSendInvoice)
+                                                <form action="{{ route('invoices.send', $invoice) }}" method="POST" class="d-inline-flex">
+                                                    @csrf
+                                                    <button class="btn btn-icon btn-sm btn-soft-success" type="submit" data-bs-toggle="tooltip" data-bs-title="{{ in_array($invoice->status, [\App\Models\Invoice::STATUS_SENT, \App\Models\Invoice::STATUS_OVERDUE], true) ? 'Resend' : 'Send' }}" aria-label="Send invoice {{ $invoice->invoice_number }}">
+                                                        <i class="align-middle" data-lucide="mail"></i>
+                                                    </button>
+                                                </form>
+                                            @endif
+                                            <a class="btn btn-icon btn-sm btn-soft-info" href="{{ route('invoices.download', $invoice) }}" data-bs-toggle="tooltip" data-bs-title="Download" aria-label="Download invoice {{ $invoice->invoice_number }}">
+                                                <i class="align-middle" data-lucide="download"></i>
                                             </a>
-                                            <button class="btn btn-icon btn-sm btn-soft-danger" data-delete-confirm
-                                                data-delete-message="Do you want to delete this invoice?"
-                                                data-delete-remove-closest="tr"
-                                                data-delete-success-toast="Invoice deleted successfully."
-                                                data-delete-title="Delete invoice?" title="Delete" type="button">
-                                                <i class="align-middle" data-lucide="trash-2"></i>
-                                            </button>
+                                            @if($canDeleteInvoice)
+                                                <form action="{{ route('invoice.destroy', $invoice) }}" data-delete-confirm data-delete-message="Do you want to delete this invoice?" data-delete-title="Delete invoice?" method="POST" class="d-inline-flex">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button class="btn btn-icon btn-sm btn-soft-danger" type="submit" data-bs-toggle="tooltip" data-bs-title="Delete" aria-label="Delete invoice {{ $invoice->invoice_number }}">
+                                                        <i class="align-middle" data-lucide="trash-2"></i>
+                                                    </button>
+                                                </form>
+                                            @endif
+                                            <div class="dropdown">
+                                                <button class="btn btn-icon btn-sm btn-soft-light" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="More actions for invoice {{ $invoice->invoice_number }}">
+                                                    <i class="align-middle" data-lucide="ellipsis-vertical"></i>
+                                                </button>
+                                                <div class="dropdown-menu dropdown-menu-end">
+                                                    @if($canEditInvoice)
+                                                        <a class="dropdown-item" href="{{ route('invoice.edit', $invoice) }}">
+                                                            <i class="icon-sm" data-lucide="edit-3"></i>Edit
+                                                        </a>
+                                                    @endif
+                                                    <a class="dropdown-item" href="{{ $printRoute }}">
+                                                        <i class="icon-sm" data-lucide="printer"></i>Print
+                                                    </a>
+                                                    @if($canMarkInvoicePaid || $canMarkInvoiceUnpaid)
+                                                        <div class="dropdown-divider"></div>
+                                                    @endif
+                                                    @if($canMarkInvoicePaid)
+                                                        <form action="{{ route('invoice.mark-paid', $invoice) }}" method="POST">
+                                                            @csrf
+                                                            @method('PATCH')
+                                                            <button class="dropdown-item text-success" type="submit">
+                                                                <i class="icon-sm" data-lucide="check-circle"></i>Mark as Paid
+                                                            </button>
+                                                        </form>
+                                                    @endif
+                                                    @if($canMarkInvoiceUnpaid)
+                                                        <form action="{{ route('invoice.mark-unpaid', $invoice) }}" method="POST">
+                                                            @csrf
+                                                            @method('PATCH')
+                                                            <button class="dropdown-item text-warning" type="submit">
+                                                                <i class="icon-sm" data-lucide="credit-card"></i>Mark as Unpaid
+                                                            </button>
+                                                        </form>
+                                                    @endif
+                                                </div>
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
                             @endforeach
 
-                            <tr class="d-none" id="invoice-empty-state">
-                                <td class="text-center text-muted py-4" colspan="8">No invoices match your search.</td>
+                            <tr class="{{ $invoiceCount > 0 ? 'd-none' : '' }}" id="invoice-empty-state">
+                                <td class="text-center text-muted py-4" colspan="8">No invoices found.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -299,24 +326,29 @@
                     <div class="col-sm">
                         <div class="text-muted" id="invoice-count">Showing {{ $invoiceCount }} of {{ $invoiceCount }} invoices</div>
                     </div>
-                    <div class="col-sm-auto mt-3 mt-sm-0">
-                        <ul class="pagination justify-content-end mb-0">
-                            <li class="page-item">
-                                <a class="page-link" href="javascript:void(0);">
-                                    <iconify-icon class="fs-18" icon="lucide:chevron-left"></iconify-icon>
-                                </a>
-                            </li>
-                            <li class="page-item active"><a class="page-link" href="javascript:void(0);">1</a></li>
-                            <li class="page-item"><a class="page-link" href="javascript:void(0);">2</a></li>
-                            <li class="page-item"><a class="page-link" href="javascript:void(0);">3</a></li>
-                            <li class="page-item">
-                                <a class="page-link" href="javascript:void(0);">
-                                    <iconify-icon class="fs-18" icon="lucide:chevron-right"></iconify-icon>
-                                </a>
-                            </li>
-                        </ul>
-                    </div>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@foreach ($invoices as $invoice)
+    <template data-invoice-preview-template="invoice-{{ $invoice->id }}">
+        @include('invoice.partials.preview', ['invoice' => $invoice])
+    </template>
+@endforeach
+
+<div class="modal fade" id="invoicePreviewModal" tabindex="-1" aria-labelledby="invoicePreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="invoicePreviewModalLabel">Invoice Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body bg-light" id="invoicePreviewModalBody"></div>
+            <div class="modal-footer">
+                <a class="btn btn-primary" href="{{ $fallbackDetailsRoute }}" id="invoicePreviewFullPageLink">Open full page</a>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
             </div>
         </div>
     </div>
@@ -351,9 +383,15 @@
 
         const filterLabels = {
             all: 'All',
+            draft: 'Draft',
+            pending: 'Pending',
+            sent: 'Sent',
+            overdue: 'Overdue',
+            void: 'Void',
+            cancelled: 'Cancelled',
+            failed: 'Failed',
             paid: 'Paid',
             unpaid: 'Unpaid',
-            overdue: 'Overdue',
         };
 
         const sortLabels = {
@@ -412,8 +450,12 @@
             sortRows(visibleRows).forEach((row) => {
                 tbody.appendChild(row);
             });
+            tbody.appendChild(emptyState);
 
             emptyState.classList.toggle('d-none', visibleCount > 0);
+            emptyState.querySelector('td').textContent = total === 0
+                ? 'No invoices found.'
+                : 'No invoices match your search.';
             countLabel.textContent = `Showing ${visibleCount} of ${total} invoices`;
         };
 
@@ -440,14 +482,8 @@
             debounceTimer = window.setTimeout(applyFilters, 180);
         });
 
-        document.addEventListener('confirmation:local-success', function (event) {
-            if (event.detail?.source?.closest('#invoice-table-body')) {
-                applyFilters();
-            }
-        });
-
         previewButtons.forEach((button) => {
-            button.addEventListener('click', function () {
+            button.addEventListener('click', function (event) {
                 const previewId = this.dataset.invoicePreviewId;
                 const template = document.querySelector(`[data-invoice-preview-template="${previewId}"]`);
 
@@ -455,10 +491,12 @@
                     return;
                 }
 
+                event.preventDefault();
+
                 previewBody.innerHTML = template.innerHTML;
 
                 if (previewTitle) {
-                    previewTitle.textContent = `Invoice Preview • ${this.dataset.invoicePreviewNumber || ''}`.trim();
+                    previewTitle.textContent = `Invoice Preview - ${this.dataset.invoicePreviewNumber || ''}`.trim();
                 }
 
                 if (previewFullPageLink) {

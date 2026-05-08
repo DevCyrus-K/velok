@@ -8,6 +8,15 @@ use Illuminate\Support\Str;
 
 class QuoteRequest extends Model
 {
+    public const STATUS_NEW = 'new';
+    public const STATUS_EMAILED = 'emailed';
+    public const STATUS_EMAIL_FAILED = 'email_failed';
+    public const STATUS_PROCESSING = 'processing';
+    public const STATUS_QUOTED = 'quoted';
+    public const STATUS_CREATED = 'created';
+    public const STATUS_CLOSED = 'closed';
+    public const STATUS_SPAM = 'spam';
+
     protected $table = 'quote_requests';
 
     public $timestamps = true;
@@ -27,24 +36,34 @@ class QuoteRequest extends Model
         'ip_address',
         'user_agent',
         'status',
+        'approval_date',
     ];
 
     protected $casts = [
         'move_date' => 'date',
+        'approval_date' => 'date',
         'created_at' => 'datetime',
     ];
 
     public static function statusOptions(): array
     {
         return [
-            'new' => 'New',
-            'emailed' => 'Emailed',
-            'email_failed' => 'Email Failed',
-            'processing' => 'Processing',
-            'quoted' => 'Approved',
-            'closed' => 'Declined',
-            'spam' => 'Spam',
+            self::STATUS_NEW => 'New',
+            self::STATUS_EMAILED => 'Emailed',
+            self::STATUS_EMAIL_FAILED => 'Email Failed',
+            self::STATUS_PROCESSING => 'Processing',
+            self::STATUS_QUOTED => 'Approved',
+            self::STATUS_CREATED => 'Created',
+            self::STATUS_CLOSED => 'Rejected',
+            self::STATUS_SPAM => 'Spam',
         ];
+    }
+
+    public static function serviceTypeOptions(): array
+    {
+        return collect(LeadCategory::serviceTypes())
+            ->mapWithKeys(fn (string $serviceType) => [$serviceType => $serviceType])
+            ->all();
     }
 
     public function reference(): string
@@ -70,6 +89,36 @@ class QuoteRequest extends Model
         return trim($this->moving_from . ' to ' . $this->moving_to);
     }
 
+    public function getCustomerNameAttribute(): ?string
+    {
+        return $this->full_name;
+    }
+
+    public function getPickupLocationAttribute(): ?string
+    {
+        return $this->moving_from;
+    }
+
+    public function getDropoffLocationAttribute(): ?string
+    {
+        return $this->moving_to;
+    }
+
+    public function getPreferredMoveDateAttribute()
+    {
+        return $this->move_date;
+    }
+
+    public function getItemDetailsAttribute(): ?string
+    {
+        return $this->move_size;
+    }
+
+    public function getSpecialNotesAttribute(): ?string
+    {
+        return $this->additional_notes;
+    }
+
     public function serviceTypeLabel(): string
     {
         return LeadCategory::serviceTypeLabel($this->service_type);
@@ -83,11 +132,20 @@ class QuoteRequest extends Model
     public function statusBadgeClass(): string
     {
         return match ($this->status) {
-            'quoted' => 'success',
-            'processing', 'emailed' => 'info',
-            'email_failed', 'spam' => 'danger',
-            'closed' => 'secondary',
+            self::STATUS_QUOTED, self::STATUS_CREATED => 'success',
+            self::STATUS_PROCESSING, self::STATUS_EMAILED => 'info',
+            self::STATUS_EMAIL_FAILED, self::STATUS_SPAM => 'danger',
+            self::STATUS_CLOSED => 'secondary',
             default => 'warning',
+        };
+    }
+
+    public function statusGroup(): string
+    {
+        return match ($this->status) {
+            self::STATUS_QUOTED, self::STATUS_CREATED, self::STATUS_EMAILED => 'approved',
+            self::STATUS_CLOSED, self::STATUS_SPAM => 'declined',
+            default => 'pending',
         };
     }
 
@@ -118,5 +176,15 @@ class QuoteRequest extends Model
     public function quotation()
     {
         return $this->hasOne(Quotation::class, 'quote_request_id');
+    }
+
+    public function quote()
+    {
+        return $this->hasOne(Quotation::class, 'quote_request_id');
+    }
+
+    public function invoice()
+    {
+        return $this->hasOne(Invoice::class, 'quote_request_id');
     }
 }

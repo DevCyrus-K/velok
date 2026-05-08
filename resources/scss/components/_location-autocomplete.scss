@@ -1,0 +1,87 @@
+//
+// location-autocomplete.scss
+//
+
+.location-autocomplete {
+    position: relative;
+}
+
+.location-autocomplete__menu {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    right: 0;
+    left: 0;
+    z-index: 1056;
+    display: none;
+    max-height: 16rem;
+    padding: 0.25rem;
+    overflow-y: auto;
+    background-color: var(--#{$prefix}body-bg);
+    border: 1px solid var(--#{$prefix}border-color);
+    border-radius: var(--#{$prefix}border-radius);
+    box-shadow: $box-shadow-lg;
+}
+
+.location-autocomplete.is-open {
+    .location-autocomplete__menu {
+        display: block;
+        animation: DropDownSlide 0.2s ease both;
+    }
+}
+
+.location-autocomplete__option {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-start;
+    width: 100%;
+    min-height: 44px;
+    padding: 0.625rem 0.75rem;
+    color: var(--#{$prefix}body-color);
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-radius: 0.25rem;
+
+    &:hover,
+    &:focus,
+    &[aria-selected="true"] {
+        color: var(--#{$prefix}primary);
+        background-color: rgba(var(--#{$prefix}primary-rgb), 0.08);
+        outline: 0;
+    }
+}
+
+.location-autocomplete__pin {
+    flex: 0 0 auto;
+    margin-top: 0.0625rem;
+    color: var(--#{$prefix}primary);
+}
+
+.location-autocomplete__label {
+    line-height: 1.35;
+}
+
+.location-autocomplete__message {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    min-height: 44px;
+    padding: 0.625rem 0.75rem;
+    color: var(--#{$prefix}secondary-color);
+    font-size: 0.875rem;
+}
+
+.location-autocomplete__spinner {
+    width: 0.875rem;
+    height: 0.875rem;
+    border: 2px solid rgba(var(--#{$prefix}primary-rgb), 0.2);
+    border-top-color: var(--#{$prefix}primary);
+    border-radius: 50%;
+    animation: locationAutocompleteSpin 0.7s linear infinite;
+}
+
+@keyframes locationAutocompleteSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}

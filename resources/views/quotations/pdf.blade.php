@@ -34,9 +34,16 @@
             text-align: right;
             margin-bottom: 20px;
         }
-        .logo-section img {
-            height: 40px;
-            margin-right: 10px;
+        .brand-mark {
+            display: inline-block;
+            padding: 10px 14px;
+            background: #df1119;
+            color: #fff;
+            font-size: 14px;
+            line-height: 18px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            border-radius: 4px;
         }
         .header-title {
             float: left;
@@ -213,17 +220,43 @@
     </style>
 </head>
 <body>
+    @php
+        $authorization = $authorization ?? [
+            'name' => $quotation->authorized_by ?: 'Pending',
+            'job_title' => $quotation->authorized_role,
+            'is_complete' => filled($quotation->authorized_role) && filled($quotation->signature),
+            'date_label' => $quotation->authorizationDate()?->format('d M Y') ?? now()->format('d M Y'),
+            'prompt' => 'Please complete your profile to display authorization details',
+        ];
+        $signatureDataUri = $signatureDataUri ?? null;
+        $company = $company ?? app(\App\Support\CompanyProfile::class)->data();
+        $logoDataUri = $logoDataUri ?? app(\App\Support\CompanyProfile::class)->logoDataUri();
+        $canEmbedImages = extension_loaded('gd');
+        $companyName = trim((string) ($quotation->company_name ?: ($company['name'] ?? '')));
+        $companyPhone = trim((string) ($quotation->company_phone ?: ($company['phone'] ?? '')));
+        $companyEmail = trim((string) ($quotation->company_email ?: ($company['email'] ?? '')));
+        $companyTagline = trim((string) ($company['tagline'] ?? ''));
+        $companyAddressLines = collect([
+            $company['address_line_1'] ?? null,
+            $company['address_line_2'] ?? null,
+        ])->map(fn ($line) => trim((string) $line))->filter();
+        $companyContactLine = collect([$companyPhone, $companyEmail])->filter()->implode(' | ');
+    @endphp
     <div class="container">
         <div class="clearfix">
             <div class="logo-section float-end">
-                <img alt="logo-dark" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAA5klEQVR42u3QMQqCMBCG4S/EpXELHBqcHJ0cnJ0cnBycHBwcHBwd3NtaXBoanp6e7/u+/73h4H4nHNzfBARBEARBEARBEARBEARBEARBEARB/Ccsy5LneZIkSZZliOM4z/M0TdO2bQzDoOu6vu93u93P8zxVVZVl2XmepmnyPC/LMhzHcRyHbduWZRkOh8NhGIYQQgiRJImUUkqplBJC6LpOKaXrOqWU53ksy0IIMQxDCCGmafI87zoP23bTNLqua5rGNE2maRiGIYRQFMWyLF3XVVWVZRnHcZqmabve7/ePx4OUUkqJ4zjXdZ1lWZZlIoSQJMlxHNd1XdftdjtN02RZll3Xfd/nPM+z7zpVVeV5/vN+PxwO/wAAAP//dFpomcYbFegAAAAASUVORK5CYII=" />
+                @if($logoDataUri && $canEmbedImages)
+                    <img alt="{{ $companyName ?: 'Company' }} logo" style="max-height: 42px; max-width: 180px;" src="{{ $logoDataUri }}">
+                @elseif($companyName !== '')
+                    <span class="brand-mark">{{ $companyName }}</span>
+                @endif
             </div>
             <div class="header-title float-start">
                 <h5>PROFESSIONAL QUOTATION</h5>
                 <p>Quotation: {{ $quotation->quoteRequest->reference() }}</p>
-                <p>{{ $quotation->quote_date?->format('d M, Y h:i A') ?? 'N/A' }}</p>
+                <p>{{ $quotation->quote_date?->format('d M, Y') ?? 'N/A' }}</p>
                 <span class="badge {{ $quotation->status === 'sent' ? 'badge-success' : ($quotation->status === 'draft' ? 'badge-info' : 'badge-warning') }}">
-                    {{ ucfirst($quotation->status) }}
+                    {{ in_array($quotation->status, ['declined', 'rejected'], true) ? 'Rejected' : ucfirst($quotation->status) }}
                 </span>
             </div>
         </div>
@@ -234,8 +267,7 @@
                 <h6>Customer</h6>
                 <div class="title">{{ $quotation->quoteRequest->full_name }}</div>
                 <address>
-                    {{ $quotation->quoteRequest->email }}<br />
-                    <abbr title="Phone">P:</abbr> {{ $quotation->quoteRequest->phone }}<br />
+                    {{ $quotation->quoteRequest->email }} • {{ $quotation->quoteRequest->phone }}<br />
                     <span style="color: #999;">{{ $quotation->quoteRequest->serviceTypeLabel() }}</span>
                 </address>
             </div>
@@ -268,12 +300,12 @@
                 <tr>
                     <td>Deposit Required</td>
                     <td>{{ ($quotation->deposit_percentage ?? 30) }}% of total amount</td>
-                    <td class="text-end">KES {{ number_format(($quotation->quote_amount ?? 0) * (($quotation->deposit_percentage ?? 30) / 100), 2) }}</td>
+                    <td class="text-end">KES {{ number_format($quotation->depositAmount(), 2) }}</td>
                 </tr>
                 <tr>
                     <td>Quote Valid Until</td>
                     <td>{{ $quotation->quote_valid_until?->format('d M, Y') ?? 'Not specified' }}</td>
-                    <td class="text-end">{{ $quotation->quote_valid_until?->diffInDays() }} days</td>
+                    <td class="text-end">{{ $quotation->validityDays() ?? 'N/A' }} days</td>
                 </tr>
                 <tr>
                     <td>Service Type</td>
@@ -322,7 +354,7 @@
                 @if ($quotation->cancellation_notice_hours)
                     <div style="margin-top: 20px;">
                         <h6>Cancellation Policy</h6>
-                        <small>{{ $quotation->cancellation_notice_hours }} hours notice required</small>
+                        <small>{{ $quotation->cancellationPolicyText() }}</small>
                     </div>
                 @endif
             </div>
@@ -334,17 +366,25 @@
                 </p>
                 <p>
                     <span class="label">Authorized By:</span>
-                    <span class="value">{{ $quotation->authorized_by ?? 'Admin' }}</span>
+                    <span class="value">{{ $authorization['name'] }}</span>
+                </p>
+                <p>
+                    <span class="label">Job Title:</span>
+                    <span class="value">{{ $authorization['job_title'] ?: 'Pending' }}</span>
                 </p>
                 <p>
                     <span class="label">Approval Date:</span>
-                    <span class="value">{{ $quotation->approval_date?->format('d M, Y') ?? 'Pending' }}</span>
+                    <span class="value">{{ $authorization['date_label'] }}</span>
                 </p>
-                @if ($quotation->signature)
-                    <p>
-                        <span class="label">Signature:</span>
-                        <span class="value">{{ $quotation->signature }}</span>
-                    </p>
+                @if ($authorization['is_complete'] ?? false)
+                    @if ($signatureDataUri)
+                        <div style="margin-top: 10px;">
+                            <span class="label">Signature:</span><br>
+                            <img alt="Authorized signature" src="{{ $signatureDataUri }}" style="border:none; outline:none; box-shadow:none; background:transparent; padding:0; max-height:60px; max-width:200px;">
+                        </div>
+                    @endif
+                @else
+                    <div style="margin-top: 10px; color: #e65100; font-size: 12px;">{{ $authorization['prompt'] }}</div>
                 @endif
                 <h3 style="color: #007bff;">KES {{ number_format($quotation->quote_amount ?? 0, 2) }}</h3>
             </div>
@@ -352,10 +392,18 @@
 
         <!-- Footer -->
         <div class="footer">
-            <strong>KwikShift Movers</strong><br>
-            Professional Moving & Storage Services<br>
-            +254 112587581 / +254111330980 | info@kwikshiftmovers.co.ke<br>
-            Londiani Road, off Likoni Road, Industrial Area, Nairobi, 00200, KE<br>
+            @if($companyName !== '')
+                <strong>{{ $companyName }}</strong><br>
+            @endif
+            @if($companyTagline !== '')
+                {{ $companyTagline }}<br>
+            @endif
+            @if($companyContactLine !== '')
+                {{ $companyContactLine }}<br>
+            @endif
+            @foreach($companyAddressLines as $companyAddressLine)
+                {{ $companyAddressLine }}<br>
+            @endforeach
             <br>
             <em>This quotation is valid until {{ $quotation->quote_valid_until?->format('d M, Y') ?? 'the specified date' }}. All prices are in Kenyan Shillings (KES).</em>
         </div>

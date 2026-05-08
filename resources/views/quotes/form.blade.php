@@ -3,6 +3,12 @@
 @section('content')
 @php
     $selectedStatus = old('status', $quote->status ?? 'new');
+    $serviceTypeOptions = $serviceTypeOptions ?? \App\Models\QuoteRequest::serviceTypeOptions();
+    $selectedServiceType = \App\Support\LeadCategory::serviceTypeLabel(
+        old('service_type', $quote->serviceTypeLabel()),
+        ''
+    );
+    $canDeleteQuote = $isEditing && $quote->statusGroup() !== 'approved';
 @endphp
 
 @if ($errors->any())
@@ -30,7 +36,7 @@
                         <div>
                             <h5 class="card-title mb-1">{{ $isEditing ? 'Edit Quote' : 'Create Quote' }}</h5>
                             <p class="text-muted mb-0">
-                                {{ $isEditing ? 'Update this live quote request from the kwikshift database.' : 'Create a new quote request directly in the kwikshift database.' }}
+                                {{ $isEditing ? 'Update this live quote from the kwikshift database.' : 'Create a new quote directly in the kwikshift database.' }}
                             </p>
                         </div>
                         <a class="btn btn-sm btn-outline-secondary" href="{{ route('quotes.index') }}">Back to Quotes</a>
@@ -70,39 +76,58 @@
                             @enderror
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label" for="moving_from">Moving From</label>
-                            <input class="form-control @error('moving_from') is-invalid @enderror" id="moving_from" name="moving_from"
-                                type="text" value="{{ old('moving_from', $quote->moving_from) }}">
+                            <label class="form-label" for="pickup_location">Pickup Location</label>
+                            <div class="location-autocomplete" data-location-autocomplete>
+                                <input class="form-control @error('moving_from') is-invalid @enderror" id="pickup_location" name="moving_from"
+                                    type="text" value="{{ old('moving_from', $quote->moving_from) }}" placeholder="Start typing a Kenyan pickup area"
+                                    autocomplete="off" data-location-next="#dropoff_location" required>
+                                <div class="location-autocomplete__menu" id="pickup_location_suggestions" role="listbox" aria-label="Pickup location suggestions"></div>
+                            </div>
                             @error('moving_from')
-                                <div class="invalid-feedback">{{ $message }}</div>
+                                <div class="invalid-feedback d-block">{{ $message }}</div>
                             @enderror
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label" for="moving_to">Moving To</label>
-                            <input class="form-control @error('moving_to') is-invalid @enderror" id="moving_to" name="moving_to"
-                                type="text" value="{{ old('moving_to', $quote->moving_to) }}">
+                            <label class="form-label" for="dropoff_location">Drop-off Location</label>
+                            <div class="location-autocomplete" data-location-autocomplete>
+                                <input class="form-control @error('moving_to') is-invalid @enderror" id="dropoff_location" name="moving_to"
+                                    type="text" value="{{ old('moving_to', $quote->moving_to) }}" placeholder="Start typing a Kenyan drop-off area"
+                                    autocomplete="off" data-location-next="#service_type" required>
+                                <div class="location-autocomplete__menu" id="dropoff_location_suggestions" role="listbox" aria-label="Drop-off location suggestions"></div>
+                            </div>
                             @error('moving_to')
-                                <div class="invalid-feedback">{{ $message }}</div>
+                                <div class="invalid-feedback d-block">{{ $message }}</div>
                             @enderror
                         </div>
                         <div class="col-md-6">
                             <label class="form-label" for="service_type">Service Type</label>
-                            <input class="form-control @error('service_type') is-invalid @enderror" id="service_type" list="service_type_options"
-                                name="service_type" type="text" value="{{ old('service_type', $quote->serviceTypeLabel()) }}">
-                            <datalist id="service_type_options">
-                                @foreach ($serviceTypes as $serviceType)
-                                    <option value="{{ $serviceType }}"></option>
+                            <select class="form-control @error('service_type') is-invalid @enderror" id="service_type" name="service_type" required>
+                                <option value="" @selected($selectedServiceType === '')>Select Service Type</option>
+                                @foreach ($serviceTypeOptions as $value => $label)
+                                    <option value="{{ $value }}" @selected($selectedServiceType === $value)>{{ $label }}</option>
                                 @endforeach
-                            </datalist>
+                            </select>
                             @error('service_type')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-6" id="move_size_wrapper">
                             <label class="form-label" for="move_size">Move Size</label>
-                            <input class="form-control @error('move_size') is-invalid @enderror" id="move_size" name="move_size"
-                                placeholder="Studio apartment, 2 bedroom house, office move..." type="text"
-                                value="{{ old('move_size', $quote->move_size) }}">
+                            <!-- Residential Relocation Size Dropdown -->
+                            <select class="form-control @error('move_size') is-invalid @enderror" id="move_size_residential" name="move_size" style="display: block;">
+                                <option value="">Select Bedroom Type</option>
+                                <option value="Studio" @if(old('move_size', $quote->move_size) === 'Studio') selected @endif>Studio</option>
+                                <option value="Bedsitter" @if(old('move_size', $quote->move_size) === 'Bedsitter') selected @endif>Bedsitter</option>
+                                <option value="1 Bedroom" @if(old('move_size', $quote->move_size) === '1 Bedroom') selected @endif>1 Bedroom</option>
+                                <option value="2 Bedroom" @if(old('move_size', $quote->move_size) === '2 Bedroom') selected @endif>2 Bedroom</option>
+                                <option value="3 Bedroom" @if(old('move_size', $quote->move_size) === '3 Bedroom') selected @endif>3 Bedroom</option>
+                                <option value="4 Bedroom" @if(old('move_size', $quote->move_size) === '4 Bedroom') selected @endif>4 Bedroom</option>
+                                <option value="5 Bedroom" @if(old('move_size', $quote->move_size) === '5 Bedroom') selected @endif>5 Bedroom</option>
+                                <option value="Villa" @if(old('move_size', $quote->move_size) === 'Villa') selected @endif>Villa</option>
+                                <option value="Bungalow" @if(old('move_size', $quote->move_size) === 'Bungalow') selected @endif>Bungalow</option>
+                            </select>
+                            <!-- Office Relocation Size Text Input -->
+                            <input class="form-control @error('move_size') is-invalid @enderror" id="move_size_office" name="move_size" placeholder="Office size in square feet or description" type="text" value="{{ old('move_size', $quote->move_size) }}" style="display: none;">
                             @error('move_size')
                                 <div class="invalid-feedback">{{ $message }}</div>
                             @enderror
@@ -140,10 +165,6 @@
                     @if ($isEditing)
                         <div class="d-flex flex-wrap gap-2 mb-3">
                             <a class="btn btn-sm btn-primary" href="{{ route('quotes.show', $quote) }}">View Details</a>
-                            <a class="btn btn-sm btn-outline-dark" href="{{ $quote->telLink() }}">Call</a>
-                            @if ($quote->whatsappUrl())
-                                <a class="btn btn-sm btn-success" href="{{ $quote->whatsappUrl() }}" target="_blank" rel="noopener noreferrer">WhatsApp</a>
-                            @endif
                         </div>
                     @endif
 
@@ -192,14 +213,14 @@
     </div>
 </form>
 
-@if ($isEditing)
+@if ($canDeleteQuote)
     <div class="row">
         <div class="col-xl-4 ms-auto">
             <div class="card border-danger border-opacity-25">
                 <div class="card-body">
                     <h5 class="card-title text-danger mb-2">Delete Quote</h5>
-                    <p class="text-muted mb-3">Remove this quote request permanently from the `quote_requests` table.</p>
-                    <form action="{{ route('quotes.destroy', $quote) }}" data-delete-confirm data-delete-message="Do you want to delete this quote request?" data-delete-title="Delete quote?" method="POST">
+                    <p class="text-muted mb-3">Remove this quote permanently.</p>
+                    <form action="{{ route('quotes.destroy', $quote) }}" data-delete-confirm data-delete-message="Do you want to delete this quote?" data-delete-title="Delete quote?" method="POST">
                         @csrf
                         @method('DELETE')
                         <button class="btn btn-danger" type="submit">Delete Quote</button>
@@ -209,4 +230,52 @@
         </div>
     </div>
 @endif
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const serviceTypeSelect = document.getElementById("service_type");
+    const moveResidentialSelect = document.getElementById("move_size_residential");
+    const moveOfficeInput = document.getElementById("move_size_office");
+
+    if (!serviceTypeSelect || !moveResidentialSelect || !moveOfficeInput) {
+        return;
+    }
+
+    function updateMoveSizeField() {
+        const serviceType = serviceTypeSelect.value;
+        if (serviceType === "Residential Relocation") {
+            moveResidentialSelect.style.display = "block";
+            moveOfficeInput.style.display = "none";
+            moveResidentialSelect.name = "move_size";
+            moveOfficeInput.name = "";
+        } else if (serviceType === "Office Relocation") {
+            moveResidentialSelect.style.display = "none";
+            moveOfficeInput.style.display = "block";
+            moveOfficeInput.placeholder = "Office size in square feet or description";
+            moveResidentialSelect.name = "";
+            moveOfficeInput.name = "move_size";
+        } else if (serviceType === "Long-Distance Move") {
+            moveResidentialSelect.style.display = "none";
+            moveOfficeInput.style.display = "block";
+            moveOfficeInput.placeholder = "Distance or route details";
+            moveResidentialSelect.name = "";
+            moveOfficeInput.name = "move_size";
+        } else if (serviceType === "Packing & Storage") {
+            moveResidentialSelect.style.display = "none";
+            moveOfficeInput.style.display = "block";
+            moveOfficeInput.placeholder = "Storage details or item description";
+            moveResidentialSelect.name = "";
+            moveOfficeInput.name = "move_size";
+        } else {
+            moveResidentialSelect.style.display = "none";
+            moveOfficeInput.style.display = "none";
+            moveResidentialSelect.name = "";
+            moveOfficeInput.name = "";
+        }
+    }
+
+    serviceTypeSelect.addEventListener("change", updateMoveSizeField);
+    updateMoveSizeField();
+});
+</script>
 @endsection

@@ -6,10 +6,24 @@ use Illuminate\Support\Str;
 
 class LeadCategory
 {
-    public const MOVING_RELOCATION = 'Moving & Relocation';
+    public const RESIDENTIAL_RELOCATION = 'Residential Relocation';
+    public const OFFICE_RELOCATION = 'Office Relocation';
+    public const LONG_DISTANCE_MOVE = 'Long-Distance Move';
+    public const PACKING_STORAGE = 'Packing & Storage';
+    public const MOVING_RELOCATION = self::RESIDENTIAL_RELOCATION;
     public const INVOICE = 'Invoice';
     public const FEEDBACK = 'Feedback';
     public const GENERAL = 'General';
+
+    public static function serviceTypes(): array
+    {
+        return [
+            self::RESIDENTIAL_RELOCATION,
+            self::OFFICE_RELOCATION,
+            self::LONG_DISTANCE_MOVE,
+            self::PACKING_STORAGE,
+        ];
+    }
 
     public static function normalizeServiceType(?string $value): ?string
     {
@@ -26,23 +40,31 @@ class LeadCategory
             'move',
             'relocation',
             'moving and relocation',
-            'moving & relocation' => self::MOVING_RELOCATION,
-            'office',
-            'office move',
-            'office moving' => 'Office Move',
-            'commercial',
-            'commercial move',
-            'commercial moving' => 'Commercial Move',
+            'moving & relocation',
             'residential',
             'residential move',
-            'home moving' => 'Residential Move',
+            'home moving',
+            'residential relocation' => self::RESIDENTIAL_RELOCATION,
+            'office',
+            'office move',
+            'office moving',
+            'office relocation',
+            'commercial',
+            'commercial move',
+            'commercial moving',
+            'warehouse',
+            'warehouse move' => self::OFFICE_RELOCATION,
+            'long-distance move',
+            'long distance move',
+            'long-distance relocation',
+            'long distance relocation' => self::LONG_DISTANCE_MOVE,
             'storage',
             'storage and packing',
+            'storage & packing',
             'packing',
-            'packing and storage' => 'Storage & Packing',
-            'warehouse',
-            'warehouse move' => 'Warehouse Move',
-            default => Str::of($normalized)->headline()->replace(' And ', ' & ')->toString(),
+            'packing and storage',
+            'packing & storage' => self::PACKING_STORAGE,
+            default => in_array($normalized, self::serviceTypes(), true) ? $normalized : null,
         };
     }
 

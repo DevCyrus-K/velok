@@ -102,7 +102,7 @@
                         </div>
                     </div>
                     <div class="col-md-3 mb-4">
-                        <div class="d-flex gap-3"><i class="fs-32 text-primary" data-lucide="phone"></i>
+                        <div class="d-flex gap-3"><i class="fs-32 text-primary" data-lucide="message-square"></i>
                             <h5 class="mt-2 mb-0">Phone</h5>
                         </div>
                     </div>

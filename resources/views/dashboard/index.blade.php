@@ -157,6 +157,10 @@
 @php
      $dashboardPeriodOptions = $dashboardCharts['periodOptions'] ?? ['weekly' => 'Weekly', 'monthly' => 'Monthly', 'yearly' => 'Yearly'];
      $emailDeliveryPeriodOptions = ['today' => 'Today', 'weekly' => 'Weekly', 'monthly' => 'Monthly'];
+     $visitorToday = $dashboardCharts['visitorToday'] ?? ['new_users' => 0];
+     $dashboardSummary = $dashboardCharts['summary'] ?? [];
+     $inquiriesToday = (int) ($dashboardSummary['inquiries_today'] ?? 0);
+     $completedMovesThisWeek = (int) ($dashboardSummary['completed_moves_this_week'] ?? 0);
 @endphp
 
 <div class="row g-3 dashboard-overview-row align-items-stretch">
@@ -199,7 +203,7 @@
                </div>
 	               <div class="card-body">
 	                    <div class="text-center">
-	                         <p class="text-muted mb-3">Yeah! You have received <span class="fw-semibold text-success">+33</span> new visitors today.</p>
+	                         <p class="text-muted mb-3">Google Analytics shows <span class="fw-semibold text-success">{{ number_format((int) ($visitorToday['new_users'] ?? 0)) }}</span> new visitors today.</p>
 	                    </div>
 	                    <div id="simple-donut" class="apex-charts dashboard-chart-panel"></div>
                </div>
@@ -226,7 +230,7 @@
 	               </div>
                <div class="card-body">
                     <div class="text-center">
-                         <p class="text-muted mb-3">You have received <span class="fw-semibold text-success">+3</span> new inquiries today.</p>
+                         <p class="text-muted mb-3">You have received <span class="fw-semibold text-success">{{ $inquiriesToday > 0 ? '+' . number_format($inquiriesToday) : number_format($inquiriesToday) }}</span> new {{ \Illuminate\Support\Str::plural('inquiry', $inquiriesToday) }} today.</p>
                     </div>
                     <div id="datalabels-column2" class="apex-charts dashboard-chart-panel"></div>
                </div>
@@ -253,7 +257,7 @@
                </div>
                <div class="card-body">
                     <div class="text-center">
-                         <p class="text-muted mb-3">Yeah! You have completed <span class="fw-semibold text-success">5</span> moves this week.</p>
+                         <p class="text-muted mb-3">Yeah! You have completed <span class="fw-semibold text-success">{{ number_format($completedMovesThisWeek) }}</span> {{ \Illuminate\Support\Str::plural('move', $completedMovesThisWeek) }} this week.</p>
                     </div>
                     <div id="basic-heatmap" class="apex-charts dashboard-chart-panel"></div>
                </div>
@@ -284,9 +288,6 @@
                                    <div class="text-dark fs-15 fw-medium">{{ $customer->full_name }}</div>
                                    <p class="mb-1 text-muted">{{ $customer->email }}</p>
                                    <small class="text-muted d-block">{{ $customer->latestServiceLabel() }} • {{ $customer->latestRouteSummary() }}</small>
-                              </div>
-                              <div class="align-self-center ms-auto d-flex justify-content-end">
-                                   <a href="{{ $customer->telLink() }}" class="btn btn-sm btn-primary">Call</a>
                               </div>
                          </div>
                          @empty
@@ -336,11 +337,12 @@
                                              </td>
                                              <td>
                                                   @php
-                                                       $displayStatus = match ($quote->status) {
-                                                            'quoted' => 'Approved',
-                                                            'closed', 'spam' => 'Declined',
-                                                            default => 'Pending',
-                                                       };
+	                                                       $displayStatus = match ($quote->status) {
+	                                                            'quoted' => 'Approved',
+	                                                            'created' => 'Created',
+	                                                            'closed', 'spam' => 'Declined',
+	                                                            default => 'Pending',
+	                                                       };
                                                   @endphp
                                                   <span class="badge badge-soft-{{ $quote->statusBadgeClass() }}">{{ $displayStatus }}</span>
                                              </td>
@@ -455,7 +457,9 @@
             'sparkline_color' => $card['sparkline_color'] ?? '#22B956',
         ])->filter(fn (array $card) => filled($card['sparkline_id']))->values()->all(),
         'visitorDevices' => $dashboardCharts['visitorDevices'] ?? ['labels' => [], 'series' => []],
+        'visitorToday' => $dashboardCharts['visitorToday'] ?? ['active_users' => 0, 'new_users' => 0],
         'periodOptions' => $dashboardCharts['periodOptions'] ?? ['weekly' => 'Weekly', 'monthly' => 'Monthly', 'yearly' => 'Yearly'],
+        'summary' => $dashboardCharts['summary'] ?? ['inquiries_today' => 0, 'completed_moves_this_week' => 0],
         'inquiries' => $dashboardCharts['inquiries'] ?? ['weekly' => ['labels' => [], 'series' => []]],
         'serviceHeatmap' => $dashboardCharts['serviceHeatmap'] ?? ['weekly' => ['labels' => [], 'series' => []]],
     ];

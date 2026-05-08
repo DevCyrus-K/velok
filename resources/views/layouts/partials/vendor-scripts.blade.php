@@ -1,5 +1,25 @@
 @vite(['resources/js/app.js', 'resources/js/layout.js'])
 
+<script>
+    window.showToast = window.showToast || function (message, type = 'success') {
+        const classes = {
+            success: 'bg-success',
+            error: 'bg-danger',
+            info: 'bg-info',
+            warning: 'bg-warning',
+        };
+
+        Toastify({
+            text: message,
+            duration: 4000,
+            close: true,
+            gravity: 'top',
+            position: 'right',
+            className: classes[type] || type || 'bg-success',
+        }).showToast();
+    };
+</script>
+
 @php
     $toasts = [];
 

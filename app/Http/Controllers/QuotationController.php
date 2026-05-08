@@ -2,63 +2,109 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\QuotationFormRequest;
 use App\Models\Quotation;
 use App\Models\QuoteRequest;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Mail;
+use App\Models\User;
+use App\Support\CompanyProfile;
+use App\Support\QuotationEmail;
+use App\Support\UserSignature;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\CarbonInterface;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Throwable;
 
 class QuotationController extends Controller
 {
-    public function create(QuoteRequest $quote)
+    private const DEFAULT_PAYMENT_TERMS = '50% deposit required to confirm booking. Remaining balance due on day of move. Accepted payments: M-Pesa, Bank Transfer, Cash.';
+    private const DEFAULT_CANCELLATION_POLICY = 'Free cancellation up to 48 hours before the scheduled move date. Cancellations made within 48 hours will incur a cancellation fee.';
+    private const DEFAULT_CANCELLATION_NOTICE_HOURS = 48;
+
+    public function __construct(
+        private readonly UserSignature $userSignature,
+    ) {}
+
+    public function create(QuoteRequest $quote, Request $request)
     {
-        // Check if quotation already exists
         $quotation = Quotation::where('quote_request_id', $quote->id)->first() ?? new Quotation();
-        
-        return view('quotations.create', compact('quote', 'quotation'));
-    }
 
-    public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'quote_request_id' => 'required|exists:quote_requests,id',
-            'quote_date' => 'required|date',
-            'quote_valid_until' => 'required|date|after:quote_date',
-            'moving_from' => 'required|string|max:255',
-            'moving_to' => 'required|string|max:255',
-            'move_date' => 'required|date',
-            'quote_amount' => 'required|numeric|min:0',
-            'deposit_percentage' => 'required|numeric|min:0|max:100',
-            'cancellation_notice_hours' => 'required|integer|min:0',
-            'services' => 'required|array|min:1',
-            'services.*.name' => 'required|string|max:255',
-            'services.*.description' => 'nullable|string',
-            'additional_notes' => 'nullable|string',
-            'payment_terms' => 'nullable|string',
-            'authorized_by' => 'required|string|max:255',
-            'authorized_role' => 'nullable|string|max:255',
-            'approval_date' => 'required|date',
-        ]);
-
-        $quote = QuoteRequest::findOrFail($validated['quote_request_id']);
-
-        // Format services array
-        $services = [];
-        if (isset($validated['services']) && is_array($validated['services'])) {
-            foreach ($validated['services']['name'] as $index => $name) {
-                if ($name) {
-                    $services[] = [
-                        'name' => $name,
-                        'description' => $validated['services']['description'][$index] ?? '',
-                    ];
-                }
-            }
+        if (! $quotation->exists && in_array($quote->status, [
+            QuoteRequest::STATUS_NEW,
+            QuoteRequest::STATUS_QUOTED,
+            QuoteRequest::STATUS_EMAIL_FAILED,
+        ], true)) {
+            $quote->update(['status' => QuoteRequest::STATUS_PROCESSING]);
         }
 
-        // Create or update quotation
-        $quotation = Quotation::updateOrCreate(
-            ['quote_request_id' => $quote->id],
-            [
+        return view('quotations.create', $this->formViewData($quote, $quotation, $request->user()));
+    }
+
+    public function store(QuotationFormRequest $request)
+    {
+        $validated = $request->quotationData();
+        $action = $request->submissionAction();
+        $quote = QuoteRequest::findOrFail($request->validated('quote_request_id'));
+        $services = $request->servicesIncluded();
+        $authorization = $this->authorizationStorageData($request->user(), $quote);
+        $company = app(CompanyProfile::class)->data();
+
+        $quotation = DB::transaction(function () use ($quote, $validated, $services, $authorization, $company) {
+            $quotation = Quotation::updateOrCreate(
+                ['quote_request_id' => $quote->id],
+                [
+                    'company_name' => $company['name'] ?? '',
+                    'company_email' => $company['email'] ?? '',
+                    'company_phone' => $company['phone'] ?? '',
+                    'company_website' => $company['website'] ?? null,
+                    'quote_date' => $validated['quote_date'],
+                    'quote_valid_until' => $validated['quote_valid_until'],
+                    'moving_from' => $validated['moving_from'],
+                    'moving_to' => $validated['moving_to'],
+                    'move_date' => $validated['move_date'],
+                    'quote_amount' => $validated['quote_amount'],
+                    'deposit_percentage' => $validated['deposit_percentage'],
+                    'cancellation_notice_hours' => $validated['cancellation_notice_hours'],
+                    'cancellation_policy' => $validated['cancellation_policy'] ?: self::DEFAULT_CANCELLATION_POLICY,
+                    'services_included' => $services,
+                    'additional_notes' => $validated['additional_notes'] ?? null,
+                    'payment_terms' => $validated['payment_terms'] ?: self::DEFAULT_PAYMENT_TERMS,
+                    'authorized_by' => $authorization['authorized_by'],
+                    'authorized_role' => $authorization['authorized_role'],
+                    'approval_date' => $authorization['approval_date'],
+                    'signature' => $authorization['signature'],
+                    'signature_type' => $authorization['signature'] ? 'image' : null,
+                    'status' => 'draft',
+                    'sent_at' => null,
+                ]
+            );
+
+            $quote->update(['status' => QuoteRequest::STATUS_CREATED]);
+
+            return $quotation;
+        });
+
+        return $this->quotationActionResponse($quotation, $action, 'Quotation created successfully.');
+    }
+
+    public function update(QuotationFormRequest $request, Quotation $quotation)
+    {
+        $validated = $request->quotationData();
+        $action = $request->submissionAction();
+        $services = $request->servicesIncluded();
+        $quote = QuoteRequest::findOrFail($request->validated('quote_request_id'));
+        $authorization = $this->authorizationStorageData($request->user(), $quote, $quotation);
+        $company = app(CompanyProfile::class)->data();
+
+        DB::transaction(function () use ($quotation, $quote, $validated, $services, $authorization, $action, $company): void {
+            $quotationData = [
+                'company_name' => $quotation->company_name ?: ($company['name'] ?? ''),
+                'company_email' => $quotation->company_email ?: ($company['email'] ?? ''),
+                'company_phone' => $quotation->company_phone ?: ($company['phone'] ?? ''),
+                'company_website' => $quotation->company_website ?: ($company['website'] ?? null),
                 'quote_date' => $validated['quote_date'],
                 'quote_valid_until' => $validated['quote_valid_until'],
                 'moving_from' => $validated['moving_from'],
@@ -67,131 +113,363 @@ class QuotationController extends Controller
                 'quote_amount' => $validated['quote_amount'],
                 'deposit_percentage' => $validated['deposit_percentage'],
                 'cancellation_notice_hours' => $validated['cancellation_notice_hours'],
+                'cancellation_policy' => $validated['cancellation_policy'] ?: self::DEFAULT_CANCELLATION_POLICY,
                 'services_included' => $services,
-                'additional_notes' => $validated['additional_notes'],
-                'payment_terms' => $validated['payment_terms'],
-                'authorized_by' => $validated['authorized_by'],
-                'authorized_role' => $validated['authorized_role'],
-                'approval_date' => $validated['approval_date'],
-                'status' => 'draft',
-            ]
-        );
+                'additional_notes' => $validated['additional_notes'] ?? null,
+                'payment_terms' => $validated['payment_terms'] ?: self::DEFAULT_PAYMENT_TERMS,
+                'authorized_by' => $authorization['authorized_by'],
+                'authorized_role' => $authorization['authorized_role'],
+                'approval_date' => $authorization['approval_date'],
+                'signature' => $authorization['signature'],
+                'signature_type' => $authorization['signature'] ? 'image' : null,
+            ];
 
-        return redirect()->route('quotations.show', $quotation)
-            ->with('toast-success', 'Quotation saved as draft successfully!');
+            if ($action === 'draft') {
+                $quotationData['status'] = 'draft';
+                $quotationData['sent_at'] = null;
+            }
+
+            $quotation->update($quotationData);
+
+            $quote->update([
+                'status' => $this->quoteRequestStatusAfterQuotationSave($quotation, $action),
+            ]);
+        });
+
+        return $this->quotationActionResponse($quotation, $action, 'Quotation updated successfully!');
     }
 
-    public function update(Request $request, Quotation $quotation)
+    public function show(Quotation $quotation, Request $request)
     {
-        $validated = $request->validate([
-            'quote_request_id' => 'required|exists:quote_requests,id',
-            'quote_date' => 'required|date',
-            'quote_valid_until' => 'required|date|after:quote_date',
-            'moving_from' => 'required|string|max:255',
-            'moving_to' => 'required|string|max:255',
-            'move_date' => 'required|date',
-            'quote_amount' => 'required|numeric|min:0',
-            'deposit_percentage' => 'required|numeric|min:0|max:100',
-            'cancellation_notice_hours' => 'required|integer|min:0',
-            'services' => 'required|array|min:1',
-            'services.*.name' => 'required|string|max:255',
-            'services.*.description' => 'nullable|string',
-            'additional_notes' => 'nullable|string',
-            'payment_terms' => 'nullable|string',
-            'authorized_by' => 'required|string|max:255',
-            'authorized_role' => 'nullable|string|max:255',
-            'approval_date' => 'required|date',
-        ]);
+        $quotation->loadMissing(['quoteRequest', 'invoice', 'emailLogs']);
 
-        // Format services array
-        $services = [];
-        if (isset($validated['services']) && is_array($validated['services'])) {
-            foreach ($validated['services']['name'] as $index => $name) {
-                if ($name) {
-                    $services[] = [
-                        'name' => $name,
-                        'description' => $validated['services']['description'][$index] ?? '',
-                    ];
-                }
+        return view('quotations.show', [
+            'quotation' => $quotation,
+            'authorization' => $this->authorizationViewData($request->user(), $quotation, $quotation->quoteRequest),
+        ]);
+    }
+
+    public function edit(Quotation $quotation, Request $request)
+    {
+        abort_if($quotation->status !== Quotation::STATUS_DRAFT, 403);
+
+        $quote = $quotation->quoteRequest;
+
+        return view('quotations.create', $this->formViewData($quote, $quotation, $request->user()));
+    }
+
+    public function pdf(Quotation $quotation, Request $request)
+    {
+        $quotation->loadMissing('quoteRequest');
+        $authorization = $this->authorizationViewData($request->user(), $quotation, $quotation->quoteRequest);
+        $user = $request->user();
+
+        $pdf = Pdf::loadView('quotes.pdf', [
+            'quote' => $quotation->quoteRequest,
+            'quotation' => $quotation,
+            'company' => app(CompanyProfile::class)->data(),
+            'logoDataUri' => app(CompanyProfile::class)->logoDataUri(),
+            'authorization' => $authorization,
+            'signatureDataUri' => $this->userSignature->dataUri($authorization['signature_path']),
+            'user' => $user,
+        ])->setPaper('a4');
+
+        return $pdf->download('Quote-' . Str::slug($quotation->quoteRequest->reference()) . '-' . Str::slug($quotation->quoteRequest->full_name) . '.pdf');
+    }
+
+    public function send(Request $request, Quotation $quotation, QuotationEmail $quotationEmail): RedirectResponse|JsonResponse
+    {
+        $quotation->loadMissing('quoteRequest');
+
+        if (! in_array($quotation->status, [Quotation::STATUS_DRAFT, Quotation::STATUS_SENT], true)) {
+            $message = 'Only draft or sent quotations can be emailed.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $message], 422);
             }
+
+            return redirect()->route('quotations.show', $quotation)->with('toast-error', $message);
         }
 
-        $quotation->update([
-            'quote_date' => $validated['quote_date'],
-            'quote_valid_until' => $validated['quote_valid_until'],
-            'moving_from' => $validated['moving_from'],
-            'moving_to' => $validated['moving_to'],
-            'move_date' => $validated['move_date'],
-            'quote_amount' => $validated['quote_amount'],
-            'deposit_percentage' => $validated['deposit_percentage'],
-            'cancellation_notice_hours' => $validated['cancellation_notice_hours'],
-            'services_included' => $services,
-            'additional_notes' => $validated['additional_notes'],
-            'payment_terms' => $validated['payment_terms'],
-            'authorized_by' => $validated['authorized_by'],
-            'authorized_role' => $validated['authorized_role'],
-            'approval_date' => $validated['approval_date'],
-        ]);
+        $payload = array_merge([
+            'recipient_email' => $quotation->quoteRequest->email,
+            'subject' => $quotationEmail->defaultSubject($quotation),
+            'message' => $quotationEmail->defaultMessage($quotation, $request->user()),
+            'attach_pdf' => $request->has('attach_pdf') ? $request->boolean('attach_pdf') : true,
+        ], $request->only(['recipient_email', 'subject', 'message']));
+
+        $validated = validator($payload, [
+            'recipient_email' => ['required', 'email', 'max:190'],
+            'subject' => ['required', 'string', 'max:190'],
+            'message' => ['required', 'string', 'max:5000'],
+            'attach_pdf' => ['required', 'boolean'],
+        ])->validate();
+
+        try {
+            $result = $quotationEmail->queue($quotation, $validated, $request->user());
+        } catch (Throwable $exception) {
+            report($exception);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Quotation email failed. Delivery status was logged.',
+                ], 500);
+            }
+
+            return redirect()->route('quotations.show', $quotation)
+                ->with('toast-error', 'Quotation email failed. Delivery status was logged.');
+        }
+
+        if ($result['status'] !== 'sent') {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Quotation email failed. Delivery status was logged.',
+                ], 500);
+            }
+
+            return redirect()->route('quotations.show', $quotation)
+                ->with('toast-error', 'Quotation email failed. Delivery status was logged.');
+        }
+
+        $message = 'Quotation sent successfully to '.$result['recipient_email'];
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $message,
+                'recipient_email' => $result['recipient_email'],
+                'sent_at' => $result['sent_at'],
+                'sent_at_human' => $result['sent_at_human'],
+                'status' => $result['status'],
+                'quote_status' => $result['quote_status'],
+            ]);
+        }
 
         return redirect()->route('quotations.show', $quotation)
-            ->with('toast-success', 'Quotation updated successfully!');
+            ->with('toast-success', $message);
     }
 
-    public function show(Quotation $quotation)
+    public function approve(Quotation $quotation): RedirectResponse
     {
-        return view('quotations.show', compact('quotation'));
-    }
+        $quotation->loadMissing('quoteRequest');
 
-    public function edit(Quotation $quotation)
-    {
-        $quote = $quotation->quoteRequest;
-        return view('quotations.create', compact('quote', 'quotation'));
-    }
+        if ($quotation->status !== Quotation::STATUS_SENT) {
+            return redirect()
+                ->route('quotations.show', $quotation)
+                ->with('toast-error', 'Only sent quotations can be approved.');
+        }
 
-    public function pdf(Quotation $quotation)
-    {
-        $pdf = Pdf::loadView('quotations.pdf', ['quotation' => $quotation]);
-        return $pdf->download('Quotation_' . $quotation->quoteRequest->reference() . '.pdf');
-    }
-
-    public function send(Quotation $quotation)
-    {
-        try {
-            // Update quotation status
+        DB::transaction(function () use ($quotation): void {
             $quotation->update([
-                'status' => 'sent',
-                'sent_at' => now(),
+                'status' => 'approved',
+                'approval_date' => $quotation->approval_date ?: now()->toDateString(),
             ]);
 
-            // Send email to client with PDF attachment
-            $this->sendQuotationEmail($quotation);
-
-            // Update quote request status to quoted
-            $quotation->quoteRequest->update(['status' => 'quoted']);
-
-            return redirect()->route('quotations.show', $quotation)
-                ->with('toast-success', 'Quotation sent to client successfully!');
-        } catch (\Exception $e) {
-            return redirect()->route('quotations.show', $quotation)
-                ->with('toast-error', 'Failed to send quotation: ' . $e->getMessage());
-        }
-    }
-
-    private function sendQuotationEmail(Quotation $quotation)
-    {
-        $client = $quotation->quoteRequest;
-        
-        // Generate PDF
-        $pdf = Pdf::loadView('quotations.pdf', ['quotation' => $quotation]);
-
-        // Send email with PDF attachment
-        Mail::send('emails.quotation', ['quotation' => $quotation, 'client' => $client], function ($message) use ($client, $quotation, $pdf) {
-            $message->to($client->email)
-                ->subject('Your Professional Moving Quotation - ' . $client->reference())
-                ->from(config('mail.from.address'), config('mail.from.name'))
-                ->attachData($pdf->output(), 'Quotation_' . $client->reference() . '.pdf', [
-                    'mime' => 'application/pdf',
-                ]);
+            $quotation->quoteRequest?->update([
+                'status' => QuoteRequest::STATUS_CREATED,
+                'approval_date' => $quotation->quoteRequest?->approval_date ?: now()->toDateString(),
+            ]);
         });
+
+        return redirect()
+            ->route('quotations.show', $quotation)
+            ->with('toast-success', 'Quotation approved successfully.');
     }
+
+    public function reject(Quotation $quotation): RedirectResponse
+    {
+        $quotation->loadMissing('quoteRequest');
+
+        if ($quotation->status !== Quotation::STATUS_SENT) {
+            return redirect()
+                ->route('quotations.show', $quotation)
+                ->with('toast-error', 'Only sent quotations can be rejected.');
+        }
+
+        DB::transaction(function () use ($quotation): void {
+            $quotation->update(['status' => Quotation::STATUS_DECLINED]);
+            $quotation->quoteRequest?->update(['status' => QuoteRequest::STATUS_CLOSED]);
+        });
+
+        return redirect()
+            ->route('quotations.show', $quotation)
+            ->with('toast-success', 'Quotation rejected successfully.');
+    }
+
+    public function duplicate(Quotation $quotation): RedirectResponse
+    {
+        $quotation->loadMissing('quoteRequest');
+
+        $copy = $quotation->replicate([
+            'status',
+            'sent_at',
+            'quote_date',
+            'quote_valid_until',
+            'approval_date',
+            'created_at',
+            'updated_at',
+        ]);
+        $copy->status = 'draft';
+        $copy->sent_at = null;
+        $copy->quote_date = now()->toDateString();
+        $copy->quote_valid_until = now()->addDays(7)->toDateString();
+        $copy->approval_date = now()->toDateString();
+        $copy->save();
+
+        return redirect()
+            ->route('quotations.show', $copy)
+            ->with('toast-success', 'Quotation duplicated as a draft.');
+    }
+
+    public function destroy(Quotation $quotation)
+    {
+        $quotation->loadMissing(['quoteRequest', 'invoice']);
+        $quote = $quotation->quoteRequest;
+
+        if ($quotation->invoice) {
+            return redirect()
+                ->route('quotations.show', $quotation)
+                ->with('toast-error', 'Delete the invoice before deleting this quotation.');
+        }
+
+        DB::transaction(function () use ($quotation, $quote): void {
+            $quotation->delete();
+
+            if ($quote) {
+                $quote->update(['status' => QuoteRequest::STATUS_QUOTED]);
+            }
+        });
+
+        return $quote
+            ? redirect()->route('quotes.show', $quote)->with('toast-success', 'Quotation deleted successfully.')
+            : redirect()->route('quotes.index')->with('toast-success', 'Quotation deleted successfully.');
+    }
+
+    private function formViewData(QuoteRequest $quote, Quotation $quotation, ?User $user): array
+    {
+        return [
+            'quote' => $quote,
+            'quotation' => $quotation,
+            'autofill' => $this->autofillData($quote, $quotation),
+            'authorization' => $this->authorizationViewData($user, $quotation, $quote),
+            'company' => app(CompanyProfile::class)->data(),
+            'serviceTypeOptions' => QuoteRequest::serviceTypeOptions(),
+        ];
+    }
+
+    private function autofillData(QuoteRequest $quote, Quotation $quotation): array
+    {
+        $quoteDate = $quotation->quote_date?->format('Y-m-d') ?: now()->format('Y-m-d');
+        $validUntil = $quotation->quote_valid_until?->format('Y-m-d') ?: now()->addDays(7)->format('Y-m-d');
+        $validityDays = max(0, (int) round(now()->copy()->startOfDay()->diffInDays(now()->copy()->addDays(7)->startOfDay(), false)));
+
+        if ($quotation->quote_date && $quotation->quote_valid_until) {
+            $validityDays = $quotation->validityDays() ?? $validityDays;
+        }
+
+        return [
+            'customer_name' => $quote->customer_name,
+            'contact_info' => trim($quote->email.' • '.$quote->phone),
+            'service_type' => $quote->serviceTypeLabel(),
+            'pickup_location' => $quotation->moving_from ?: $quote->pickup_location,
+            'dropoff_location' => $quotation->moving_to ?: $quote->dropoff_location,
+            'preferred_move_date' => $quotation->move_date?->format('Y-m-d') ?: $quote->preferred_move_date?->format('Y-m-d'),
+            'preferred_move_date_label' => $quotation->move_date?->format('d M Y') ?: $quote->preferred_move_date?->format('d M Y') ?: 'Not specified',
+            'item_details' => $quote->item_details ?: 'Not specified',
+            'special_notes' => $quote->special_notes ?: '',
+            'quote_date' => $quoteDate,
+            'quote_valid_until' => $validUntil,
+            'quote_validity_days' => $validityDays,
+            'payment_terms' => $quotation->payment_terms ?: self::DEFAULT_PAYMENT_TERMS,
+            'cancellation_notice_hours' => $quotation->cancellation_notice_hours ?: self::DEFAULT_CANCELLATION_NOTICE_HOURS,
+            'cancellation_policy' => $quotation->cancellation_policy ?: self::DEFAULT_CANCELLATION_POLICY,
+        ];
+    }
+
+    private function authorizationStorageData(?User $user, QuoteRequest $quote, ?Quotation $quotation = null): array
+    {
+        $approvalDate = $quote->approval_date?->format('Y-m-d')
+            ?: $quotation?->approval_date?->format('Y-m-d')
+            ?: now()->toDateString();
+
+        return [
+            'authorized_by' => $user?->name,
+            'authorized_role' => $user?->job_title,
+            'approval_date' => $approvalDate,
+            'signature' => $this->userSignature->path($user),
+        ];
+    }
+
+    private function authorizationViewData(?User $user, ?Quotation $quotation = null, ?QuoteRequest $quote = null): array
+    {
+        $userSignaturePath = $this->userSignature->path($user);
+        $signaturePath = $user ? $userSignaturePath : $quotation?->signature;
+        $date = $quotation?->approval_date ?: $quote?->approval_date ?: now();
+        $dateValue = $date instanceof CarbonInterface ? $date->format('Y-m-d') : now()->toDateString();
+        $dateLabel = $date instanceof CarbonInterface ? $date->format('d M Y') : now()->format('d M Y');
+        $name = $user ? $user->name : $quotation?->authorized_by;
+        $jobTitle = $user ? $user->job_title : $quotation?->authorized_role;
+        $hasSignature = $this->userSignature->exists($signaturePath);
+
+        return [
+            'name' => $name ?: 'Pending',
+            'job_title' => $jobTitle ?: 'Authorized Signatory',
+            'signature_path' => $signaturePath,
+            'signature_url' => $hasSignature ? $this->userSignature->dataUri($signaturePath) : null,
+            'is_complete' => $hasSignature,
+            'profile_url' => route('account.show'),
+            'date_value' => $dateValue,
+            'date_label' => $dateLabel,
+            'prompt' => 'No signature on file.',
+        ];
+    }
+
+    private function quotationActionResponse(Quotation $quotation, string $action, string $successMessage)
+    {
+        $quotation->refresh()->loadMissing('quoteRequest');
+
+        if ($action === 'send') {
+            $quotationEmail = app(QuotationEmail::class);
+
+            try {
+                $result = $quotationEmail->queue($quotation, [
+                    'recipient_email' => $quotation->quoteRequest->email,
+                    'subject' => $quotationEmail->defaultSubject($quotation),
+                    'message' => $quotationEmail->defaultMessage($quotation, auth()->user()),
+                    'attach_pdf' => true,
+                ], auth()->user());
+            } catch (Throwable $exception) {
+                report($exception);
+
+                return redirect()->route('quotations.show', $quotation)
+                    ->with('toast-error', 'Quotation saved, but the email could not be queued.');
+            }
+
+            if ($result['status'] === 'sent') {
+                return redirect()->route('quotations.show', $quotation)
+                    ->with('toast-success', 'Quotation saved and sent to client successfully.');
+            }
+
+            return redirect()->route('quotations.show', $quotation)
+                ->with('toast-error', 'Quotation saved, but the email failed. Delivery status was logged.');
+        }
+
+        if ($action === 'download') {
+            return redirect()->route('quotations.pdf', $quotation);
+        }
+
+        $message = $action === 'draft' ? 'Quotation saved as draft.' : $successMessage;
+
+        return redirect()->route('quotations.show', $quotation)
+            ->with('toast-success', $message);
+    }
+
+    private function quoteRequestStatusAfterQuotationSave(Quotation $quotation, string $action): string
+    {
+        if ($action !== 'draft' && $quotation->status === 'sent') {
+            return QuoteRequest::STATUS_EMAILED;
+        }
+
+        return QuoteRequest::STATUS_CREATED;
+    }
+
 }

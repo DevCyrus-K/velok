@@ -563,8 +563,15 @@
             const hasData = rawSeries.some((value) => value > 0);
             const series = hasData ? rawSeries : [1];
             const labels = hasData ? reportData.charts.status.labels : ['No activity'];
+            const statusPalette = [
+                chartColors.success,
+                chartColors.danger,
+                chartColors.warning,
+                chartColors.accent,
+                chartColors.primary
+            ];
             const colors = hasData
-                ? [chartColors.success, chartColors.danger, chartColors.warning]
+                ? labels.map((label, index) => statusPalette[index % statusPalette.length])
                 : [chartColors.primary];
 
             new ApexCharts(chartElement, {

@@ -1,26 +1,42 @@
 @extends('layouts.vertical', ['title' => 'Quote Details'])
 
+@section('css')
+<style>
+    @media (max-width: 639.98px) {
+        .quote-request-actions .btn,
+        .quote-request-actions form {
+            width: 100%;
+        }
+    }
+</style>
+@endsection
+
 @section('content')
+@php
+    $requestGroup = $quote->statusGroup();
+    $quotation = $quotation ?? $quote->quote;
+    $invoice = $invoice ?? $quote->invoice;
+@endphp
 <div class="row">
     <div class="col-12">
         <div class="card">
             <div class="card-body">
                 <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
                     <div>
-                        <p class="text-muted mb-1">Quote Request</p>
+                        <p class="text-muted mb-1">Quote</p>
                         <h3 class="mb-2">{{ $quote->reference() }}</h3>
                         <div class="d-flex flex-wrap align-items-center gap-2">
-                            <span class="badge badge-soft-{{ $quote->statusBadgeClass() }}">{{ $quote->statusLabel() }}</span>
+                            <span class="badge badge-soft-{{ $quote->statusBadgeClass() }}" id="quote-status-badge">{{ $quote->statusLabel() }}</span>
                             <span class="text-muted small">Submitted {{ $quote->created_at?->format('d M Y, h:i A') ?? 'N/A' }}</span>
+                            <span class="text-muted small" id="quote-approval-date-label">
+                                @if($quote->approval_date)
+                                    Approved {{ $quote->approval_date->format('d M Y') }}
+                                @endif
+                            </span>
                         </div>
                     </div>
                     <div class="d-flex flex-wrap gap-2">
                         <a class="btn btn-outline-secondary" href="{{ route('quotes.index') }}">Back to Quotes</a>
-                        <a class="btn btn-outline-primary" href="mailto:{{ $quote->email }}">Email</a>
-                        @if($quote->whatsappUrl())
-                        <a class="btn btn-success" href="{{ $quote->whatsappUrl() }}" target="_blank" rel="noopener">WhatsApp</a>
-                        @endif
-                        <a class="btn btn-primary" href="{{ $quote->telLink() }}">Call</a>
                     </div>
                 </div>
 
@@ -64,8 +80,8 @@
                         <div class="border rounded p-4 h-100">
                             <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
                                 <div>
-                                    <h5 class="mb-1">Submitted Request Details</h5>
-                                    <p class="text-muted mb-0">Everything below is pulled directly from the stored quote request record.</p>
+                                    <h5 class="mb-1">Submitted Quote Details</h5>
+                                    <p class="text-muted mb-0">Everything below is pulled directly from the stored quote record.</p>
                                 </div>
                                 <span class="badge badge-soft-primary">{{ $quote->serviceTypeLabel() }}</span>
                             </div>
@@ -105,6 +121,10 @@
                                             <th class="ps-0 text-muted fw-medium">Special Notes</th>
                                             <td>{{ $quote->additional_notes ?: 'No special notes were submitted.' }}</td>
                                         </tr>
+                                        <tr>
+                                            <th class="ps-0 text-muted fw-medium">Approval Date</th>
+                                            <td id="quote-approval-date-value">{{ $quote->approval_date?->format('d M Y') ?? 'Pending approval' }}</td>
+                                        </tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -114,61 +134,51 @@
                     <div class="col-xl-4">
                         <div class="border rounded p-4 h-100">
                             <h5 class="mb-3">Action Center</h5>
-                            <div class="d-grid gap-2">
-                                @if ($quotation)
-                                    <a class="btn btn-info" href="{{ route('quotations.show', $quotation) }}">
-                                        <i data-lucide="file-text" class="align-middle me-1"></i>View Quotation
-                                    </a>
-                                    @if ($quotation->status === 'draft')
-                                        <a class="btn btn-warning" href="{{ route('quotations.edit', $quotation) }}">
-                                            <i data-lucide="edit-3" class="align-middle me-1"></i>Edit Quotation
-                                        </a>
-                                        <form action="{{ route('quotations.send', $quotation) }}" method="POST">
-                                            @csrf
-                                            <button type="submit" class="btn btn-success w-100">
-                                                <i data-lucide="mail" class="align-middle me-1"></i>Send Quotation
-                                            </button>
-                                        </form>
-                                    @endif
-                                @elseif ($quote->status === 'processing' || $quote->status === 'quoted')
-                                    <a class="btn btn-primary" href="{{ route('quotations.create', $quote) }}">
-                                        <i data-lucide="plus" class="align-middle me-1"></i>Create Quotation
-                                    </a>
-                                @endif
-
-                                @if ($quote->status !== 'quoted' && $quote->status !== 'closed')
-                                    <form action="{{ route('quotes.approve', $quote) }}" data-confirm-button-class="btn-success" data-confirm-cancel-text="No, Keep" data-confirm-confirm-text="Yes, Approve" data-confirm-message="Do you want to approve this quote request?" data-confirm-modal data-confirm-title="Approve quote?" method="POST">
+                            <div class="d-grid gap-2 quote-request-actions">
+                                @if($requestGroup === 'pending')
+                                    <form action="{{ route('quotes.approve', $quote) }}" id="approveQuoteRequestForm" method="POST">
                                         @csrf
                                         @method('PATCH')
                                         <button class="btn btn-success w-100" type="submit">
                                             <i data-lucide="check" class="align-middle me-1"></i>Approve
                                         </button>
                                     </form>
-                                @endif
-
-                                @if ($quote->status !== 'closed' && $quote->status !== 'quoted')
-                                    <form action="{{ route('quotes.decline', $quote) }}" data-confirm-button-class="btn-warning" data-confirm-cancel-text="No, Keep" data-confirm-confirm-text="Yes, Decline" data-confirm-message="Do you want to decline this quote request?" data-confirm-modal data-confirm-title="Decline quote?" method="POST">
+                                    <form action="{{ route('quotes.decline', $quote) }}" data-confirm-button-class="btn-warning" data-confirm-cancel-text="No, Keep" data-confirm-confirm-text="Yes, Reject" data-confirm-message="Do you want to reject this quote request?" data-confirm-modal data-confirm-title="Reject quote request?" id="declineQuoteRequestForm" method="POST">
                                         @csrf
                                         @method('PATCH')
                                         <button class="btn btn-outline-warning w-100" type="submit">
-                                            <i data-lucide="x" class="align-middle me-1"></i>Decline
+                                            <i data-lucide="x" class="align-middle me-1"></i>Reject
+                                        </button>
+                                    </form>
+                                    <form action="{{ route('quotes.destroy', $quote) }}" data-delete-confirm data-delete-message="Do you want to delete this quote request?" data-delete-title="Delete quote request?" id="deleteQuoteRequestForm" method="POST">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button class="btn btn-outline-danger w-100" type="submit">
+                                            <i data-lucide="trash-2" class="align-middle me-1"></i>Delete
+                                        </button>
+                                    </form>
+                                    <a class="btn btn-primary d-none" id="createQuotationButton" href="{{ route('quotations.create', $quote) }}">
+                                        <i data-lucide="plus" class="align-middle me-1"></i>Create Quote
+                                    </a>
+                                @elseif($requestGroup === 'approved')
+                                    @if($quotation)
+                                        <a class="btn btn-info" href="{{ route('quotations.show', $quotation) }}">
+                                            <i data-lucide="file-text" class="align-middle me-1"></i>View Quote
+                                        </a>
+                                    @else
+                                        <a class="btn btn-primary" id="createQuotationButton" href="{{ route('quotations.create', $quote) }}">
+                                            <i data-lucide="plus" class="align-middle me-1"></i>Create Quote
+                                        </a>
+                                    @endif
+                                @else
+                                    <form action="{{ route('quotes.destroy', $quote) }}" data-delete-confirm data-delete-message="Do you want to delete this rejected quote request?" data-delete-title="Delete quote request?" method="POST">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button class="btn btn-outline-danger w-100" type="submit">
+                                            <i data-lucide="trash-2" class="align-middle me-1"></i>Delete
                                         </button>
                                     </form>
                                 @endif
-
-                                <a class="btn btn-outline-secondary" href="{{ route('quotes.edit', $quote) }}">
-                                    <i data-lucide="edit-3" class="align-middle me-1"></i>Edit Request
-                                </a>
-                                <a class="btn btn-outline-dark" href="javascript:window.print()">
-                                    <i data-lucide="printer" class="align-middle me-1"></i>Print
-                                </a>
-                                <form action="{{ route('quotes.destroy', $quote) }}" data-delete-confirm data-delete-message="Do you want to delete this quote request?" data-delete-title="Delete quote?" method="POST">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button class="btn btn-outline-danger w-100" type="submit">
-                                        <i data-lucide="trash-2" class="align-middle me-1"></i>Delete Request
-                                    </button>
-                                </form>
                             </div>
                         </div>
                     </div>
@@ -177,4 +187,122 @@
         </div>
     </div>
 </div>
+@endsection
+
+@section('scripts')
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('approveQuoteRequestForm');
+
+        if (!form) {
+            return;
+        }
+
+        const modalElement = document.getElementById('deleteConfirmModal');
+        const titleElement = document.getElementById('deleteConfirmModalTitle');
+        const messageElement = document.getElementById('deleteConfirmModalMessage');
+        const confirmButton = document.getElementById('deleteConfirmButton');
+        const cancelButton = document.getElementById('deleteConfirmCancelButton');
+        const modal = modalElement && window.bootstrap ? new bootstrap.Modal(modalElement) : null;
+        const statusBadge = document.getElementById('quote-status-badge');
+        const approvalDateLabel = document.getElementById('quote-approval-date-label');
+        const approvalDateValue = document.getElementById('quote-approval-date-value');
+        const createButton = document.getElementById('createQuotationButton');
+        const declineForm = document.getElementById('declineQuoteRequestForm');
+        const deleteForm = document.getElementById('deleteQuoteRequestForm');
+
+        const showToast = (message, className = 'bg-success') => {
+            if (!window.Toastify || !message) {
+                return;
+            }
+
+            Toastify({
+                text: message,
+                duration: 3000,
+                close: true,
+                gravity: 'top',
+                position: 'right',
+                className,
+            }).showToast();
+        };
+
+        const approve = async () => {
+            const submitButton = form.querySelector('[type="submit"]');
+            const formData = new FormData(form);
+
+            submitButton.disabled = true;
+
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    throw new Error('Approval failed.');
+                }
+
+                const data = await response.json();
+
+                if (statusBadge) {
+                    statusBadge.className = `badge badge-soft-${data.status_badge_class || 'success'}`;
+                    statusBadge.textContent = data.status_label || 'Approved';
+                }
+
+                if (approvalDateLabel) {
+                    approvalDateLabel.textContent = data.approval_date_formatted ? `Approved ${data.approval_date_formatted}` : '';
+                }
+
+                if (approvalDateValue) {
+                    approvalDateValue.textContent = data.approval_date_formatted || 'Pending approval';
+                }
+
+                if (createButton && data.create_url) {
+                    createButton.href = data.create_url;
+                    createButton.classList.remove('d-none');
+                }
+
+                form.classList.add('d-none');
+                declineForm?.classList.add('d-none');
+                deleteForm?.classList.add('d-none');
+                showToast(data.message || 'Quote request approved.');
+            } catch (error) {
+                submitButton.disabled = false;
+                showToast('Quote request approval failed. Please try again.', 'bg-danger');
+            }
+        };
+
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+
+            if (!modal || !titleElement || !messageElement || !confirmButton || !cancelButton) {
+                approve();
+                return;
+            }
+
+            titleElement.textContent = 'Approve quote?';
+            messageElement.textContent = 'Do you want to approve this quote request?';
+            confirmButton.textContent = 'Yes, Approve';
+            cancelButton.textContent = 'No, Keep';
+            confirmButton.className = 'btn btn-success';
+
+            const onConfirm = () => {
+                confirmButton.removeEventListener('click', onConfirm);
+                modal.hide();
+                approve();
+            };
+
+            confirmButton.addEventListener('click', onConfirm);
+            modalElement.addEventListener('hidden.bs.modal', function cleanup() {
+                confirmButton.removeEventListener('click', onConfirm);
+                modalElement.removeEventListener('hidden.bs.modal', cleanup);
+            });
+            modal.show();
+        });
+    });
+</script>
 @endsection

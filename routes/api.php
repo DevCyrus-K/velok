@@ -2,7 +2,10 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\CareerApiController;
+use App\Http\Controllers\ContentApiController;
 use App\Http\Controllers\MessageController;
+use App\Http\Controllers\ReviewApiController;
 
 /*
 |--------------------------------------------------------------------------
@@ -21,3 +24,9 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 // Frontend message submission (public endpoint)
 Route::post('/messages/submit', [MessageController::class, 'storeFromFrontend']);
+Route::get('/careers/jobs', [CareerApiController::class, 'jobs']);
+Route::post('/careers/applications', [CareerApiController::class, 'storeApplication']);
+Route::get('/reviews', [ReviewApiController::class, 'index']);
+Route::post('/reviews/submit', [ReviewApiController::class, 'store']);
+Route::get('/faqs', [ContentApiController::class, 'faqs']);
+Route::get('/gallery', [ContentApiController::class, 'gallery']);

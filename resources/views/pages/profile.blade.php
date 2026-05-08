@@ -12,9 +12,9 @@
                 </div>
                 <div class="mt-3 px-4 d-flex flex-wrap align-items-end justify-content-between">
                     <div>
-                        <h4 class="mb-1 fw-semibold">Gaston Lapierre <i class="text-success align-middle"
+                        <h4 class="mb-1 fw-semibold">Super Lapierre <i class="text-success align-middle"
                                 data-lucide="badge-check"></i></h4>
-                        <p class="mb-4">gastonlapierre333@rhyta.com</p>
+                        <p class="mb-4">Superlapierre333@rhyta.com</p>
                         <p class="text-muted fw-medium mb-2 d-flex align-items-start gap-2"><span
                                 class="text-dark fs-12 fw-bold text-uppercase d-flex align-items-center gap-1">Occupation:
                             </span> Senior Web Developer In Joins LLP</p>
@@ -77,7 +77,7 @@
                             <div class="card-body">
                                 <div class="pb-3 border-bottom">
                                     <h5 class="text-dark fs-12 text-uppercase fw-bold">About Me :</h5>
-                                    <p class="fw-medium mb-0">Hi, Gaston Lapierre I'm 36 and I work as a Digital Designer for the “debater” Agency in Ontario, Canada</p>
+                                    <p class="fw-medium mb-0">Hi, Super Lapierre I'm 36 and I work as a Digital Designer for the “debater” Agency in Ontario, Canada</p>
                                 </div>
                                 <div class="py-3 border-bottom">
                                     <h5 class="text-dark fs-12 text-uppercase fw-bold">Birth Date : </h5>
@@ -221,7 +221,7 @@
                                             src="/images/users/avatar-1.jpg" />
                                     </a>
                                     <div>
-                                        <a class="text-dark fw-semibold fs-5" href="#!">Gaston Lapierre </a>
+                                        <a class="text-dark fw-semibold fs-5" href="#!">Super Lapierre </a>
                                         <p class="mt-1 mb-0 text-muted fs-12"> 20 May at 01:12 PM </p>
                                     </div>
                                     <div class="ms-auto">
@@ -460,7 +460,7 @@
                                             </span>
                                         </div>
                                     </div>
-                                    <h5 class="mt-3 mb-2 fw-semibold fs-14">Gaston Lapierre</h5>
+                                    <h5 class="mt-3 mb-2 fw-semibold fs-14">Super Lapierre</h5>
                                     <p class="mb-0">Future Program Designer at <a class="link-primary fw-semibold text-decoration-underline" href="#!">Google</a></p>
                                 </div>
                                 <div class="border-bottom py-3">

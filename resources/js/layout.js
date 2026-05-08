@@ -426,39 +426,64 @@ class ThemeLayout {
                });
           }
           
-          var menuToggleBtn = document.querySelector('.button-toggle-menu');
-          if (menuToggleBtn) {
+          document.querySelectorAll('.button-toggle-menu').forEach(function (menuToggleBtn) {
                menuToggleBtn.addEventListener('click', function () {
-                    var configSize = self.config.menu.size;
-                    var size = self.html.classList.contains(configSize);
-
                     if (window.innerWidth > 1040) {
                          self.html.classList.toggle("sidebar-hover");
-                    } else {
-                         self.html.classList.toggle('sidebar-enable');
-                         self.showBackdrop();
+                         self.updateSidebarToggleState(self.html.classList.contains("sidebar-hover"));
+                         return;
                     }
 
+                    var isEnabled = self.html.classList.toggle('sidebar-enable');
+                    self.updateSidebarToggleState(isEnabled);
+
+                    if (isEnabled) {
+                         self.showBackdrop();
+                    } else {
+                         self.hideBackdrop();
+                    }
                });
-          }
+          });
      }
 
-     // showBackdrop() {
-     //      const backdrop = document.createElement('div');
-     //      backdrop.classList = 'offcanvas-backdrop fade show';
-     //      document.body.appendChild(backdrop);
-     //      document.body.style.overflow = "hidden";
-     //      if (window.innerWidth > 1040) {
-     //           document.body.style.paddingRight = "15px";
-     //      }
-     //      const self = this
-     //      backdrop.addEventListener('click', function (e) {
-     //           self.html.classList.remove('sidebar-enable');
-     //           document.body.removeChild(backdrop);
-     //           document.body.style.overflow = null;
-     //           document.body.style.paddingRight = null;
-     //      })
-     // }
+     showBackdrop() {
+          if (document.querySelector('[data-sidebar-backdrop]')) {
+               return;
+          }
+
+          const backdrop = document.createElement('div');
+          backdrop.className = 'offcanvas-backdrop fade show';
+          backdrop.setAttribute('data-sidebar-backdrop', '');
+          document.body.appendChild(backdrop);
+          document.body.style.overflow = "hidden";
+
+          backdrop.addEventListener('click', () => {
+               this.hideMobileSidebar();
+          });
+     }
+
+     hideBackdrop() {
+          const backdrop = document.querySelector('[data-sidebar-backdrop]');
+
+          if (backdrop) {
+               backdrop.remove();
+          }
+
+          document.body.style.overflow = null;
+          document.body.style.paddingRight = null;
+     }
+
+     hideMobileSidebar() {
+          this.html.classList.remove('sidebar-enable');
+          this.hideBackdrop();
+          this.updateSidebarToggleState(false);
+     }
+
+     updateSidebarToggleState(isExpanded) {
+          document.querySelectorAll('.button-toggle-menu').forEach(function (button) {
+               button.setAttribute('aria-expanded', String(isExpanded));
+          });
+     }
 
      initWindowSize() {
           var self = this;
@@ -473,6 +498,7 @@ class ThemeLayout {
           if (window.innerWidth <= 1140) {
                self.changeMenuSize('sidebar-hidden', false);
           } else {
+               self.hideMobileSidebar();
                self.changeMenuSize(self.config.menu.size);
           }
      }

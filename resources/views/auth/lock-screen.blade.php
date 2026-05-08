@@ -16,7 +16,7 @@
                                         <img alt="logo light" height="30" src="/images/logo-white.png" />
                                    </a>
                               </div>
-                              <h2 class="fw-bold text-center fs-18">Hi ! Gaston</h2>
+                              <h2 class="fw-bold text-center fs-18">Hi ! Super</h2>
                               <p class="text-muted text-center mt-1 mb-4">Enter your password to access the admin.</p>
                               <div class="px-4">
                                    <form action="index.html" class="authentication-form">

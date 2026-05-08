@@ -34,8 +34,15 @@ class CustomerSyncService
                 $firstQuote = $group->first();
                 $latestQuote = $group->last();
 
-                $approvedQuotesCount = $group->where('status', 'quoted')->count();
-                $declinedQuotesCount = $group->filter(fn (QuoteRequest $quote) => in_array($quote->status, ['closed', 'spam'], true))->count();
+                $approvedQuotesCount = $group->whereIn('status', [
+                    QuoteRequest::STATUS_QUOTED,
+                    QuoteRequest::STATUS_CREATED,
+                    QuoteRequest::STATUS_EMAILED,
+                ])->count();
+                $declinedQuotesCount = $group->filter(fn (QuoteRequest $quote) => in_array($quote->status, [
+                    QuoteRequest::STATUS_CLOSED,
+                    QuoteRequest::STATUS_SPAM,
+                ], true))->count();
                 $status = Customer::classifyStatus($latestQuote->status, $latestQuote->created_at);
 
                 return [

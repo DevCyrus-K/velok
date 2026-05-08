@@ -13,10 +13,6 @@
                          </div>
                          <div class="d-flex flex-wrap gap-2">
                               <a class="btn btn-outline-primary btn-sm" href="mailto:{{ $customer->email }}">Send Email</a>
-                              @if($customer->whatsappUrl())
-                              <a class="btn btn-success btn-sm" href="{{ $customer->whatsappUrl() }}" target="_blank" rel="noopener">WhatsApp</a>
-                              @endif
-                              <a class="btn btn-primary btn-sm" href="{{ $customer->telLink() }}">Call</a>
                          </div>
                     </div>
 

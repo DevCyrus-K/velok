@@ -27,6 +27,24 @@
         box-shadow: inset 0 -1px 0 var(--bs-border-color);
     }
 
+    .quote-row-actions {
+        flex-wrap: nowrap !important;
+        white-space: nowrap;
+    }
+
+    .quote-row-actions form {
+        margin: 0;
+    }
+
+    .quote-route-text {
+        display: inline-block;
+        max-width: 220px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: bottom;
+        white-space: nowrap;
+    }
+
     @media (max-width: 767.98px) {
         .quote-list-toolbar > *,
         .quote-list-toolbar .dropdown,
@@ -42,13 +60,83 @@
         }
 
         .quote-table-wrap {
-            max-height: 62vh;
+            max-height: none;
+            overflow: visible;
+        }
+
+        .quote-table-wrap .table {
+            min-width: 0;
+        }
+
+        .quote-table-wrap table,
+        .quote-table-wrap thead,
+        .quote-table-wrap tbody,
+        .quote-table-wrap tr,
+        .quote-table-wrap td {
+            display: block;
+            width: 100%;
+        }
+
+        .quote-table-wrap thead {
+            display: none;
+        }
+
+        .quote-table-wrap tr[data-quote-row] {
+            background: var(--bs-body-bg);
+            border: 1px solid var(--bs-border-color);
+            border-radius: 8px;
+            margin: 0.75rem;
+            padding: 0.75rem;
+        }
+
+        .quote-table-wrap td {
+            border: 0;
+            padding: 0.35rem 0;
+            white-space: normal;
+        }
+
+        .quote-table-wrap td::before {
+            color: var(--bs-secondary-color);
+            content: attr(data-label);
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .quote-row-actions {
+            justify-content: flex-start !important;
+        }
+
+        .quote-route-text {
+            max-width: 100%;
+        }
+    }
+
+    @media (min-width: 768px) and (max-width: 1024px) {
+        .quote-table-wrap .quote-phone-col,
+        .quote-table-wrap .quote-service-col {
+            display: none;
         }
     }
 </style>
 @endsection
 
 @section('content')
+@php
+    $shortLocation = static function (?string $value): string {
+        $text = trim((string) $value);
+
+        if ($text === '') {
+            return 'Not set';
+        }
+
+        return collect(preg_split('/\s+/', $text) ?: [])
+            ->filter()
+            ->map(fn (string $word) => Str::length($word) > 10 ? Str::substr($word, 0, 10) . '..' : $word)
+            ->implode(' ');
+    };
+@endphp
 
 <!-- Stat Cards -->
 <div class="row">
@@ -112,7 +200,7 @@
                 <div class="d-flex align-items-center gap-3">
                     <div>
                         <p class="text-dark fw-semibold fs-26 mb-1">{{ $summary['declined'] }}</p>
-                        <p class="card-title mb-0">Declined Quotes</p>
+                        <p class="card-title mb-0">Rejected Quotes</p>
                     </div>
                     <div class="ms-auto">
                         <a class="btn btn-danger avatar-md rounded-circle d-flex align-items-center justify-content-center"
@@ -145,7 +233,7 @@
                             <a class="dropdown-item filter-option" href="#!" data-filter="all">All</a>
                             <a class="dropdown-item filter-option" href="#!" data-filter="pending">Pending</a>
                             <a class="dropdown-item filter-option" href="#!" data-filter="approved">Approved</a>
-                            <a class="dropdown-item filter-option" href="#!" data-filter="declined">Declined</a>
+                            <a class="dropdown-item filter-option" href="#!" data-filter="declined">Rejected</a>
                         </div>
                     </div>
                     <div class="dropdown">
@@ -201,24 +289,37 @@
                             <tr>
                                 <th class="border-0 py-2 text-dark">Quote ID</th>
                                 <th class="border-0 py-2 text-dark">Customer</th>
-                                <th class="border-0 py-2 text-dark">Phone</th>
+                                <th class="border-0 py-2 text-dark quote-phone-col">Phone</th>
                                 <th class="border-0 py-2 text-dark">Created Date</th>
                                 <th class="border-0 py-2 text-dark">Move Date</th>
                                 <th class="border-0 py-2 text-dark">Route</th>
-                                <th class="border-0 py-2 text-dark">Service</th>
+                                <th class="border-0 py-2 text-dark quote-service-col">Service</th>
                                 <th class="border-0 py-2 text-dark">Status</th>
                                 <th class="border-0 py-2 text-dark">Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             @forelse ($quotes as $quote)
+                                @php
+                                    $requestGroup = $quote->statusGroup();
+                                    $quotation = $quote->quote ?: $quote->quotation;
+                                    $canDeleteQuotation = $quotation && ! $quote->invoice;
+                                    $canDeleteRequest = ! $quotation && $requestGroup !== 'approved';
+                                    $quoteIdUrl = $quotation ? route('quotes.download', $quote) : route('quotes.edit', $quote);
+                                    $quoteIdTitle = $quotation ? 'Download Quote' : 'Edit Request';
+                                    $routeTitle = trim(collect([$quote->moving_from, $quote->moving_to])->filter()->implode(' to '));
+                                    $routeLabel = $shortLocation($quote->moving_from) . ' to ' . $shortLocation($quote->moving_to);
+                                @endphp
                                 <tr data-quote-row
                                     data-search="{{ strtolower(implode(' ', [$quote->reference(), $quote->full_name, $quote->email, $quote->phone, $quote->moving_from, $quote->moving_to, $quote->serviceTypeLabel(), $quote->move_size, $quote->statusLabel()])) }}"
-                                    data-service="{{ Str::slug($quote->serviceTypeLabel()) }}">
-                                    <td>
-                                        <a class="fw-medium" href="{{ route('quotes.show', $quote) }}">{{ $quote->reference() }}</a>
+                                    data-created-at="{{ $quote->created_at?->timestamp ?? 0 }}"
+                                    data-customer="{{ Str::lower($quote->full_name ?? '') }}"
+                                    data-service="{{ Str::slug($quote->serviceTypeLabel()) }}"
+                                    data-status-group="{{ $quote->statusGroup() }}">
+                                    <td data-label="Quote ID">
+                                        <a class="fw-medium" href="{{ $quoteIdUrl }}" title="{{ $quoteIdTitle }} {{ $quote->reference() }}">{{ $quote->reference() }}</a>
                                     </td>
-                                    <td>
+                                    <td data-label="Customer">
                                         <div class="d-flex align-items-center">
                                             <div class="avatar-xs rounded-circle bg-primary-subtle text-primary d-inline-flex align-items-center justify-content-center fw-semibold me-2">
                                                 {{ $quote->initials() }}
@@ -233,53 +334,62 @@
                                             </div>
                                         </div>
                                     </td>
-                                    <td>
-                                        <a class="text-muted text-decoration-none" href="{{ $quote->telLink() }}">{{ $quote->phone }}</a>
+                                    <td class="quote-phone-col" data-label="Phone">
+                                        <span class="text-muted">{{ $quote->phone }}</span>
                                     </td>
-                                    <td>
+                                    <td data-label="Created">
                                         {{ $quote->created_at?->format('d M, Y') ?? 'N/A' }}
                                         <small>{{ $quote->created_at?->format('h:i A') ?? '' }}</small>
                                     </td>
-                                    <td>{{ $quote->move_date?->format('d M, Y') ?? 'Not set' }}</td>
-                                    <td>
-                                        <div>{{ $quote->moving_from }}</div>
-                                        <small class="text-muted">to {{ $quote->moving_to }}</small>
+                                    <td data-label="Move Date">{{ $quote->move_date?->format('d M, Y') ?? 'Not set' }}</td>
+                                    <td data-label="Route">
+                                        <span class="quote-route-text" title="{{ $routeTitle ?: 'Not set' }}">{{ $routeLabel }}</span>
                                     </td>
-                                    <td>
+                                    <td class="quote-service-col" data-label="Service">
                                         <div>{{ $quote->serviceTypeLabel() }}</div>
                                         <small class="text-muted">{{ $quote->move_size ?: 'Size not set' }}</small>
                                     </td>
-                                    <td>
-                                        @php
-                                            $displayStatus = match ($quote->status) {
-                                                'quoted' => 'Approved',
-                                                'closed', 'spam' => 'Declined',
-                                                default => 'Pending',
-                                            };
-                                        @endphp
-                                        <span class="badge badge-soft-{{ $quote->statusBadgeClass() }}">{{ $displayStatus }}</span>
+                                    <td data-label="Status">
+                                        <span class="badge badge-soft-{{ $quote->statusBadgeClass() }}">{{ $quote->statusLabel() }}</span>
                                     </td>
-                                    <td>
-                                        <div class="d-flex flex-wrap gap-1">
-                                            <a class="btn btn-icon btn-sm btn-soft-primary" href="{{ route('quotes.show', $quote) }}" title="View">
-                                                <i data-lucide="eye" class="align-middle"></i>
-                                            </a>
-                                            <a class="btn btn-icon btn-sm btn-soft-secondary" href="{{ route('quotes.edit', $quote) }}" title="Edit">
-                                                <i data-lucide="edit-3" class="align-middle"></i>
-                                            </a>
-                                            <form action="{{ route('quotes.destroy', $quote) }}" data-delete-confirm data-delete-message="Do you want to delete this quote request?" data-delete-title="Delete quote?" method="POST">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button class="btn btn-icon btn-sm btn-soft-danger" type="submit" title="Delete">
-                                                    <i data-lucide="trash-2" class="align-middle"></i>
-                                                </button>
-                                            </form>
+                                    <td data-label="Action">
+                                        <div class="d-inline-flex align-items-center gap-1 justify-content-end quote-row-actions">
+                                            @if($quotation)
+                                                <a class="btn btn-icon btn-sm btn-soft-primary" href="{{ route('quotations.show', $quotation) }}" data-bs-toggle="tooltip" data-bs-title="View" aria-label="View quote {{ $quote->reference() }}">
+                                                    <i data-lucide="eye" class="align-middle"></i>
+                                                </a>
+                                                <a class="btn btn-icon btn-sm btn-soft-info" href="{{ route('quotes.download', $quote) }}" data-bs-toggle="tooltip" data-bs-title="Download" aria-label="Download quote {{ $quote->reference() }}">
+                                                    <i data-lucide="download" class="align-middle"></i>
+                                                </a>
+                                                @if($canDeleteQuotation)
+                                                    <form action="{{ route('quotations.destroy', $quotation) }}" data-delete-confirm data-delete-message="Do you want to delete this quotation?" data-delete-title="Delete quotation?" method="POST" class="d-inline-flex">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button class="btn btn-icon btn-sm btn-soft-danger" type="submit" data-bs-toggle="tooltip" data-bs-title="Delete" aria-label="Delete quote {{ $quote->reference() }}">
+                                                            <i data-lucide="trash-2" class="align-middle"></i>
+                                                        </button>
+                                                    </form>
+                                                @endif
+                                            @else
+                                                <a class="btn btn-icon btn-sm btn-soft-warning" href="{{ route('quotes.edit', $quote) }}" data-bs-toggle="tooltip" data-bs-title="Edit" aria-label="Edit request {{ $quote->reference() }}">
+                                                    <i data-lucide="edit-3" class="align-middle"></i>
+                                                </a>
+                                                @if($canDeleteRequest)
+                                                    <form action="{{ route('quotes.destroy', $quote) }}" data-delete-confirm data-delete-message="Do you want to delete this quote request?" data-delete-title="Delete quote request?" method="POST" class="d-inline-flex">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button class="btn btn-icon btn-sm btn-soft-danger" type="submit" data-bs-toggle="tooltip" data-bs-title="Delete" aria-label="Delete request {{ $quote->reference() }}">
+                                                            <i data-lucide="trash-2" class="align-middle"></i>
+                                                        </button>
+                                                    </form>
+                                                @endif
+                                            @endif
                                         </div>
                                     </td>
                                 </tr>
                             @empty
                                 <tr id="quote-empty-state">
-                                    <td class="text-center text-muted py-4" colspan="9">No quote requests found.</td>
+                                    <td class="text-center text-muted py-4" colspan="9">No quotes found.</td>
                                 </tr>
                             @endforelse
                             @if ($quotes->isNotEmpty())
@@ -312,8 +422,9 @@
         const filterLabel = document.getElementById('filter-label');
         const serviceFilterLabel = document.getElementById('service-filter-label');
         const sortLabel = document.getElementById('sort-label');
+        const tableBody = rows[0]?.parentElement;
 
-        if (!searchInput || rows.length === 0 || !emptyState || !countLabel) {
+        if (!searchInput || rows.length === 0 || !emptyState || !countLabel || !tableBody) {
             return;
         }
 
@@ -328,7 +439,7 @@
             'all': 'All',
             'pending': 'Pending',
             'approved': 'Approved',
-            'declined': 'Declined'
+            'declined': 'Rejected'
         };
 
         const sortLabels = {
@@ -349,33 +460,26 @@
         const getStatusFromRow = (row) => {
             const statusBadge = row.querySelector('[class*="badge-soft-"]');
             if (!statusBadge) return 'pending';
-            const text = statusBadge.textContent.trim().toLowerCase();
+            const text = (row.dataset.statusGroup || statusBadge.textContent).trim().toLowerCase();
             if (text === 'approved') return 'approved';
             if (text === 'declined') return 'declined';
             return 'pending';
         };
 
-        // Extract date from row for sorting
-        const getDateFromRow = (row) => {
-            const dateCell = row.querySelector('td:nth-child(4)');
-            if (!dateCell) return new Date(0);
-            const dateText = dateCell.textContent.trim();
-            return new Date(dateText);
-        };
+        // Extract stable sort values from row metadata.
+        const getCreatedAtFromRow = (row) => Number.parseInt(row.dataset.createdAt || '0', 10) || 0;
 
-        // Extract customer name from row
         const getCustomerFromRow = (row) => {
-            const nameLink = row.querySelector('td:nth-child(2) a.link-dark');
-            return nameLink ? nameLink.textContent.trim() : '';
+            return row.dataset.customer || '';
         };
 
         // Sort rows
         const sortRows = (rowsToSort) => {
             const sorted = [...rowsToSort];
             if (currentSort === 'newest') {
-                sorted.sort((a, b) => getDateFromRow(b) - getDateFromRow(a));
+                sorted.sort((a, b) => getCreatedAtFromRow(b) - getCreatedAtFromRow(a));
             } else if (currentSort === 'oldest') {
-                sorted.sort((a, b) => getDateFromRow(a) - getDateFromRow(b));
+                sorted.sort((a, b) => getCreatedAtFromRow(a) - getCreatedAtFromRow(b));
             } else if (currentSort === 'customer') {
                 sorted.sort((a, b) => getCustomerFromRow(a).localeCompare(getCustomerFromRow(b)));
             }
@@ -410,9 +514,8 @@
             const sortedRows = sortRows(visibleRows);
             
             // Reorder DOM elements
-            const tbody = document.querySelector('tbody');
             sortedRows.forEach(row => {
-                tbody.appendChild(row);
+                tableBody.appendChild(row);
             });
 
             emptyState.classList.toggle('d-none', visibleCount > 0);

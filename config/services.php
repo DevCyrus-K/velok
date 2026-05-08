@@ -39,4 +39,15 @@ return [
         'root' => env('KWIKSHIFT_ROOT_PATH', realpath(base_path('../kwikshift')) ?: base_path('../kwikshift')),
     ],
 
+    'google_analytics' => [
+        'property_id' => env('GOOGLE_ANALYTICS_PROPERTY_ID'),
+        'credentials_path' => env('GOOGLE_ANALYTICS_CREDENTIALS_PATH', env('GOOGLE_APPLICATION_CREDENTIALS')),
+        'credentials_json' => env('GOOGLE_ANALYTICS_CREDENTIALS_JSON'),
+        'client_email' => env('GOOGLE_ANALYTICS_CLIENT_EMAIL'),
+        'private_key_id' => env('GOOGLE_ANALYTICS_PRIVATE_KEY_ID'),
+        'private_key' => env('GOOGLE_ANALYTICS_PRIVATE_KEY'),
+        'cache_ttl' => env('GOOGLE_ANALYTICS_CACHE_TTL', 900),
+        'timeout' => env('GOOGLE_ANALYTICS_TIMEOUT', 10),
+    ],
+
 ];

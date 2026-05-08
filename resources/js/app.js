@@ -21,6 +21,10 @@ import { createIcons, icons } from "lucide";
 import Inputmask from 'inputmask';
 import Choices from 'choices.js';
 import Toastify from 'toastify-js';
+import './location-autocomplete';
+
+window.Toastify = Toastify;
+window.lucide = { createIcons: () => createIcons({ icons }) };
 
 // Components
 class Components {

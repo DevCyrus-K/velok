@@ -217,13 +217,17 @@ if (chartDataElement) {
 
     const renderVisitorDevicesChart = () => {
         const visitorDevices = parsedData.visitorDevices || { labels: [], series: [] };
+        const series = Array.isArray(visitorDevices.series)
+            ? visitorDevices.series.map((value) => Number(value) || 0)
+            : [];
+        const hasData = series.some((value) => value > 0);
 
         return renderChart('#simple-donut', {
             chart: {
                 height: 280,
                 type: 'donut',
             },
-            series: visitorDevices.series || [],
+            series: hasData ? series : [1],
             legend: {
                 show: true,
                 position: 'bottom',
@@ -234,8 +238,8 @@ if (chartDataElement) {
                 offsetX: 0,
                 offsetY: 7,
             },
-            labels: visitorDevices.labels || [],
-            colors: ['#22B956', '#1989df', '#f59e0b'],
+            labels: hasData ? (visitorDevices.labels || []) : ['No GA data'],
+            colors: hasData ? ['#22B956', '#1989df', '#f59e0b'] : ['#64748b'],
             responsive: [{
                 breakpoint: 600,
                 options: {

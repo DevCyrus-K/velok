@@ -14,7 +14,7 @@ return new class extends Migration
 
         Schema::create('quotations', function (Blueprint $table) {
             $table->id();
-            $table->unsignedInteger('quote_request_id');
+            $table->unsignedBigInteger('quote_request_id');
             $table->foreign('quote_request_id')
                 ->references('id')
                 ->on('quote_requests')
