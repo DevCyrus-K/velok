@@ -24,7 +24,7 @@
                         <a href="#reply-card" class="btn btn-sm btn-primary">
                             <i data-lucide="reply" class="icon-sm me-1"></i>Reply
                         </a>
-                        <button type="button" class="btn btn-sm btn-outline-danger" data-message-delete-detail data-delete-url="{{ route('messages.destroy', $message) }}">
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-message-delete-detail data-delete-url="{{ route('messages.destroy', $message) }}" data-delete-title="Delete message?" data-delete-message="Keep this message in the inbox or delete it?" data-delete-cancel-text="Keep it" data-delete-confirm-text="Delete it">
                             <i data-lucide="trash-2" class="icon-sm me-1"></i>Delete
                         </button>
                     </div>
@@ -58,10 +58,8 @@
                         <div class="mb-3">
                             <label class="form-label">Status</label>
                             <p>
-                                @if($message->status === 'responded')
-                                    <span id="message-status-badge" class="badge bg-success">Responded</span>
-                                @elseif($message->status === 'draft')
-                                    <span id="message-status-badge" class="badge bg-warning">Draft</span>
+                                @if($message->response)
+                                    <span id="message-status-badge" class="badge bg-success">Replied</span>
                                 @elseif($message->status === 'sent')
                                     <span id="message-status-badge" class="badge bg-info">Sent</span>
                                 @elseif($message->status === 'read')
@@ -128,7 +126,7 @@
                     <a href="#reply-card" class="btn btn-primary">
                         <i data-lucide="reply" class="icon-sm me-1"></i>Reply
                     </a>
-                    <button type="button" class="btn btn-outline-danger" data-message-delete-detail data-delete-url="{{ route('messages.destroy', $message) }}">
+                    <button type="button" class="btn btn-outline-danger" data-message-delete-detail data-delete-url="{{ route('messages.destroy', $message) }}" data-delete-title="Delete message?" data-delete-message="Keep this message in the inbox or delete it?" data-delete-cancel-text="Keep it" data-delete-confirm-text="Delete it">
                         <i data-lucide="trash-2" class="icon-sm me-1"></i>Delete
                     </button>
                     <a href="{{ route('messages.index') }}" class="btn btn-outline-secondary ms-auto">Back to Inbox</a>
@@ -210,10 +208,21 @@
             });
         }
 
+        @include('messages.partials.delete-confirm-script')
+
         document.querySelectorAll('[data-message-delete-detail]').forEach((button) => {
             button.addEventListener('click', async function () {
                 const deleteUrl = this.dataset.deleteUrl;
-                this.disabled = true;
+
+                if (this.dataset.deleting === 'true' || ! await confirmMessageDelete(this)) {
+                    return;
+                }
+
+                const deleteButtons = document.querySelectorAll('[data-message-delete-detail]');
+                deleteButtons.forEach((deleteButton) => {
+                    deleteButton.dataset.deleting = 'true';
+                    deleteButton.disabled = true;
+                });
 
                 try {
                     const response = await fetch(deleteUrl, {
@@ -235,7 +244,10 @@
                         window.location.href = detail?.dataset.indexUrl || '{{ route('messages.index') }}';
                     }, 500);
                 } catch (error) {
-                    this.disabled = false;
+                    deleteButtons.forEach((deleteButton) => {
+                        deleteButton.dataset.deleting = 'false';
+                        deleteButton.disabled = false;
+                    });
                     showToast('Failed to delete message', 'error');
                 }
             });

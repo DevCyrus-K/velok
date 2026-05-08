@@ -5,6 +5,7 @@ use App\Models\EmailLog;
 use App\Models\Message;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 
 uses(RefreshDatabase::class);
@@ -82,6 +83,16 @@ it('sends composed emails through a mailable and logs delivery', function () {
         ->and($log->attempts)->toBe(1)
         ->and($log->tracking_token)->not->toBeNull();
 
+    $deliveryLog = DB::table('email_delivery_logs')
+        ->where('recipient_email', 'buyer@example.com')
+        ->where('form_type', 'message')
+        ->first();
+
+    expect($deliveryLog)->not->toBeNull()
+        ->and($deliveryLog->status)->toBe('sent')
+        ->and($deliveryLog->subject)->toBe('Viewing request')
+        ->and($deliveryLog->response_message)->toBe('Message email sent successfully.');
+
     Mail::assertSent(MessageMail::class, fn (MessageMail $mail) => $mail->hasTo('buyer@example.com'));
 });
 
@@ -112,5 +123,52 @@ it('sends replies through a mailable and updates the message response', function
         ->and($message->email_log_id)->toBe($log->id)
         ->and($log->status)->toBe(EmailLog::STATUS_SENT);
 
+    $deliveryLog = DB::table('email_delivery_logs')
+        ->where('recipient_email', 'buyer@example.com')
+        ->where('form_type', 'message_reply')
+        ->first();
+
+    expect($deliveryLog)->not->toBeNull()
+        ->and($deliveryLog->status)->toBe('sent')
+        ->and($deliveryLog->subject)->toBe('Re: Listing inquiry')
+        ->and($deliveryLog->response_message)->toBe('Message reply email sent successfully.');
+
     Mail::assertSent(MessageMail::class, fn (MessageMail $mail) => $mail->hasTo('buyer@example.com'));
+});
+
+it('logs failed composed email delivery', function () {
+    Mail::shouldReceive('to')
+        ->once()
+        ->with('buyer@example.com')
+        ->andThrow(new RuntimeException('SMTP offline'));
+
+    $user = User::factory()->create();
+
+    $response = $this->actingAs($user)
+        ->postJson(route('messages.store'), [
+            'email' => 'buyer@example.com',
+            'subject' => 'Viewing request',
+            'message' => 'Please confirm the earliest viewing slot.',
+        ]);
+
+    $response->assertStatus(500)
+        ->assertJson([
+            'success' => false,
+            'error' => 'SMTP offline',
+        ]);
+
+    $message = Message::query()->where('email', 'buyer@example.com')->firstOrFail();
+    $log = EmailLog::query()->where('recipient_email', 'buyer@example.com')->firstOrFail();
+    $deliveryLog = DB::table('email_delivery_logs')
+        ->where('recipient_email', 'buyer@example.com')
+        ->where('form_type', 'message')
+        ->first();
+
+    expect($message->email_log_id)->toBe($log->id)
+        ->and($log->status)->toBe(EmailLog::STATUS_FAILED)
+        ->and($log->failed_reason)->toBe('SMTP offline')
+        ->and($deliveryLog)->not->toBeNull()
+        ->and($deliveryLog->status)->toBe('failed')
+        ->and($deliveryLog->subject)->toBe('Viewing request')
+        ->and($deliveryLog->response_message)->toContain('SMTP offline');
 });

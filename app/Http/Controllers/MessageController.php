@@ -9,8 +9,10 @@ use App\Support\TopbarData;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -95,10 +97,24 @@ class MessageController extends Controller
             ]);
 
             $this->markEmailLogSent($emailLog);
+            $this->recordEmailDelivery(
+                'message',
+                EmailLog::STATUS_SENT,
+                $recipient,
+                $subject,
+                'Message email sent successfully.'
+            );
 
             return $this->emailSuccessResponse($request, $message);
         } catch (Throwable $exception) {
             $this->markEmailLogFailed($emailLog, $exception);
+            $this->recordEmailDelivery(
+                'message',
+                EmailLog::STATUS_FAILED,
+                $recipient,
+                $subject,
+                'Email failed: '.$exception->getMessage()
+            );
             $this->logEmailFailure($message, $exception);
 
             return $this->emailFailureResponse($request, $exception);
@@ -136,10 +152,24 @@ class MessageController extends Controller
 
             $message->update(['status' => 'responded']);
             $this->markEmailLogSent($emailLog);
+            $this->recordEmailDelivery(
+                'message_reply',
+                EmailLog::STATUS_SENT,
+                $recipient,
+                $subject,
+                'Message reply email sent successfully.'
+            );
 
             return $this->emailSuccessResponse($request, $message);
         } catch (Throwable $exception) {
             $this->markEmailLogFailed($emailLog, $exception);
+            $this->recordEmailDelivery(
+                'message_reply',
+                EmailLog::STATUS_FAILED,
+                $recipient,
+                $subject,
+                'Email failed: '.$exception->getMessage()
+            );
             $this->logEmailFailure($message, $exception);
 
             return $this->emailFailureResponse($request, $exception);
@@ -185,6 +215,13 @@ class MessageController extends Controller
             ]);
 
             $this->markEmailLogSent($emailLog);
+            $this->recordEmailDelivery(
+                $isReply ? 'message_reply' : 'message',
+                EmailLog::STATUS_SENT,
+                $recipient,
+                $subject,
+                $isReply ? 'Message reply email resent successfully.' : 'Message email resent successfully.'
+            );
 
             return response()->json([
                 'success' => true,
@@ -193,6 +230,13 @@ class MessageController extends Controller
             ]);
         } catch (Throwable $exception) {
             $this->markEmailLogFailed($emailLog, $exception);
+            $this->recordEmailDelivery(
+                $isReply ? 'message_reply' : 'message',
+                EmailLog::STATUS_FAILED,
+                $recipient,
+                $subject,
+                'Email failed: '.$exception->getMessage()
+            );
             $this->logEmailFailure($message, $exception);
 
             return response()->json([
@@ -377,6 +421,37 @@ class MessageController extends Controller
             'failed_reason' => $emailLog->failed_reason,
             'attempts' => $emailLog->attempts,
         ];
+    }
+
+    private function recordEmailDelivery(string $formType, string $status, string $recipient, string $subject, string $responseMessage): void
+    {
+        if (! Schema::hasTable('email_delivery_logs')) {
+            return;
+        }
+
+        $mailer = (string) config('mail.default', '');
+        $transport = (string) (config("mail.mailers.{$mailer}.transport") ?: $mailer ?: 'unknown');
+        $now = now();
+        $data = [
+            'form_type' => Str::limit($formType, 190, ''),
+            'recipient_email' => Str::limit($recipient, 190, ''),
+            'status' => Str::limit($status, 50, ''),
+            'direction' => 'client',
+            'subject' => Str::limit($subject, 190, ''),
+            'transport' => Str::limit($transport, 50, ''),
+            'response_message' => Str::limit($responseMessage, 1000, ''),
+            'created_at' => $now,
+        ];
+
+        if (Schema::hasColumn('email_delivery_logs', 'updated_at')) {
+            $data['updated_at'] = $now;
+        }
+
+        try {
+            DB::table('email_delivery_logs')->insert($data);
+        } catch (Throwable $logException) {
+            report($logException);
+        }
     }
 
     private function logEmailFailure(Message $message, Throwable $exception): void

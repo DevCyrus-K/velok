@@ -75,7 +75,6 @@
                                 <th class="border-0 py-2 text-dark">Message</th>
                                 <th class="border-0 py-2 text-dark">Date</th>
                                 <th class="border-0 py-2 text-dark">Status</th>
-                                <th class="border-0 py-2 text-dark">Delivery</th>
                                 <th class="border-0 py-2 text-dark">Action</th>
                             </tr>
                         </thead>
@@ -110,35 +109,14 @@
                                         <small class="text-muted">{{ $message->created_at->format('h:i A') }}</small>
                                     </td>
                                     <td>
-                                        @if($message->status === 'unread')
-                                            <span class="badge badge-soft-danger">Unread</span>
-                                        @elseif($message->status === 'responded')
-                                            <span class="badge badge-soft-success">Responded</span>
-                                        @elseif($message->status === 'draft')
-                                            <span class="badge badge-soft-warning">Draft</span>
+                                        @if($message->response)
+                                            <span class="badge badge-soft-success">Replied</span>
                                         @elseif($message->status === 'sent')
                                             <span class="badge badge-soft-info">Sent</span>
-                                        @else
+                                        @elseif($message->status === 'read')
                                             <span class="badge badge-soft-secondary">Read</span>
-                                        @endif
-                                    </td>
-                                    <td data-delivery-cell data-retry-url="{{ route('messages.retry', $message) }}">
-                                        @if($deliveryLog?->status === \App\Models\EmailLog::STATUS_SENT)
-                                            <span class="badge bg-success">✅ Sent</span>
-                                        @elseif($deliveryLog?->status === \App\Models\EmailLog::STATUS_OPENED)
-                                            <span class="badge bg-info">👁 Opened</span>
-                                        @elseif($deliveryLog?->status === \App\Models\EmailLog::STATUS_FAILED)
-                                            <div class="d-flex flex-wrap align-items-center gap-1">
-                                                <span class="badge bg-danger">❌ Failed</span>
-                                                <button class="btn btn-sm btn-outline-danger py-0" type="button" data-message-retry data-retry-url="{{ route('messages.retry', $message) }}">Retry</button>
-                                            </div>
-                                            @if($deliveryLog->failed_reason)
-                                                <small class="text-muted d-block">{{ Str::limit($deliveryLog->failed_reason, 60) }}</small>
-                                            @endif
-                                        @elseif($deliveryLog)
-                                            <span class="badge bg-warning">Sending</span>
                                         @else
-                                            <span class="text-muted">-</span>
+                                            <span class="badge badge-soft-danger">Unread</span>
                                         @endif
                                     </td>
                                     <td>
@@ -146,12 +124,12 @@
                                             <a class="btn btn-icon btn-sm btn-soft-primary" href="{{ route('messages.show', $message) }}" title="View">
                                                 <i class="align-middle" data-lucide="eye"></i>
                                             </a>
-                                            @if($message->status !== 'responded')
+                                            @if(!$message->response)
                                                 <a class="btn btn-icon btn-sm btn-soft-secondary" href="{{ route('messages.show', $message) }}" title="Reply">
                                                     <i class="align-middle" data-lucide="reply"></i>
                                                 </a>
                                             @endif
-                                            <form action="{{ route('messages.destroy', $message) }}" class="d-inline-flex" data-message-delete-form method="POST">
+                                            <form action="{{ route('messages.destroy', $message) }}" class="d-inline-flex" data-message-delete-form data-delete-title="Delete message?" data-delete-message="Keep this message in the inbox or delete it?" data-delete-cancel-text="Keep it" data-delete-confirm-text="Delete it" method="POST">
                                                 @csrf
                                                 @method('DELETE')
                                                 <button class="btn btn-icon btn-sm btn-soft-danger" title="Delete" type="submit">
@@ -359,6 +337,8 @@
             return '<span class="text-muted">-</span>';
         }
 
+        @include('messages.partials.delete-confirm-script')
+
         tbody.addEventListener('submit', async function (event) {
             const form = event.target.closest('[data-message-delete-form]');
 
@@ -367,6 +347,17 @@
             }
 
             event.preventDefault();
+
+            if (form.dataset.deleting === 'true' || ! await confirmMessageDelete(form)) {
+                return;
+            }
+
+            const deleteButton = form.querySelector('button[type="submit"]');
+            form.dataset.deleting = 'true';
+
+            if (deleteButton) {
+                deleteButton.disabled = true;
+            }
 
             try {
                 const response = await fetch(form.action, {
@@ -388,6 +379,12 @@
                 filterAndSort();
                 showToast('Message deleted', 'success');
             } catch (error) {
+                form.dataset.deleting = 'false';
+
+                if (deleteButton) {
+                    deleteButton.disabled = false;
+                }
+
                 showToast('Failed to delete message', 'error');
             }
         });

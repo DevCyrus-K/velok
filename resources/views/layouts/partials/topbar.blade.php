@@ -195,10 +195,10 @@
                               <a class="dropdown-item" href="{{ route('second', [ 'auth' , 'lock-screen']) }}">
                                    <i data-lucide="lock" class="fs-16 text-muted align-middle me-2"></i><span class="align-middle">Lock screen</span>
                               </a>
-                              <a class="dropdown-item" href="{{ route('logout') }}" onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+                              <a class="dropdown-item" href="{{ route('logout') }}" onclick="event.preventDefault(); const form = document.getElementById('logout-form'); form.requestSubmit ? form.requestSubmit() : form.submit();">
                                    <i data-lucide="log-out" class="fs-16 text-muted align-middle me-2"></i><span class="align-middle">Logout</span>
                               </a>
-                              <form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;">
+                              <form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;" data-action-message="Logging you out...">
                                    @csrf
                               </form>
                          </div>

@@ -67,8 +67,8 @@
                          </form>
                     </div>
 
-                    <p class="text-muted text-center mt-4 mb-0">Wrong account? <a class="link-primary fst-italic text-decoration-underline fw-semibold" href="{{ route('logout') }}" onclick="event.preventDefault(); document.getElementById('verify-logout-form').submit();">Log out</a></p>
-                    <form id="verify-logout-form" action="{{ route('logout') }}" method="POST" class="d-none">
+                    <p class="text-muted text-center mt-4 mb-0">Wrong account? <a class="link-primary fst-italic text-decoration-underline fw-semibold" href="{{ route('logout') }}" onclick="event.preventDefault(); const form = document.getElementById('verify-logout-form'); form.requestSubmit ? form.requestSubmit() : form.submit();">Log out</a></p>
+                    <form id="verify-logout-form" action="{{ route('logout') }}" method="POST" class="d-none" data-action-message="Logging you out...">
                          @csrf
                     </form>
                </div>
