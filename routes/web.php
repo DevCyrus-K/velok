@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Auth\ScreenLockController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\CareerJobController;
 use App\Http\Controllers\FaqController;
@@ -41,10 +42,18 @@ Route::middleware('auth')->get('/topbar/data', [TopbarController::class, 'getTop
     ->name('topbar.data');
 
 Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
+    Route::get('lock-screen', [ScreenLockController::class, 'show'])->name('lock-screen');
+    Route::post('lock-screen', [ScreenLockController::class, 'lock'])->name('lock-screen.lock');
+    Route::post('lock-screen/unlock', [ScreenLockController::class, 'unlock'])->name('lock-screen.unlock');
+
     Route::get('account', [AccountController::class, 'show'])->name('account.show');
     Route::get('account/signature', [AccountController::class, 'signature'])->name('account.signature');
     Route::patch('account/profile', [AccountController::class, 'updateProfile'])->name('account.profile.update');
     Route::patch('account/security', [AccountController::class, 'updateSecurity'])->name('account.security.update');
+    Route::post('account/two-factor', [AccountController::class, 'requestTwoFactorEnable'])->name('account.two-factor.request');
+    Route::post('account/two-factor/confirm', [AccountController::class, 'confirmTwoFactorEnable'])->middleware('throttle:5,10')->name('account.two-factor.confirm');
+    Route::delete('account/two-factor', [AccountController::class, 'disableTwoFactor'])->name('account.two-factor.disable');
+    Route::post('account/sessions/logout-others', [AccountController::class, 'logoutOtherDevices'])->name('account.sessions.logout-other-devices');
     Route::get('settings', [SettingsController::class, 'index'])->name('settings.index');
     Route::get('settings/payment', [SettingsController::class, 'paymentSettings'])->name('settings.payment');
     Route::post('settings/payment', [SettingsController::class, 'updatePayment'])->name('settings.payment.update');

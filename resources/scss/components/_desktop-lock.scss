@@ -1,0 +1,635 @@
+//
+// Desktop layout lock
+//
+
+@use "sass:math";
+
+$desktop-lock-width: 1210px;
+$desktop-lock-height: 760px;
+$locked-breakpoints: sm, md, lg, xl;
+$locked-table-responsive-selector: ":is(.table-responsive, .table-responsive-sm, .table-responsive-md, .table-responsive-lg, .table-responsive-xl)";
+
+html,
+body {
+    min-width: $desktop-lock-width;
+    min-height: $desktop-lock-height;
+}
+
+body {
+    overflow-x: auto;
+}
+
+.wrapper {
+    min-width: $desktop-lock-width;
+    min-height: $desktop-lock-height;
+}
+
+.page-container {
+    min-width: calc(#{$desktop-lock-width} - #{$main-nav-width});
+}
+
+.main-content,
+.page-wrapper,
+.content-wrapper {
+    min-width: $desktop-lock-width;
+}
+
+@media (max-width: 1209.98px) {
+    body {
+        overflow-x: auto;
+    }
+
+    .wrapper {
+        min-width: $desktop-lock-width;
+    }
+
+    .page-container {
+        margin-left: $main-nav-width !important;
+        min-width: calc(#{$desktop-lock-width} - #{$main-nav-width});
+    }
+
+    .page-content {
+        min-width: calc(#{$desktop-lock-width} - #{$main-nav-width});
+    }
+
+    .main-content,
+    .page-wrapper,
+    .content-wrapper {
+        min-width: $desktop-lock-width;
+    }
+}
+
+// Keep Bootstrap's desktop grid utilities active when the viewport is narrower
+// than the locked document width. This preserves the 1210px layout and lets the
+// browser scroll instead of stacking columns.
+@media (max-width: 1209.98px) {
+    @each $breakpoint in $locked-breakpoints {
+        .col-#{$breakpoint} {
+            flex: 1 0 0% !important;
+        }
+
+        .col-#{$breakpoint}-auto {
+            flex: 0 0 auto !important;
+            width: auto !important;
+        }
+
+        @for $i from 1 through 12 {
+            .col-#{$breakpoint}-#{$i} {
+                flex: 0 0 auto !important;
+                width: percentage(math.div($i, 12)) !important;
+            }
+
+            .offset-#{$breakpoint}-#{$i} {
+                margin-left: percentage(math.div($i, 12)) !important;
+            }
+
+            .row-cols-#{$breakpoint}-#{$i} > * {
+                flex: 0 0 auto !important;
+                width: percentage(math.div(1, $i)) !important;
+            }
+        }
+
+        .offset-#{$breakpoint}-0 {
+            margin-left: 0 !important;
+        }
+    }
+}
+
+@media (max-width: 1209.98px) {
+    @each $breakpoint in $locked-breakpoints {
+        .d-#{$breakpoint}-none {
+            display: none !important;
+        }
+
+        .d-#{$breakpoint}-inline {
+            display: inline !important;
+        }
+
+        .d-#{$breakpoint}-inline-block {
+            display: inline-block !important;
+        }
+
+        .d-#{$breakpoint}-block {
+            display: block !important;
+        }
+
+        .d-#{$breakpoint}-grid {
+            display: grid !important;
+        }
+
+        .d-#{$breakpoint}-inline-grid {
+            display: inline-grid !important;
+        }
+
+        .d-#{$breakpoint}-table {
+            display: table !important;
+        }
+
+        .d-#{$breakpoint}-table-row {
+            display: table-row !important;
+        }
+
+        .d-#{$breakpoint}-table-cell {
+            display: table-cell !important;
+        }
+
+        .d-#{$breakpoint}-flex {
+            display: flex !important;
+        }
+
+        .d-#{$breakpoint}-inline-flex {
+            display: inline-flex !important;
+        }
+
+        .float-#{$breakpoint}-start {
+            float: left !important;
+        }
+
+        .float-#{$breakpoint}-end {
+            float: right !important;
+        }
+
+        .float-#{$breakpoint}-none {
+            float: none !important;
+        }
+
+        .text-#{$breakpoint}-start {
+            text-align: left !important;
+        }
+
+        .text-#{$breakpoint}-end {
+            text-align: right !important;
+        }
+
+        .text-#{$breakpoint}-center {
+            text-align: center !important;
+        }
+
+        .flex-#{$breakpoint}-row {
+            flex-direction: row !important;
+        }
+
+        .flex-#{$breakpoint}-column {
+            flex-direction: column !important;
+        }
+
+        .flex-#{$breakpoint}-row-reverse {
+            flex-direction: row-reverse !important;
+        }
+
+        .flex-#{$breakpoint}-column-reverse {
+            flex-direction: column-reverse !important;
+        }
+
+        .flex-#{$breakpoint}-wrap {
+            flex-wrap: wrap !important;
+        }
+
+        .flex-#{$breakpoint}-nowrap {
+            flex-wrap: nowrap !important;
+        }
+
+        .justify-content-#{$breakpoint}-start {
+            justify-content: flex-start !important;
+        }
+
+        .justify-content-#{$breakpoint}-end {
+            justify-content: flex-end !important;
+        }
+
+        .justify-content-#{$breakpoint}-center {
+            justify-content: center !important;
+        }
+
+        .justify-content-#{$breakpoint}-between {
+            justify-content: space-between !important;
+        }
+
+        .justify-content-#{$breakpoint}-around {
+            justify-content: space-around !important;
+        }
+
+        .justify-content-#{$breakpoint}-evenly {
+            justify-content: space-evenly !important;
+        }
+
+        .align-items-#{$breakpoint}-start {
+            align-items: flex-start !important;
+        }
+
+        .align-items-#{$breakpoint}-end {
+            align-items: flex-end !important;
+        }
+
+        .align-items-#{$breakpoint}-center {
+            align-items: center !important;
+        }
+
+        .align-items-#{$breakpoint}-baseline {
+            align-items: baseline !important;
+        }
+
+        .align-items-#{$breakpoint}-stretch {
+            align-items: stretch !important;
+        }
+
+        @each $key, $value in $spacers {
+            .mt-#{$breakpoint}-#{$key} {
+                margin-top: $value !important;
+            }
+
+            .me-#{$breakpoint}-#{$key} {
+                margin-right: $value !important;
+            }
+
+            .mb-#{$breakpoint}-#{$key} {
+                margin-bottom: $value !important;
+            }
+
+            .ms-#{$breakpoint}-#{$key} {
+                margin-left: $value !important;
+            }
+
+            .mx-#{$breakpoint}-#{$key} {
+                margin-right: $value !important;
+                margin-left: $value !important;
+            }
+
+            .my-#{$breakpoint}-#{$key} {
+                margin-top: $value !important;
+                margin-bottom: $value !important;
+            }
+
+            .pt-#{$breakpoint}-#{$key} {
+                padding-top: $value !important;
+            }
+
+            .pe-#{$breakpoint}-#{$key} {
+                padding-right: $value !important;
+            }
+
+            .pb-#{$breakpoint}-#{$key} {
+                padding-bottom: $value !important;
+            }
+
+            .ps-#{$breakpoint}-#{$key} {
+                padding-left: $value !important;
+            }
+
+            .px-#{$breakpoint}-#{$key} {
+                padding-right: $value !important;
+                padding-left: $value !important;
+            }
+
+            .py-#{$breakpoint}-#{$key} {
+                padding-top: $value !important;
+                padding-bottom: $value !important;
+            }
+        }
+    }
+}
+
+#{$locked-table-responsive-selector} {
+    overflow-x: auto !important;
+}
+
+#{$locked-table-responsive-selector} > .table,
+#{$locked-table-responsive-selector} > table.table {
+    border-collapse: collapse;
+    display: table !important;
+    min-width: 100%;
+    table-layout: auto;
+    width: 100%;
+}
+
+#{$locked-table-responsive-selector} > .table > caption,
+#{$locked-table-responsive-selector} > table.table > caption {
+    display: table-caption !important;
+}
+
+#{$locked-table-responsive-selector} > .table > thead,
+#{$locked-table-responsive-selector} > table.table > thead {
+    display: table-header-group !important;
+}
+
+#{$locked-table-responsive-selector} > .table > tbody,
+#{$locked-table-responsive-selector} > table.table > tbody {
+    display: table-row-group !important;
+}
+
+#{$locked-table-responsive-selector} > .table > tfoot,
+#{$locked-table-responsive-selector} > table.table > tfoot {
+    display: table-footer-group !important;
+}
+
+#{$locked-table-responsive-selector} > .table > thead > tr,
+#{$locked-table-responsive-selector} > .table > tbody > tr,
+#{$locked-table-responsive-selector} > .table > tfoot > tr,
+#{$locked-table-responsive-selector} > table.table > thead > tr,
+#{$locked-table-responsive-selector} > table.table > tbody > tr,
+#{$locked-table-responsive-selector} > table.table > tfoot > tr {
+    display: table-row !important;
+}
+
+#{$locked-table-responsive-selector} > .table > thead > tr > th,
+#{$locked-table-responsive-selector} > .table > thead > tr > td,
+#{$locked-table-responsive-selector} > .table > tbody > tr > th,
+#{$locked-table-responsive-selector} > .table > tbody > tr > td,
+#{$locked-table-responsive-selector} > .table > tfoot > tr > th,
+#{$locked-table-responsive-selector} > .table > tfoot > tr > td,
+#{$locked-table-responsive-selector} > table.table > thead > tr > th,
+#{$locked-table-responsive-selector} > table.table > thead > tr > td,
+#{$locked-table-responsive-selector} > table.table > tbody > tr > th,
+#{$locked-table-responsive-selector} > table.table > tbody > tr > td,
+#{$locked-table-responsive-selector} > table.table > tfoot > tr > th,
+#{$locked-table-responsive-selector} > table.table > tfoot > tr > td {
+    display: table-cell !important;
+    max-width: none;
+    overflow-wrap: normal;
+    text-align: inherit;
+    white-space: nowrap !important;
+    width: auto;
+    word-break: normal;
+}
+
+#{$locked-table-responsive-selector} td::before,
+#{$locked-table-responsive-selector} th::before {
+    content: none !important;
+    display: none !important;
+}
+
+.responsive-row-action-menu {
+    display: none !important;
+}
+
+.main-nav,
+#sidebar,
+[data-sidebar] {
+    display: block !important;
+    margin-left: 0 !important;
+    min-width: $main-nav-width !important;
+    transform: translateX(0) !important;
+    visibility: visible !important;
+    width: $main-nav-width !important;
+}
+
+html.sidebar-hidden,
+html.sidebar-hover {
+    .main-nav {
+        margin-left: 0 !important;
+        min-width: $main-nav-width !important;
+        width: $main-nav-width !important;
+    }
+
+    .page-container {
+        margin-left: $main-nav-width !important;
+    }
+
+    .topbar {
+        padding-left: $main-nav-width !important;
+    }
+}
+
+html.sidebar-hover {
+    .main-nav:not(:hover) {
+        min-width: $main-nav-width !important;
+        width: $main-nav-width !important;
+
+        .logo-box {
+            display: block !important;
+        }
+
+        .menu-title {
+            height: auto !important;
+            opacity: 1 !important;
+            padding: $main-menu-item-padding-y calc($main-menu-item-padding-x * 1.25) !important;
+        }
+
+        .menu-link {
+            justify-content: flex-start !important;
+            padding: $main-menu-item-padding-y $main-menu-item-padding-x !important;
+        }
+
+        .nav-icon {
+            margin-left: 10px !important;
+        }
+
+        .nav-text,
+        .menu-arrow,
+        .badge {
+            display: inline-flex !important;
+        }
+    }
+}
+
+.main-logo-box .button-toggle-menu,
+.topbar .button-toggle-menu {
+    display: none !important;
+}
+
+.topbar {
+    min-width: $desktop-lock-width;
+    padding-left: $main-nav-width !important;
+}
+
+@media (max-width: 1209.98px) {
+    .topbar .navbar-header {
+        gap: 0 !important;
+        padding: 0 28px !important;
+    }
+
+    .topbar-app-search {
+        flex: 1 1 280px !important;
+        max-width: 420px !important;
+        min-width: 180px !important;
+    }
+
+    .topbar-app-search .form-control {
+        font-size: $input-font-size !important;
+        height: 38px !important;
+        min-width: 0 !important;
+        padding-left: 40px !important;
+        padding-right: 15px !important;
+    }
+
+    .topbar-actions {
+        gap: .5rem !important;
+    }
+
+    .topbar .topbar-item .topbar-button {
+        padding: $btn-padding-y $btn-padding-y !important;
+    }
+
+    .message-preview-column,
+    .message-preview-cell,
+    .message-col-index,
+    .message-index-cell,
+    .invoice-due-col,
+    .invoice-payment-col,
+    .quote-phone-col,
+    .quote-service-col {
+        display: table-cell !important;
+    }
+
+    .message-toolbar,
+    .quote-list-toolbar,
+    .invoice-list-toolbar,
+    .career-toolbar,
+    .application-toolbar,
+    .review-toolbar,
+    .content-toolbar,
+    .gallery-toolbar,
+    .email-report-toolbar,
+    .report-toolbar {
+        align-items: center !important;
+        flex-wrap: nowrap !important;
+    }
+
+    .message-toolbar > *,
+    .quote-list-toolbar > *,
+    .invoice-list-toolbar > *,
+    .career-toolbar > *,
+    .application-toolbar > *,
+    .review-toolbar > *,
+    .content-toolbar > *,
+    .gallery-toolbar > *,
+    .email-report-toolbar > *,
+    .report-toolbar > *,
+    .message-toolbar .dropdown,
+    .quote-list-toolbar .dropdown,
+    .invoice-list-toolbar .dropdown,
+    .career-toolbar .dropdown,
+    .application-toolbar .dropdown,
+    .review-toolbar .dropdown,
+    .content-toolbar .dropdown,
+    .gallery-toolbar .dropdown,
+    .email-report-toolbar .dropdown,
+    .report-toolbar .dropdown,
+    .message-toolbar .btn,
+    .quote-list-toolbar .btn,
+    .invoice-list-toolbar .btn,
+    .career-toolbar .btn,
+    .application-toolbar .btn,
+    .review-toolbar .btn,
+    .content-toolbar .btn,
+    .gallery-toolbar .btn,
+    .email-report-toolbar button,
+    .report-toolbar button,
+    .message-toolbar .form-control,
+    .quote-list-toolbar .form-control,
+    .invoice-list-toolbar .form-control,
+    .career-toolbar .form-control,
+    .application-toolbar .form-control,
+    .review-toolbar .form-control,
+    .content-toolbar .form-control,
+    .gallery-toolbar .form-control,
+    .content-toolbar .content-search-bar,
+    .content-toolbar .content-search-bar input,
+    .gallery-toolbar .gallery-search-bar,
+    .gallery-toolbar .gallery-search-bar input,
+    .email-report-toolbar .form-control,
+    .email-report-toolbar .form-select,
+    .report-toolbar .form-control,
+    .report-toolbar .form-select {
+        width: auto !important;
+    }
+
+    .message-toolbar .search-bar,
+    .quote-list-toolbar .search-bar,
+    .invoice-list-toolbar .search-bar,
+    .career-toolbar .search-bar,
+    .application-toolbar .search-bar,
+    .review-toolbar .search-bar,
+    .content-toolbar .search-bar,
+    .gallery-toolbar .search-bar,
+    .content-toolbar .content-search-bar,
+    .gallery-toolbar .gallery-search-bar {
+        margin-left: auto !important;
+        max-width: 380px !important;
+        min-width: 220px !important;
+    }
+
+    .document-action-bar {
+        flex-wrap: nowrap !important;
+    }
+
+    .document-action-bar > div {
+        flex-wrap: nowrap !important;
+    }
+
+    .document-action-bar .btn,
+    .document-action-bar form,
+    .document-action-bar .dropdown,
+    .document-action-bar .dropdown > .btn,
+    .quote-detail-actions,
+    .quote-detail-actions .btn,
+    .quote-contact-actions .btn,
+    .quote-request-actions .btn,
+    .quote-request-actions form,
+    .quotation-form-actions,
+    .quotation-form-actions .btn,
+    .quotation-preview-actions,
+    .quotation-preview-actions .btn {
+        width: auto !important;
+    }
+
+    .quotation-form-header {
+        grid-template-columns: minmax(0, 1fr) minmax(220px, auto) !important;
+    }
+
+    .quotation-company-block {
+        justify-self: end !important;
+        max-width: 320px !important;
+        text-align: right !important;
+    }
+
+    .quotation-date-grid {
+        max-width: 460px !important;
+    }
+
+    .quotation-pricing-panel,
+    .invoice-total-box,
+    .quotation-total-box {
+        margin-left: auto !important;
+        max-width: 360px !important;
+        width: 100% !important;
+    }
+
+    .quotation-document-header {
+        flex-direction: row !important;
+    }
+
+    .quotation-company-stamp {
+        max-width: 320px !important;
+        text-align: right !important;
+        width: auto !important;
+    }
+
+    .quotation-total-line {
+        align-items: center !important;
+        flex-direction: row !important;
+        gap: 1rem !important;
+    }
+
+    .quote-table-wrap.table-responsive,
+    .invoice-table-wrap,
+    .message-table-wrap,
+    .email-report-table-wrap,
+    .dashboard-table-wrap {
+        overflow: auto !important;
+    }
+
+    .quote-table-wrap.table-responsive > .quote-table {
+        min-width: 980px !important;
+    }
+
+    .quote-table-wrap .quote-route-text {
+        max-width: 220px !important;
+        white-space: nowrap !important;
+    }
+
+    .message-table-wrap .table {
+        font-size: .875rem !important;
+        min-width: 860px !important;
+    }
+}

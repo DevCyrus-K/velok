@@ -4,7 +4,10 @@ namespace App\Providers;
 
 use App\Models\AppSetting;
 use App\Support\TopbarData;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\View;
@@ -24,6 +27,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(TopbarData $topbarData): void
     {
+        $this->configureRateLimiting();
         $this->applyRuntimeSettings();
 
         View::composer('layouts.partials.topbar', function ($view) use ($topbarData): void {
@@ -31,6 +35,17 @@ class AppServiceProvider extends ServiceProvider
 
             $view->with('topbarUser', $payload['user']);
             $view->with('topbarNotifications', $payload['notifications']);
+        });
+    }
+
+    private function configureRateLimiting(): void
+    {
+        RateLimiter::for('api', function (Request $request) {
+            $user = $request->user();
+
+            return $user
+                ? Limit::perMinute(60)->by('user:'.$user->getAuthIdentifier())
+                : Limit::perMinute(20)->by('guest:'.$request->ip());
         });
     }
 

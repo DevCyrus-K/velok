@@ -4,16 +4,17 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\AuthSession;
 use App\Support\EmailVerificationCode;
-use App\Support\TopbarData;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password;
 
 class RegisteredUserController extends Controller
 {
     public function __construct(
         private readonly EmailVerificationCode $verificationCode,
-        private readonly TopbarData $topbarData,
+        private readonly AuthSession $authSession,
     ) {
     }
 
@@ -40,22 +41,16 @@ class RegisteredUserController extends Controller
         $request->validate([
             'name' => 'required|string|max:255|unique:users,name',
             'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|confirmed|min:8',
+            'password' => ['required', 'string', 'confirmed', Password::min(8)->letters()->mixedCase()->numbers()],
         ]);
 
         $user = User::create([
             'name' => $request->name,
-            'email' => $request->email,
+            'email' => Str::lower(trim((string) $request->email)),
             'password' => $request->password,
         ]);
 
-        Auth::login($user);
-        $request->session()->regenerate();
-
-        $request->session()->put('user_name', $user->name);
-        $request->session()->put('user_email', $user->email);
-        $request->session()->put('user_id', $user->id);
-        $request->session()->put('user_avatar', $this->topbarData->avatarUrl($user));
+        $this->authSession->login($request, $user, false, false);
 
         $this->verificationCode->send($user);
 

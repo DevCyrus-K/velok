@@ -12,7 +12,20 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        //
+        $middleware->web(append: [
+            \Illuminate\Session\Middleware\AuthenticateSession::class,
+            \App\Http\Middleware\EnsureScreenIsUnlocked::class,
+            \App\Http\Middleware\ContentSecurityPolicy::class,
+        ]);
+
+        $middleware->api(append: [
+            'throttle:api',
+        ]);
+
+        $middleware->alias([
+            'otp.session' => \App\Http\Middleware\EnsureOtpSession::class,
+            'block.suspicious.login.ip' => \App\Http\Middleware\BlockSuspiciousLoginIp::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->render(function (Throwable $e) {
@@ -36,9 +49,6 @@ return Application::configure(basePath: dirname(__DIR__))
                 }
             }
             
-            // For general exceptions, show 500 error page
-            if (!($e instanceof \Symfony\Component\HttpKernel\Exception\HttpException)) {
-                return response()->view('errors.500', [], 500);
-            }
+            return null;
         });
     })->create();

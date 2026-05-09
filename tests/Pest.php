@@ -9,10 +9,15 @@
 | case class. By default, that class is "PHPUnit\Framework\TestCase". Of course, you may
 | need to change it using the "pest()" function to bind a different classes or traits.
 |
-*/
+ */
+
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 
 pest()->extend(Tests\TestCase::class)
  // ->use(Illuminate\Foundation\Testing\RefreshDatabase::class)
+    ->beforeEach(function () {
+        $this->withoutMiddleware(PreventRequestForgery::class);
+    })
     ->in('Feature');
 
 /*

@@ -29,6 +29,16 @@ Quotation and invoice emails are queued on the `emails` queue. After running mig
 php artisan queue:work --queue=emails
 ```
 
+## SMTP Test
+
+Configure the `MAIL_*` values in `.env`, then send a deployment test email with:
+
+```bash
+php artisan mail:test admin@example.com
+```
+
+For Gmail SMTP, enable 2-Step Verification, generate a 16-character app password from Google Account -> Security -> App Passwords, and use that app password as `MAIL_PASSWORD`. Do not use your normal Gmail login password; less secure app access is not needed.
+
 ## Learning Laravel
 
 Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.

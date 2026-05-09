@@ -124,10 +124,10 @@ it('updates account password when the current password matches', function () {
     $this->actingAs($user)
         ->patch(route('account.security.update'), [
             'current_password' => 'password',
-            'password' => 'new-secure-password',
-            'password_confirmation' => 'new-secure-password',
+            'password' => 'NewSecurePassword1',
+            'password_confirmation' => 'NewSecurePassword1',
         ])
         ->assertRedirect(route('account.show'));
 
-    expect(Hash::check('new-secure-password', $user->refresh()->password))->toBeTrue();
+    expect(Hash::check('NewSecurePassword1', $user->refresh()->password))->toBeTrue();
 });

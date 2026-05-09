@@ -8,6 +8,7 @@ use App\Support\EmailVerificationCode;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password;
 
 class PasswordResetCodeController extends Controller
 {
@@ -54,7 +55,7 @@ class PasswordResetCodeController extends Controller
             'code' => 'required|digits:' . $this->verificationCode->digitsFor('password_reset'),
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $user = User::whereRaw('LOWER(email) = ?', [$request->email])->first();
 
         if (! $user || ! $this->verificationCode->verify($user, $request->code, 'password_reset')) {
             return back()
@@ -103,7 +104,7 @@ class PasswordResetCodeController extends Controller
         $request->validate([
             'email' => 'required|email',
             'code_token' => 'required|string',
-            'password' => 'required|string|confirmed|min:8',
+            'password' => ['required', 'string', 'confirmed', Password::min(8)->letters()->mixedCase()->numbers()],
         ]);
 
         $token = (string) $request->code_token;
@@ -119,7 +120,7 @@ class PasswordResetCodeController extends Controller
             return redirect()->route('password.request')->withErrors(['email' => self::INVALID_RESET_MESSAGE]);
         }
 
-        $user = User::where('email', $sessionData['email'])->first();
+        $user = User::whereRaw('LOWER(email) = ?', [Str::lower((string) $sessionData['email'])])->first();
 
         if (! $user) {
             $request->session()->forget($this->sessionKey($token));

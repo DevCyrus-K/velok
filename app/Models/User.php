@@ -40,6 +40,7 @@ class User extends Authenticatable
         'signature_path',
         'bio',
         'password',
+        'two_factor_enabled',
     ];
 
     /**
@@ -50,6 +51,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'otp_code',
     ];
 
     /**
@@ -62,6 +64,10 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'two_factor_enabled' => 'boolean',
+            'otp_expires_at' => 'datetime',
+            'otp_attempts' => 'integer',
+            'last_login_at' => 'datetime',
         ];
     }
 

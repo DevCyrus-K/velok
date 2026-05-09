@@ -48,13 +48,17 @@
 @section('content')
 @php
     $profileFields = ['name', 'email', 'phone', 'job_title', 'avatar', 'signature_upload', 'signature_data'];
-    $securityFields = ['current_password', 'password', 'password_confirmation'];
+    $securityFields = ['current_password', 'password', 'password_confirmation', 'otp'];
     $profileHasErrors = collect($profileFields)->contains(fn ($field) => $errors->has($field));
     $securityHasErrors = collect($securityFields)->contains(fn ($field) => $errors->has($field));
     $activeTab = session('account_tab') ?? ($securityHasErrors ? 'security' : 'profile');
     $hasSignature = filled($signatureUrl ?? null);
     $signatureEditorOpen = ! $hasSignature || $errors->has('signature_upload') || $errors->has('signature_data');
     $emptySignaturePreview = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+    $twoFactorPending = session('two_factor_setup_pending') || $errors->has('otp');
+    $lastLoginText = $user->last_login_at
+        ? 'Last login: ' . $user->last_login_at->format('d M Y \a\t H:i') . ' from ' . ($user->last_login_ip ?: 'Unknown IP')
+        : 'Last login: Not recorded yet';
 @endphp
 
 <div class="card">
@@ -64,6 +68,7 @@
             <div>
                 <h4 class="card-title mb-1">My Account</h4>
                 <p class="text-muted mb-0">{{ $user->name }} | {{ $user->email }}</p>
+                <p class="text-muted mb-0 small">{{ $lastLoginText }}</p>
             </div>
         </div>
         @if($user->email_verified_at)
@@ -239,6 +244,62 @@
         <div class="row">
             <div class="col-xl-6">
                 <div class="card">
+                    <div class="card-header d-flex align-items-center justify-content-between gap-2">
+                        <h4 class="card-title mb-0">Two-Factor Authentication</h4>
+                        <span class="badge badge-soft-{{ $user->two_factor_enabled ? 'success' : 'secondary' }}">
+                            {{ $user->two_factor_enabled ? 'Enabled' : 'Disabled' }}
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" id="two-factor-toggle" type="checkbox" role="switch" @checked($user->two_factor_enabled) disabled>
+                            <label class="form-check-label fw-medium" for="two-factor-toggle">Enable Two-Factor Authentication</label>
+                        </div>
+                        <p class="text-muted mb-3">Require a 6-digit email code after password login.</p>
+
+                        @if(! $user->two_factor_enabled)
+                            <form action="{{ route('account.two-factor.request') }}" method="POST" class="{{ $twoFactorPending ? 'mb-3' : '' }}">
+                                @csrf
+                                <button class="btn btn-outline-primary" type="submit">
+                                    <i class="icon-sm me-1" data-lucide="mail-check"></i>Send Test Code
+                                </button>
+                            </form>
+
+                            @if($twoFactorPending)
+                                <form action="{{ route('account.two-factor.confirm') }}" method="POST">
+                                    @csrf
+                                    <div class="mb-3">
+                                        <label class="form-label" for="two_factor_otp">Verification Code</label>
+                                        <input autocomplete="one-time-code" class="form-control @error('otp') is-invalid @enderror" id="two_factor_otp" inputmode="numeric" maxlength="6" name="otp" pattern="[0-9]{6}" placeholder="123456" type="text" value="{{ old('otp') }}" required>
+                                        @error('otp')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                    <button class="btn btn-success" type="submit">
+                                        <i class="icon-sm me-1" data-lucide="shield-check"></i>Confirm and Enable
+                                    </button>
+                                </form>
+                            @endif
+                        @else
+                            <form action="{{ route('account.two-factor.disable') }}" method="POST">
+                                @csrf
+                                @method('DELETE')
+                                <div class="mb-3">
+                                    <label class="form-label" for="disable_two_factor_password">Current Password</label>
+                                    <input autocomplete="current-password" class="form-control @error('current_password') is-invalid @enderror" id="disable_two_factor_password" name="current_password" type="password" required>
+                                    @error('current_password')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                                <button class="btn btn-outline-danger" type="submit">
+                                    <i class="icon-sm me-1" data-lucide="shield-off"></i>Disable Two-Factor
+                                </button>
+                            </form>
+                        @endif
+                    </div>
+                </div>
+
+                <div class="card">
                     <div class="card-header">
                         <h4 class="card-title mb-0">Password Settings</h4>
                     </div>
@@ -298,9 +359,14 @@
 
                 <div class="card">
                     <div class="card-header">
-                        <h4 class="card-title mb-0">Current Session</h4>
+                        <h4 class="card-title mb-0">Sessions</h4>
                     </div>
                     <div class="card-body">
+                        <div class="alert alert-light border d-flex align-items-start gap-2" role="status">
+                            <i class="icon-sm mt-1" data-lucide="clock"></i>
+                            <div>{{ $lastLoginText }}</div>
+                        </div>
+
                         <div class="row">
                             <div class="col-lg-6">
                                 <div class="mb-3">
@@ -320,6 +386,42 @@
                                     <textarea class="form-control bg-light-subtle" readonly rows="3">{{ $securityContext['user_agent'] }}</textarea>
                                 </div>
                             </div>
+                        </div>
+
+                        <div class="border-top pt-3 mt-3">
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                                <h6 class="mb-0">Active Sessions</h6>
+                                @unless($canListSessions)
+                                    <span class="badge badge-soft-secondary">Current device only</span>
+                                @endunless
+                            </div>
+                            <div class="list-group mb-3">
+                                @foreach($activeSessions as $session)
+                                    <div class="list-group-item">
+                                        <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
+                                            <div class="me-2">
+                                                <p class="mb-1 fw-medium">{{ $session['ip_address'] }} @if($session['is_current'])<span class="badge badge-soft-success ms-1">Current</span>@endif</p>
+                                                <p class="text-muted mb-0 small">{{ $session['user_agent'] }}</p>
+                                            </div>
+                                            <small class="text-muted">{{ $session['last_active']->diffForHumans() }}</small>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+
+                            <form action="{{ route('account.sessions.logout-other-devices') }}" method="POST">
+                                @csrf
+                                <div class="mb-3">
+                                    <label class="form-label" for="logout_devices_password">Current Password</label>
+                                    <input autocomplete="current-password" class="form-control @error('current_password') is-invalid @enderror" id="logout_devices_password" name="current_password" type="password" required>
+                                    @error('current_password')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                                <button class="btn btn-outline-primary" type="submit">
+                                    <i class="icon-sm me-1" data-lucide="log-out"></i>Log out all other devices
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </div>

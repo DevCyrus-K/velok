@@ -92,6 +92,35 @@ class TopbarData
         return Storage::url($avatar);
     }
 
+    public function initials(Authenticatable $user): string
+    {
+        $name = trim((string) data_get($user, 'name', ''));
+
+        if ($name === '') {
+            return 'U';
+        }
+
+        return Str::of($name)
+            ->explode(' ')
+            ->filter()
+            ->take(2)
+            ->map(fn (string $part) => Str::upper(Str::substr($part, 0, 1)))
+            ->implode('');
+    }
+
+    public function hasAvatar(Authenticatable $user): bool
+    {
+        if (! $user instanceof Model) {
+            return false;
+        }
+
+        $avatar = $user->getAttribute('avatar')
+            ?? $user->getAttribute('avatar_path')
+            ?? $user->getAttribute('profile_photo_path');
+
+        return is_string($avatar) && trim($avatar) !== '';
+    }
+
     public function forgetNotifications(): void
     {
         Cache::forget(self::NOTIFICATIONS_CACHE_KEY);

@@ -192,7 +192,7 @@
 
                               <div class="dropdown-divider my-1"></div>
 
-                              <a class="dropdown-item" href="{{ route('second', [ 'auth' , 'lock-screen']) }}">
+                              <a class="dropdown-item" href="{{ route('lock-screen') }}">
                                    <i data-lucide="lock" class="fs-16 text-muted align-middle me-2"></i><span class="align-middle">Lock screen</span>
                               </a>
                               <a class="dropdown-item" href="{{ route('logout') }}" onclick="event.preventDefault(); const form = document.getElementById('logout-form'); form.requestSubmit ? form.requestSubmit() : form.submit();">

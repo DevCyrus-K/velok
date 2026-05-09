@@ -16,22 +16,32 @@
                                         <img alt="logo light" height="30" src="/images/logo-white.png" />
                                    </a>
                               </div>
-                              <h2 class="fw-bold text-center fs-18">Hi ! Super</h2>
-                              <p class="text-muted text-center mt-1 mb-4">Enter your password to access the admin.</p>
+                              <h2 class="fw-bold text-center fs-18">Hi {{ $lockedUser->name }}</h2>
+                              <p class="text-muted text-center mt-1 mb-4">Enter your password to continue.</p>
                               <div class="px-4">
-                                   <form action="index.html" class="authentication-form">
+                                   <form action="{{ route('lock-screen.unlock') }}" method="POST" class="authentication-form">
+                                        @csrf
+                                        @if ($errors->any())
+                                        @foreach ($errors->all() as $error)
+                                        <p class="text-danger mb-3">{{ $error }}</p>
+                                        @endforeach
+                                        @endif
+
                                         <div class="mb-3">
-                                             <label class="form-label visually-hidden" for="example-password">Password</label>
-                                             <input class="form-control" id="example-password" placeholder="Enter your password" type="text" />
+                                             <label class="form-label visually-hidden" for="lock-password">Password</label>
+                                             <input autocomplete="current-password" class="form-control" id="lock-password" name="password" placeholder="Enter your password" type="password" required />
                                         </div>
                                         <div class="mb-1 text-center d-grid">
-                                             <button class="btn btn-primary" type="submit">Sign In</button>
+                                             <button class="btn btn-primary" type="submit">Unlock</button>
                                         </div>
                                    </form>
                               </div> <!-- end col -->
                          </div> <!-- end card-body -->
                     </div> <!-- end card -->
-                    <p class="mb-0 text-center">Not you? return <a class="link-primary fst-italic text-decoration-underline fw-semibold" href="{{ route('register') }}">Sign Up</a></p>
+                    <p class="mb-0 text-center">Not you? <a class="link-primary fst-italic text-decoration-underline fw-semibold" href="{{ route('logout') }}" onclick="event.preventDefault(); const form = document.getElementById('lock-logout-form'); form.requestSubmit ? form.requestSubmit() : form.submit();">Log out</a></p>
+                    <form id="lock-logout-form" action="{{ route('logout') }}" method="POST" class="d-none">
+                         @csrf
+                    </form>
                </div> <!-- end col -->
           </div> <!-- end row -->
      </div>

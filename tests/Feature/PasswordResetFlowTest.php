@@ -93,13 +93,13 @@ it('resets the password after a valid 6 digit code and invalidates the code afte
     $this->post(route('password.reset-confirmed'), [
         'email' => $user->email,
         'code_token' => $codeToken,
-        'password' => 'new-password',
-        'password_confirmation' => 'new-password',
+        'password' => 'NewPassword1',
+        'password_confirmation' => 'NewPassword1',
     ])
         ->assertOk()
         ->assertSee('Password reset successful!');
 
-    expect(Hash::check('new-password', $user->fresh()->password))->toBeTrue();
+    expect(Hash::check('NewPassword1', $user->fresh()->password))->toBeTrue();
     expect(Cache::has(passwordResetCacheKey($user)))->toBeFalse();
 
     $this->from(route('password.verify-code-form', ['email' => $user->email]))

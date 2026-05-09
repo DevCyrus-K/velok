@@ -5,16 +5,18 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Providers\RouteServiceProvider;
+use App\Support\AuthSession;
 use App\Support\EmailVerificationCode;
-use App\Support\TopbarData;
+use App\Support\TwoFactorOtp;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
 class AuthenticatedSessionController extends Controller
 {
     public function __construct(
-        private readonly TopbarData $topbarData,
+        private readonly AuthSession $authSession,
         private readonly EmailVerificationCode $verificationCode,
+        private readonly TwoFactorOtp $twoFactorOtp,
     ) {
     }
 
@@ -36,16 +38,28 @@ class AuthenticatedSessionController extends Controller
      */
     public function store(LoginRequest $request)
     {
-        $request->authenticate();
+        /** @var \App\Models\User $user */
+        $user = $request->authenticate();
+        $remember = $request->filled('remember');
 
-        $request->session()->regenerate();
-        
-        // Store user data in session to avoid repeated database queries
-        $user = Auth::user();
-        $request->session()->put('user_name', $user->name);
-        $request->session()->put('user_email', $user->email);
-        $request->session()->put('user_id', $user->id);
-        $request->session()->put('user_avatar', $this->topbarData->avatarUrl($user));
+        if ($user->two_factor_enabled) {
+            $request->session()->regenerate();
+
+            $this->twoFactorOtp->send($user);
+
+            $request->session()->put([
+                'otp_user_id' => $user->getAuthIdentifier(),
+                'otp_remember' => $remember,
+                'otp_last_sent_at' => now()->timestamp,
+                'otp_resend_count' => 0,
+                'otp_verify_attempts' => 0,
+            ]);
+
+            return redirect()->route('otp.verify')
+                ->with('toast-info', 'Enter the 6-digit code we sent to your email.');
+        }
+
+        $this->authSession->login($request, $user, $remember);
 
         if (! $user->hasVerifiedEmail()) {
             $this->verificationCode->send($user);

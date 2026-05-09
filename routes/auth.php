@@ -5,10 +5,12 @@ use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\EmailVerificationPromptController;
 use App\Http\Controllers\Auth\NewPasswordController;
+use App\Http\Controllers\Auth\OtpController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\PasswordResetCodeController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\VerifyEmailController;
+use App\Http\Middleware\BlockSuspiciousLoginIp;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/register', [RegisteredUserController::class, 'create'])
@@ -16,14 +18,26 @@ Route::get('/register', [RegisteredUserController::class, 'create'])
     ->name('register');
 
 Route::post('/register', [RegisteredUserController::class, 'store'])
-    ->middleware('guest');
+    ->middleware(['guest', 'throttle:3,60']);
 
 Route::get('/login', [AuthenticatedSessionController::class, 'create'])
-    ->middleware('guest')
+    ->middleware([BlockSuspiciousLoginIp::class, 'guest'])
     ->name('login');
 
 Route::post('/login', [AuthenticatedSessionController::class, 'store'])
-    ->middleware('guest');
+    ->middleware([BlockSuspiciousLoginIp::class, 'guest']);
+
+Route::get('/auth/otp/verify', [OtpController::class, 'show'])
+    ->middleware(['guest', 'otp.session'])
+    ->name('otp.verify');
+
+Route::post('/auth/otp/verify', [OtpController::class, 'verify'])
+    ->middleware(['guest', 'otp.session', 'throttle:5,10'])
+    ->name('otp.verify.store');
+
+Route::post('/auth/otp/resend', [OtpController::class, 'resend'])
+    ->middleware(['guest', 'otp.session', 'throttle:3,10'])
+    ->name('otp.resend');
 
 Route::get('/forgot-password', [PasswordResetLinkController::class, 'create'])
     ->middleware('guest')

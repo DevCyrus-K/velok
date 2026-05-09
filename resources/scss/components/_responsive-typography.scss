@@ -1,0 +1,172 @@
+//
+// _responsive-typography.scss
+// Fluid responsive typography using CSS clamp()
+// Font sizes scale smoothly across all screen sizes
+//
+
+// Page titles - clamp(min, preferred, max)
+.page-title,
+.page-title-alt,
+.page-title-alt-dark {
+    font-size: clamp(1.125rem, 2.5vw, 1.5rem) !important;
+    font-weight: 600;
+}
+
+// Section headings
+h1 {
+    font-size: clamp(1.5rem, 3vw, 2.25rem);
+}
+
+h2 {
+    font-size: clamp(1.25rem, 2.5vw, 1.875rem);
+}
+
+h3 {
+    font-size: clamp(1rem, 2vw, 1.5rem);
+}
+
+h4 {
+    font-size: clamp(0.9375rem, 1.5vw, 1.125rem);
+}
+
+h5 {
+    font-size: clamp(0.8125rem, 1.2vw, 0.9375rem);
+}
+
+h6 {
+    font-size: clamp(0.75rem, 1vw, 0.875rem);
+}
+
+// Body text
+body,
+.body-text,
+p {
+    font-size: clamp(0.8125rem, 1.5vw, 0.875rem);
+}
+
+// Small text
+small,
+.small-text,
+.text-sm {
+    font-size: clamp(0.75rem, 1.2vw, 0.8125rem);
+}
+
+// Large text
+.text-lg {
+    font-size: clamp(0.9375rem, 1.7vw, 1rem);
+}
+
+// Lead text (Bootstrap)
+.lead {
+    font-size: clamp(0.9375rem, 2vw, 1.125rem);
+}
+
+// Display headings
+.display-1 {
+    font-size: clamp(3rem, 5vw, 5rem);
+}
+
+.display-2 {
+    font-size: clamp(2.5rem, 4.5vw, 4.5rem);
+}
+
+.display-3 {
+    font-size: clamp(2rem, 4vw, 4rem);
+}
+
+.display-4 {
+    font-size: clamp(1.75rem, 3.5vw, 3.5rem);
+}
+
+.display-5 {
+    font-size: clamp(1.5rem, 3vw, 3rem);
+}
+
+.display-6 {
+    font-size: clamp(1.25rem, 2.5vw, 2.5rem);
+}
+
+// Table typography
+.table {
+    th,
+    td {
+        font-size: clamp(0.75rem, 1.2vw, 0.875rem);
+    }
+}
+
+// Form labels and inputs
+label,
+.form-label {
+    font-size: clamp(0.8rem, 1.3vw, 0.875rem);
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+input[type="url"],
+textarea,
+select,
+.form-control {
+    font-size: clamp(0.8rem, 1.3vw, 0.875rem) !important;
+}
+
+// Badge sizing
+.badge {
+    font-size: clamp(0.65rem, 1vw, 0.75rem);
+}
+
+// Card titles
+.card-title {
+    font-size: clamp(0.9375rem, 1.8vw, 1.125rem);
+}
+
+.card-subtitle {
+    font-size: clamp(0.8rem, 1.4vw, 0.875rem);
+}
+
+// Alert text
+.alert {
+    font-size: clamp(0.8rem, 1.3vw, 0.875rem);
+}
+
+// Navigation items
+.nav-link,
+.navbar-nav .nav-link {
+    font-size: clamp(0.8rem, 1.3vw, 0.875rem);
+}
+
+// Dropdown items
+.dropdown-item {
+    font-size: clamp(0.8rem, 1.3vw, 0.875rem);
+}
+
+// Menu items (sidebar)
+.menu-link,
+.sub-menu-link {
+    font-size: clamp(0.8rem, 1.3vw, 0.875rem);
+}
+
+// Breadcrumb
+.breadcrumb {
+    font-size: clamp(0.75rem, 1.2vw, 0.8125rem);
+}
+
+// Pagination
+.pagination {
+    font-size: clamp(0.8rem, 1.3vw, 0.875rem);
+}
+
+// Tooltips and popovers
+.tooltip-inner {
+    font-size: clamp(0.7rem, 1vw, 0.8rem);
+}
+
+.popover-header {
+    font-size: clamp(0.8rem, 1.3vw, 0.875rem);
+}
+
+.popover-body {
+    font-size: clamp(0.8rem, 1.3vw, 0.875rem);
+}
