@@ -204,6 +204,12 @@
                             <span data-invoice-send-label>{{ ($isSentInvoice || $isOverdueInvoice) ? 'Resend' : 'Send' }}</span>
                         </button>
                     @endif
+                    @if($canSendInvoice && !empty($invoice->customer_phone))
+                        <a class="btn btn-outline-success" href="{{ route('invoice.send-whatsapp', $invoice) }}" target="_blank" rel="noopener">
+                            <x-icons.whatsapp class="icon-sm" />
+                            Send via WhatsApp
+                        </a>
+                    @endif
                     @if($linkedQuotation)
                         <a class="btn btn-outline-info" href="{{ route('quotations.show', $linkedQuotation) }}">
                             <i data-lucide="file-text" class="icon-sm"></i>

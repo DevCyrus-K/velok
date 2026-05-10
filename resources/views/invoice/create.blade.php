@@ -268,7 +268,7 @@
                                     <label class="form-label mb-1">Status</label>
                                     <select class="form-select form-select-sm" name="status" required>
                                         @foreach ($statusOptions as $value => $label)
-                                            <option value="{{ $value }}" @selected(old('status', $invoice?->status ?? 'sent') === $value)>{{ $label }}</option>
+                                            <option value="{{ $value }}" @selected(old('status', $invoice?->status ?? 'draft') === $value)>{{ $label }}</option>
                                         @endforeach
                                     </select>
                                 </div>
@@ -302,7 +302,7 @@
                             <div class="modal-body bg-light" id="invoicePreviewBody"></div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
-                                <button class="btn btn-primary" form="invoiceForm" type="submit">{{ $isEditing ? 'Update Invoice' : 'Send Invoice' }}</button>
+                                <button class="btn btn-primary" form="invoiceForm" type="submit">{{ $isEditing ? 'Update Invoice' : 'Save Invoice' }}</button>
                             </div>
                         </div>
                     </div>

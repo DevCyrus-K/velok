@@ -606,7 +606,7 @@ class QuotationController extends Controller
         $pdfUrl = route('quote.pdf.download', ['id' => $quotation->id, 'token' => $quotation->pdf_token]);
         $moveDate = $quotation->move_date?->format('d M Y') ?? $quotation->quoteRequest?->move_date?->format('d M Y') ?? 'To be confirmed';
         $validUntil = $quotation->quote_valid_until?->format('d M Y') ?? now()->addDays(7)->format('d M Y');
-        $companyName = trim((string) (config('app.name') ?: 'Kwikshift'));
+        $companyName = trim((string) (app(CompanyProfile::class)->data()['name'] ?: 'Kwikshift Movers'));
 
         $message = "Hello {$quotation->customer_name}! 👋\n\n"
             ."Thank you for choosing *{$companyName}* 🚛\n\n"

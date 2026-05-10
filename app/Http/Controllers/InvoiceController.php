@@ -7,6 +7,7 @@ use App\Models\EmailLog;
 use App\Models\Invoice;
 use App\Models\QuoteRequest;
 use App\Models\User;
+use App\Support\BookingFlow;
 use App\Support\CompanyProfile;
 use App\Support\InvoiceAuthorization;
 use App\Support\PaymentSettings;
@@ -964,5 +965,55 @@ class InvoiceController extends Controller
         $trimmed = trim($value);
 
         return $trimmed === '' ? null : $trimmed;
+    }
+
+    public function sendWhatsApp(Invoice $invoice): RedirectResponse
+    {
+        $this->authorizeInvoiceAccess($invoice);
+        $invoice->load(['quoteRequest.quotation']);
+
+        $whatsappUrl = $this->buildInvoiceWhatsAppMessage($invoice);
+
+        if (! $whatsappUrl) {
+            return back()->with('toast-error', 'WhatsApp message could not be generated.');
+        }
+
+        return redirect()->away($whatsappUrl);
+    }
+
+    public function buildInvoiceWhatsAppMessageUrl(Invoice $invoice): ?string
+    {
+        return $this->buildInvoiceWhatsAppMessage($invoice);
+    }
+
+    private function buildInvoiceWhatsAppMessage(Invoice $invoice): ?string
+    {
+        $invoice->loadMissing('quoteRequest.quotation');
+        $companyName = trim((string) (app(CompanyProfile::class)->data()['name'] ?: 'Kwikshift Movers'));
+        $invoicePdfUrl = route('invoices.download', $invoice);
+        $linkedQuotation = $invoice->quoteRequest?->quotation;
+        $quotationPdfUrl = $linkedQuotation
+            ? route('quote.pdf.download', ['id' => $linkedQuotation->id, 'token' => $linkedQuotation->pdf_token])
+            : null;
+
+        $message = "Hello {$invoice->customer_name}! 👋\n\n"
+            ."Thank you for choosing *{$companyName}* 🚛\n\n"
+            ."Please find your invoice details:\n\n"
+            ."📋 *Invoice Number:* {$invoice->invoice_number}\n"
+            ."📅 *Invoice Date:* {$invoice->invoice_date?->format('d M Y')}\n"
+            ."📅 *Due Date:* {$invoice->due_date?->format('d M Y')}\n"
+            ."💰 *Amount Due:* KES ".number_format($invoice->total_amount, 2)."\n\n"
+            ."📄 *Download Invoice PDF:*\n{$invoicePdfUrl}\n\n";
+
+        if ($quotationPdfUrl) {
+            $message .= "📄 *Download Quotation PDF:*\n{$quotationPdfUrl}\n\n";
+        }
+
+        $message .= "💳 *Payment Details:*\n"
+            .app(BookingFlow::class)->paymentMethodsText()."\n\n"
+            ."_For any questions reply to this message_\n\n"
+            ."*{$companyName} Team* 🚛";
+
+        return app(BookingFlow::class)->whatsappUrl($invoice->customer_phone, $message);
     }
 }

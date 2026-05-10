@@ -126,6 +126,7 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
     Route::post('invoice/{invoice}/send', [InvoiceController::class, 'send'])->middleware('throttle:5,1')->name('invoice.send');
     Route::get('invoices/{invoice}/download', [InvoiceController::class, 'download'])->name('invoices.download');
     Route::post('invoices/{invoice}/send', [InvoiceController::class, 'send'])->middleware('throttle:5,1')->name('invoices.send');
+    Route::get('invoice/{invoice}/send-whatsapp', [InvoiceController::class, 'sendWhatsApp'])->name('invoice.send-whatsapp');
     Route::get('invoice/{invoice}/edit', [InvoiceController::class, 'edit'])->name('invoice.edit');
     Route::put('invoice/{invoice}', [InvoiceController::class, 'update'])->name('invoice.update');
     Route::patch('invoice/{invoice}/mark-paid', [InvoiceController::class, 'markPaid'])->name('invoice.mark-paid');
