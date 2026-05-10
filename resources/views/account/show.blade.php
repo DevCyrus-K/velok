@@ -5,7 +5,18 @@
     .account-avatar {
         width: 92px;
         height: 92px;
+    }
+    .account-avatar-image {
         object-fit: cover;
+    }
+    .account-avatar-initials {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.8rem;
+        font-weight: 700;
+        line-height: 1;
+        text-transform: uppercase;
     }
     .account-tabs .nav-link {
         display: inline-flex;
@@ -41,6 +52,9 @@
             width: 78px;
             height: 78px;
         }
+        .account-avatar-initials {
+            font-size: 1.5rem;
+        }
     }
 </style>
 @endsection
@@ -64,7 +78,11 @@
 <div class="card">
     <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-3">
         <div class="d-flex align-items-center gap-3">
-            <img alt="{{ $user->name }}" class="account-avatar rounded-circle border bg-light" src="{{ $avatarUrl }}">
+            @if($hasAvatar)
+                <img alt="{{ $user->name }}" class="account-avatar account-avatar-image rounded-circle border bg-light" src="{{ $avatarUrl }}">
+            @else
+                <span aria-label="{{ $user->name }} initials" class="account-avatar account-avatar-initials rounded-circle border bg-primary-subtle text-primary">{{ $avatarInitials }}</span>
+            @endif
             <div>
                 <h4 class="card-title mb-1">My Account</h4>
                 <p class="text-muted mb-0">{{ $user->name }} | {{ $user->email }}</p>
@@ -194,7 +212,11 @@
                             <div class="row align-items-center">
                                 <div class="col-lg-4">
                                     <div class="mb-3 mb-lg-0 text-center text-lg-start">
-                                        <img alt="{{ $user->name }}" class="account-avatar rounded-circle border bg-light" src="{{ $avatarUrl }}">
+                                        @if($hasAvatar)
+                                            <img alt="{{ $user->name }}" class="account-avatar account-avatar-image rounded-circle border bg-light" src="{{ $avatarUrl }}">
+                                        @else
+                                            <span aria-label="{{ $user->name }} initials" class="account-avatar account-avatar-initials rounded-circle border bg-primary-subtle text-primary">{{ $avatarInitials }}</span>
+                                        @endif
                                     </div>
                                 </div>
                                 <div class="col-lg-8">

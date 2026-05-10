@@ -65,6 +65,20 @@
 @endsection
 
 @section('content')
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div>
+                <h4 class="mb-1">Email Delivery Report</h4>
+                <p class="text-muted mb-0">Download the current delivery summary and log table as a PDF.</p>
+            </div>
+            <a class="btn btn-primary btn-sm" href="{{ route('reports.download', 'email-delivery') }}">
+                <i class="icon-sm me-1" data-lucide="download"></i>Download PDF
+            </a>
+        </div>
+    </div>
+</div>
+
 <div class="row">
     <div class="col-xl-3 col-md-6">
         <div class="card email-report-top-card">

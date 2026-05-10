@@ -11,8 +11,9 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
-use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CustomerController extends Controller
 {
@@ -77,7 +78,7 @@ class CustomerController extends Controller
             ->latest('id')
             ->first();
 
-        if (!$updatedCustomer) {
+        if (! $updatedCustomer) {
             return redirect()
                 ->route('any', 'customers')
                 ->with('toast-success', 'Customer updated successfully.');
@@ -109,6 +110,87 @@ class CustomerController extends Controller
         return redirect()
             ->route('any', 'customers')
             ->with('toast-success', 'Customer deleted successfully.');
+    }
+
+    public function export(Request $request): StreamedResponse
+    {
+        app(CustomerSyncService::class)->sync();
+
+        $customers = Customer::query()
+            ->orderByDesc('last_quote_at')
+            ->orderByDesc('id')
+            ->get();
+
+        $search = Str::lower(trim((string) $request->query('search', '')));
+        $status = trim((string) $request->query('status', 'all'));
+        $service = trim((string) $request->query('service', 'all'));
+        $sort = trim((string) $request->query('sort', 'newest'));
+
+        $customers = $customers
+            ->filter(function (Customer $customer) use ($search, $status, $service): bool {
+                $customerDate = $this->customerRawDate($customer);
+                $matchesStatus = $status === 'all' || $customer->status === $status;
+                $matchesService = $service === 'all' || Str::slug($customer->latestServiceLabel()) === $service;
+                $haystack = Str::lower(implode(' ', [
+                    $customer->full_name,
+                    $customer->email,
+                    $customer->phone,
+                    $customer->latestServiceLabel(),
+                    $customer->latestRouteSummary(),
+                    $customer->statusLabel(),
+                    $customerDate?->format('d M Y') ?? '',
+                ]));
+
+                return $matchesStatus
+                    && $matchesService
+                    && ($search === '' || str_contains($haystack, $search));
+            });
+
+        $customers = match ($sort) {
+            'oldest' => $customers->sortBy(fn (Customer $customer) => $this->customerRawDate($customer)?->timestamp ?? 0),
+            'customer' => $customers->sortBy(fn (Customer $customer) => Str::lower($customer->full_name)),
+            default => $customers->sortByDesc(fn (Customer $customer) => $this->customerRawDate($customer)?->timestamp ?? 0),
+        };
+
+        $filename = 'customers-'.now()->format('Y-m-d-His').'.csv';
+
+        return response()->streamDownload(function () use ($customers) {
+            $handle = fopen('php://output', 'w');
+
+            fputcsv($handle, [
+                'Customer Name',
+                'Customer Email',
+                'Phone Number',
+                'Latest Service',
+                'Latest Route',
+                'Status',
+                'First Seen',
+                'Last Quote',
+                'Quotes Count',
+                'Approved Quotes',
+                'Declined Quotes',
+            ]);
+
+            foreach ($customers as $customer) {
+                fputcsv($handle, [
+                    $customer->full_name,
+                    $customer->email,
+                    $customer->phone,
+                    $customer->latestServiceLabel(),
+                    $customer->latestRouteSummary(),
+                    $customer->statusLabel(),
+                    $customer->first_seen_at?->format('Y-m-d') ?? '',
+                    $customer->last_quote_at?->format('Y-m-d') ?? '',
+                    $customer->quotes_count,
+                    $customer->approved_quotes_count,
+                    $customer->declined_quotes_count,
+                ]);
+            }
+
+            fclose($handle);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+        ]);
     }
 
     public function import(Request $request): RedirectResponse
@@ -156,10 +238,10 @@ class CustomerController extends Controller
 
         app(CustomerSyncService::class)->sync();
 
-        $message = 'Imported ' . count($result['records']) . ' customer' . (count($result['records']) === 1 ? '' : 's') . ' successfully.';
+        $message = 'Imported '.count($result['records']).' customer'.(count($result['records']) === 1 ? '' : 's').' successfully.';
 
         if ($result['skipped'] > 0) {
-            $message .= ' Skipped ' . $result['skipped'] . ' invalid row' . ($result['skipped'] === 1 ? '' : 's') . '.';
+            $message .= ' Skipped '.$result['skipped'].' invalid row'.($result['skipped'] === 1 ? '' : 's').'.';
         }
 
         return redirect()
@@ -169,10 +251,15 @@ class CustomerController extends Controller
 
     private function customerDate(Customer $customer): string
     {
-        return $customer->first_seen_at?->format('d M Y')
-            ?? $customer->last_quote_at?->format('d M Y')
-            ?? $customer->created_at?->format('d M Y')
+        return $this->customerRawDate($customer)?->format('d M Y')
             ?? 'Not available';
+    }
+
+    private function customerRawDate(Customer $customer): ?Carbon
+    {
+        return $customer->first_seen_at
+            ?? $customer->last_quote_at
+            ?? $customer->created_at;
     }
 
     private function squish(string $value): string
@@ -219,8 +306,9 @@ class CustomerController extends Controller
             $email = Str::lower(trim((string) $this->csvValue($data, ['email', 'customer_email'])));
             $phone = trim((string) $this->csvValue($data, ['phone', 'phone_number', 'mobile', 'telephone']));
 
-            if ($fullName === '' || $email === '' || $phone === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            if ($fullName === '' || $email === '' || $phone === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 $skipped++;
+
                 continue;
             }
 
@@ -299,5 +387,4 @@ class CustomerController extends Controller
             return now();
         }
     }
-
 }

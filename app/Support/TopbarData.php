@@ -2,19 +2,22 @@
 
 namespace App\Support;
 
-use App\Models\Message;
 use App\Models\ActivityNotification;
+use App\Models\Message;
 use App\Models\User;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class TopbarData
 {
     private const DEFAULT_AVATAR = '/images/users/avatar-1.jpg';
+
     private const USER_CACHE_PREFIX = 'topbar.user.v2.';
+
     private const NOTIFICATIONS_CACHE_KEY = 'topbar.notifications';
 
     public function forUser(?Authenticatable $user): array
@@ -27,7 +30,7 @@ class TopbarData
 
     public function user(Authenticatable $user): array
     {
-        $cacheKey = self::USER_CACHE_PREFIX . $user->getAuthIdentifier();
+        $cacheKey = self::USER_CACHE_PREFIX.$user->getAuthIdentifier();
 
         return Cache::remember($cacheKey, now()->addMinutes(30), function () use ($user): array {
             return [
@@ -110,7 +113,7 @@ class TopbarData
     private function hasActivityNotifications(): bool
     {
         try {
-            return \Illuminate\Support\Facades\Schema::hasTable('activity_notifications');
+            return Schema::hasTable('activity_notifications');
         } catch (\Throwable) {
             return false;
         }
@@ -141,13 +144,19 @@ class TopbarData
 
     public function initials(Authenticatable $user): string
     {
-        $name = trim((string) data_get($user, 'name', ''));
+        $firstName = trim((string) data_get($user, 'first_name', ''));
+        $lastName = trim((string) data_get($user, 'last_name', ''));
 
-        if ($name === '') {
-            return 'U';
+        if ($firstName !== '' || $lastName !== '') {
+            $initials = collect([$firstName, $lastName])
+                ->filter()
+                ->map(fn (string $part) => Str::upper(Str::substr($part, 0, 1)))
+                ->implode('');
+
+            return $initials !== '' ? $initials : 'U';
         }
 
-        $parts = Str::of($name)
+        $parts = Str::of((string) data_get($user, 'name', ''))
             ->squish()
             ->explode(' ')
             ->filter()
@@ -183,7 +192,7 @@ class TopbarData
 
     public function forgetUser(User $user): void
     {
-        Cache::forget(self::USER_CACHE_PREFIX . $user->getKey());
+        Cache::forget(self::USER_CACHE_PREFIX.$user->getKey());
     }
 
     public function displayCount(int $count): string

@@ -53,9 +53,14 @@
                         <h3 class="mb-2">{{ $report['title'] }}</h3>
                         <p class="text-muted mb-0">{{ $report['subtitle'] ?? '' }}</p>
                     </div>
-                    <a href="{{ route('second', ['reports', 'overview']) }}" class="btn btn-outline-secondary btn-sm">
-                        All Reports
-                    </a>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="{{ route('reports.download', $report['slug']) }}" class="btn btn-primary btn-sm">
+                            <i class="icon-sm me-1" data-lucide="download"></i>Download PDF
+                        </a>
+                        <a href="{{ route('second', ['reports', 'overview']) }}" class="btn btn-outline-secondary btn-sm">
+                            All Reports
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>

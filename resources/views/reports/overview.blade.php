@@ -53,8 +53,11 @@
                     <p class="text-muted mb-0">{{ $reportCount }} live report {{ $reportCount === 1 ? 'page is' : 'pages are' }} ready from the current database and connected services.</p>
                 </div>
                 <div class="d-flex flex-wrap gap-2 mt-4">
+                    <a class="btn btn-primary btn-sm" href="{{ route('reports.download', 'overview') }}">
+                        <i class="icon-sm me-1" data-lucide="download"></i>Download PDF
+                    </a>
                     @foreach($priorityReports as $report)
-                        <a class="btn btn-primary btn-sm" href="{{ route('second', ['reports', $report['slug']]) }}">
+                        <a class="btn btn-outline-primary btn-sm" href="{{ route('second', ['reports', $report['slug']]) }}">
                             <i class="icon-sm me-1" data-lucide="{{ $report['icon'] }}"></i>{{ $report['title'] }}
                         </a>
                     @endforeach

@@ -148,15 +148,13 @@
                                    <a class="dropdown-item customer-sort-option" href="#!" data-sort="customer">Customer Name</a>
                               </div>
                          </div>
-                         <div class="dropdown">
-                              <a aria-expanded="false" class="dropdown-toggle btn btn-sm btn-outline-light rounded"
-                                   data-bs-toggle="dropdown" href="#">
-                                   Reports
+                         <div class="d-flex flex-wrap gap-2">
+                              <button class="btn btn-sm btn-outline-primary" id="customer-import-trigger" type="button">
+                                   <i class="icon-sm me-1" data-lucide="upload"></i>Import CSV
+                              </button>
+                              <a class="btn btn-sm btn-primary" href="{{ route('customers.export') }}" id="customer-export-trigger">
+                                   <i class="icon-sm me-1" data-lucide="download"></i>Export CSV
                               </a>
-                              <div class="dropdown-menu dropdown-menu-end">
-                                   <a class="dropdown-item" href="#!" id="customer-export-trigger">Export CSV</a>
-                                   <a class="dropdown-item" href="#!" id="customer-import-trigger">Import CSV</a>
-                              </div>
                          </div>
                     </div>
                </div>
@@ -317,8 +315,6 @@
         const getDateFromRow = (row) => new Date(row.dataset.date || 0);
         const getCustomerFromRow = (row) => (row.dataset.name || '').toLowerCase();
 
-        const visibleRows = () => rows.filter((row) => !row.classList.contains('d-none'));
-
         const sortRows = (rowsToSort) => {
             const sorted = [...rowsToSort];
 
@@ -422,40 +418,17 @@
             exportTrigger.addEventListener('click', function (event) {
                 event.preventDefault();
 
-                const csvRows = [
-                    ['Customer Name', 'Customer Email', 'Latest Service', 'Phone Number', 'Date']
-                ];
+                const url = new URL(exportTrigger.href, window.location.origin);
+                const query = searchInput ? searchInput.value.trim() : '';
 
-                visibleRows().forEach((row) => {
-                    const cells = row.querySelectorAll('td');
+                if (query !== '') {
+                    url.searchParams.set('search', query);
+                }
 
-                    if (cells.length < 5) {
-                        return;
-                    }
-
-                    csvRows.push([
-                        cells[0].querySelector('.fw-semibold')?.textContent.trim() || '',
-                        cells[1].textContent.trim(),
-                        cells[2].textContent.trim(),
-                        cells[3].textContent.trim(),
-                        cells[4].textContent.trim()
-                    ]);
-                });
-
-                const csvContent = csvRows
-                    .map((columns) => columns.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(','))
-                    .join('\n');
-
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-
-                link.href = url;
-                link.download = 'customers.csv';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
+                url.searchParams.set('status', currentFilter);
+                url.searchParams.set('service', currentService);
+                url.searchParams.set('sort', currentSort);
+                window.location.href = url.toString();
             });
         }
 

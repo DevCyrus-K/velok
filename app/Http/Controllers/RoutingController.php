@@ -10,16 +10,23 @@ use App\Models\Quotation;
 use App\Models\QuoteRequest;
 use App\Services\CustomerSyncService;
 use App\Services\GoogleAnalyticsService;
+use App\Support\CompanyProfile;
+use App\Support\InvoiceAuthorization;
+use App\Support\PaymentSettings;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\CarbonInterface;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Foundation\Validation\ValidatesRequests;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Routing\Controller as BaseController;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
-use Illuminate\Support\Carbon;
 use Illuminate\View\View;
 
 class RoutingController extends BaseController
@@ -31,7 +38,9 @@ class RoutingController extends BaseController
         'monthly' => 'Monthly',
         'yearly' => 'Yearly',
     ];
+
     private const DASHBOARD_WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
     private const DASHBOARD_SERVICE_CATEGORIES = [
         'Residential Relocation',
         'Office Relocation',
@@ -49,7 +58,7 @@ class RoutingController extends BaseController
     /**
      * Display a listing of the resource.
      *
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function index(Request $request)
     {
@@ -63,7 +72,7 @@ class RoutingController extends BaseController
     /**
      * Display a view based on first route param
      *
-     * @return \Illuminate\Http\Response
+     * @return Response
      */
     public function root(Request $request, $first)
     {
@@ -138,7 +147,7 @@ class RoutingController extends BaseController
             return $this->invoiceDetailsPage();
         }
 
-        return view($first . '.' . $second);
+        return view($first.'.'.$second);
     }
 
     /**
@@ -150,7 +159,7 @@ class RoutingController extends BaseController
             return $this->invoiceDetailsPage($third);
         }
 
-        return view($first . '.' . $second . '.' . $third);
+        return view($first.'.'.$second.'.'.$third);
     }
 
     public function galleryAsset(Request $request)
@@ -162,10 +171,10 @@ class RoutingController extends BaseController
         $kwikshiftRoot = realpath(config('services.kwikshift.root'));
         abort_if($kwikshiftRoot === false, 404);
 
-        $absolutePath = realpath($kwikshiftRoot . DIRECTORY_SEPARATOR . $relativePath);
+        $absolutePath = realpath($kwikshiftRoot.DIRECTORY_SEPARATOR.$relativePath);
         abort_if($absolutePath === false, 404);
-        abort_if(!str_starts_with($absolutePath, $kwikshiftRoot . DIRECTORY_SEPARATOR), 404);
-        abort_if(!is_file($absolutePath), 404);
+        abort_if(! str_starts_with($absolutePath, $kwikshiftRoot.DIRECTORY_SEPARATOR), 404);
+        abort_if(! is_file($absolutePath), 404);
 
         $extension = strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION));
         abort_unless(in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'], true), 404);
@@ -210,26 +219,39 @@ class RoutingController extends BaseController
     public function invoiceDetailsPage($invoice = null): View
     {
         $invoiceRecord = $this->invoiceRecord($invoice);
-        $company = app(\App\Support\CompanyProfile::class)->data();
+        $company = app(CompanyProfile::class)->data();
         $user = auth()->user();
-        $authorization = $invoiceRecord ? app(\App\Support\InvoiceAuthorization::class)->data($invoiceRecord, $company, $user) : null;
+        $authorization = $invoiceRecord ? app(InvoiceAuthorization::class)->data($invoiceRecord, $company, $user) : null;
 
         return view('invoice.invoice-details', [
             'invoice' => $invoiceRecord,
             'company' => $company,
-            'paymentMethods' => $invoiceRecord ? app(\App\Support\PaymentSettings::class)->methodsForInvoice($invoiceRecord) : [],
-            'thankYouMessage' => app(\App\Support\CompanyProfile::class)->thankYouMessage(),
+            'paymentMethods' => $invoiceRecord ? app(PaymentSettings::class)->methodsForInvoice($invoiceRecord) : [],
+            'thankYouMessage' => app(CompanyProfile::class)->thankYouMessage(),
             'authorization' => $authorization,
-            'signatureDataUri' => $invoiceRecord ? app(\App\Support\InvoiceAuthorization::class)->signatureDataUri($invoiceRecord, $company, $user) : null,
+            'signatureDataUri' => $invoiceRecord ? app(InvoiceAuthorization::class)->signatureDataUri($invoiceRecord, $company, $user) : null,
             'user' => $user,
         ]);
+    }
+
+    public function downloadReport(string $report)
+    {
+        $reportData = $this->reportDataForDownload($report);
+        $filename = Str::slug($reportData['title'] ?? $report).'-report-'.now()->format('Y-m-d').'.pdf';
+
+        return Pdf::loadView('reports.pdf', [
+            'report' => $reportData,
+            'generatedAt' => now(),
+        ])
+            ->setPaper('a4', 'landscape')
+            ->download($filename);
     }
 
     private function customerData(): array
     {
         app(CustomerSyncService::class)->sync();
 
-        if (!Schema::hasTable('customers')) {
+        if (! Schema::hasTable('customers')) {
             return [
                 'customers' => collect(),
                 'recentCustomers' => collect(),
@@ -288,7 +310,7 @@ class RoutingController extends BaseController
                 [
                     'title' => 'Total Revenue',
                     'value' => $this->formatCurrency($invoices->sum('total_amount')),
-                    'note' => $invoices->count() . ' live invoices contributing to the current total.',
+                    'note' => $invoices->count().' live invoices contributing to the current total.',
                     'icon' => 'wallet',
                     'icon_class' => 'text-primary',
                     'value_class' => 'text-primary',
@@ -339,7 +361,7 @@ class RoutingController extends BaseController
                     'value' => number_format((int) ($visitorSummary['active_users'] ?? 0)),
                     'note' => ($visitorAnalytics['error'] ?? null)
                         ? 'Connect Google Analytics to show live visitor totals.'
-                        : 'Google Analytics active users for ' . ($visitorAnalytics['date_range_label'] ?? 'the selected range') . '.',
+                        : 'Google Analytics active users for '.($visitorAnalytics['date_range_label'] ?? 'the selected range').'.',
                     'icon' => 'users',
                     'icon_class' => 'text-info',
                     'value_class' => 'text-dark',
@@ -494,11 +516,85 @@ class RoutingController extends BaseController
         ]);
     }
 
+    private function reportsOverviewDownloadData(): array
+    {
+        $quotes = $this->quoteRequests();
+        $customers = $this->customersCollection();
+        $quotations = $this->quotationsCollection();
+        $invoices = $this->invoicesCollection();
+        $messages = $this->messagesCollection();
+        $visibleReports = collect($this->reportsCatalog())
+            ->reject(fn (array $report) => $report['slug'] === 'overview')
+            ->values();
+
+        return [
+            'slug' => 'overview',
+            'title' => 'Reports Overview',
+            'subtitle' => 'Downloadable directory and coverage summary for the live reporting center.',
+            'badge' => 'Reports Hub',
+            'cards' => [
+                $this->reportCard('Live Reports', (string) $visibleReports->count(), 'chart-column', 'text-primary'),
+                $this->reportCard('Tracked Quotes', (string) $quotes->count(), 'message-square-quote', 'text-primary'),
+                $this->reportCard('Tracked Customers', (string) $customers->count(), 'users', 'text-primary'),
+                $this->reportCard('Tracked Messages', (string) $messages->count(), 'mail', 'text-primary'),
+                $this->reportCard('Tracked Invoices', (string) $invoices->count(), 'receipt', 'text-primary'),
+                $this->reportCard('Tracked Quotations', (string) $quotations->count(), 'file-text', 'text-primary'),
+            ],
+            'insights' => $visibleReports
+                ->groupBy('category')
+                ->map(fn ($reports, string $category) => $this->insightCard(
+                    $category,
+                    (string) $reports->count(),
+                    'Downloadable report pages in this category.'
+                ))
+                ->values()
+                ->all(),
+            'table' => [
+                'title' => 'Report Directory',
+                'description' => 'Every report currently available for viewing and download.',
+                'columns' => [
+                    ['key' => 'category', 'label' => 'Category'],
+                    ['key' => 'report', 'label' => 'Report'],
+                    ['key' => 'description', 'label' => 'Description'],
+                    ['key' => 'path', 'label' => 'Path'],
+                ],
+                'rows' => $visibleReports->map(fn (array $report) => [
+                    'cells' => [
+                        'category' => $this->textCell($report['category']),
+                        'report' => $this->textCell($report['title']),
+                        'description' => $this->textCell($report['description']),
+                        'path' => $this->textCell('/reports/'.$report['slug']),
+                    ],
+                    'datasets' => [],
+                    'actions' => [],
+                ])->all(),
+            ],
+        ];
+    }
+
     private function genericReportPage(array $report): View
     {
         return view('reports.generic', [
             'report' => $report,
         ]);
+    }
+
+    private function reportDataForDownload(string $report): array
+    {
+        return match ($report) {
+            'overview' => $this->reportsOverviewDownloadData(),
+            'quote-funnel' => $this->quoteFunnelReportData(),
+            'lead-sources' => $this->leadSourcesReportData(),
+            'customer-lifecycle' => $this->customerLifecycleReportData(),
+            'quotation-pipeline' => $this->quotationPipelineReportData(),
+            'message-response' => $this->messageResponseReportData(),
+            'route-demand' => $this->routeDemandReportData(),
+            'at-risk-follow-up' => $this->atRiskFollowUpReportData(),
+            'visitor-reports' => $this->visitorReportsData(),
+            'financial-reports' => $this->financialReportData(),
+            'email-delivery' => $this->emailDeliveryDownloadData(),
+            default => abort(404),
+        };
     }
 
     private function googleAnalyticsVisitors(): array
@@ -662,7 +758,7 @@ class RoutingController extends BaseController
                 $this->insightCard('Approval Rate', $this->formatPercent($approvedCount, $quotes->count()), 'Approved quotes divided by all tracked requests.'),
                 $this->insightCard('Top Source', $topSources->keys()->first() ?? 'No source data yet', 'Most productive captured source page so far.'),
                 $this->insightCard('Top Service', $topServices->keys()->first() ?? 'No service data yet', 'The service type currently driving the most quotes.'),
-                $this->insightCard('Avg Move Lead Time', $avgLeadTimeDays > 0 ? number_format($avgLeadTimeDays, 1) . ' days' : 'N/A', 'Average time between request creation and planned move date.'),
+                $this->insightCard('Avg Move Lead Time', $avgLeadTimeDays > 0 ? number_format($avgLeadTimeDays, 1).' days' : 'N/A', 'Average time between request creation and planned move date.'),
             ],
             'table' => [
                 'title' => 'Quote Funnel Details',
@@ -695,7 +791,7 @@ class RoutingController extends BaseController
                         'cells' => [
                             'date' => $this->stackCell($quote->created_at?->format('Y-m-d') ?? 'N/A', $quote->created_at?->format('h:i A') ?? ''),
                             'customer' => $this->stackCell($quote->full_name, $quote->email),
-                            'route' => $this->stackCell($this->safeLabel($quote->moving_from, 'Unknown Origin'), 'to ' . $this->safeLabel($quote->moving_to, 'Unknown Destination')),
+                            'route' => $this->stackCell($this->safeLabel($quote->moving_from, 'Unknown Origin'), 'to '.$this->safeLabel($quote->moving_to, 'Unknown Destination')),
                             'service' => $this->stackCell($quote->serviceTypeLabel(), $this->safeLabel($quote->move_size, 'Size not set')),
                             'source' => $this->textCell($this->safeLabel($quote->source_page, 'Unknown Source')),
                             'status' => $this->badgeCell($displayStatus['label'], $displayStatus['class']),
@@ -798,8 +894,8 @@ class RoutingController extends BaseController
                 ),
             ],
             'insights' => [
-                $this->insightCard('Best Converting Source', $bestSource['source'] ?? 'No source data yet', ($bestSource['approval_rate'] ?? 0) . '% approval rate'),
-                $this->insightCard('Largest Source', $largestSource['source'] ?? 'No source data yet', ($largestSource['total'] ?? 0) . ' captured leads'),
+                $this->insightCard('Best Converting Source', $bestSource['source'] ?? 'No source data yet', ($bestSource['approval_rate'] ?? 0).'% approval rate'),
+                $this->insightCard('Largest Source', $largestSource['source'] ?? 'No source data yet', ($largestSource['total'] ?? 0).' captured leads'),
                 $this->insightCard('Sources with Email Issues', (string) $sourceRows->where('email_failed', '>', 0)->count(), 'Pages where follow-up delivery problems were recorded.'),
                 $this->insightCard('Avg Leads per Source', $sourceRows->isNotEmpty() ? number_format($sourceRows->avg('total'), 1) : '0', 'Average lead volume per tracked source page.'),
             ],
@@ -829,7 +925,7 @@ class RoutingController extends BaseController
                             'approved' => $this->textCell((string) $row['approved']),
                             'declined' => $this->textCell((string) $row['declined']),
                             'email_failed' => $this->textCell((string) $row['email_failed']),
-                            'approval_rate' => $this->textCell($row['approval_rate'] . '%'),
+                            'approval_rate' => $this->textCell($row['approval_rate'].'%'),
                         ],
                         'datasets' => [
                             'search' => Str::lower(implode(' ', [$row['source'], $row['total'], $row['approved'], $row['declined'], $row['email_failed'], $row['approval_rate']])),
@@ -860,7 +956,7 @@ class RoutingController extends BaseController
         $topChannel = $channels->first();
         $alerts = [];
 
-        if (!empty($analytics['error'])) {
+        if (! empty($analytics['error'])) {
             $alerts[] = [
                 'type' => ($analytics['configured'] ?? false) ? 'warning' : 'info',
                 'title' => 'Google Analytics setup',
@@ -871,7 +967,7 @@ class RoutingController extends BaseController
         return [
             'slug' => 'visitor-reports',
             'title' => 'Visitor Insights',
-            'subtitle' => 'Showing only GA4 Data API traffic for ' . ($analytics['date_range_label'] ?? 'the selected range') . '.',
+            'subtitle' => 'Showing only GA4 Data API traffic for '.($analytics['date_range_label'] ?? 'the selected range').'.',
             'badge' => 'Google Analytics Data',
             'alerts' => $alerts,
             'cards' => [
@@ -937,9 +1033,9 @@ class RoutingController extends BaseController
                 ),
             ],
             'insights' => [
-                $this->insightCard('Top Page', $topPage['page'] ?? 'No GA page data yet', number_format((int) ($topPage['screen_page_views'] ?? 0)) . ' GA page views'),
-                $this->insightCard('Best Engagement', $bestEngagementPage['page'] ?? 'No GA engagement data yet', $this->formatRatePercent((float) ($bestEngagementPage['engagement_rate'] ?? 0)) . ' engagement rate'),
-                $this->insightCard('Top Channel', $topChannel['channel'] ?? 'No GA channel data yet', number_format((int) ($topChannel['active_users'] ?? 0)) . ' active users'),
+                $this->insightCard('Top Page', $topPage['page'] ?? 'No GA page data yet', number_format((int) ($topPage['screen_page_views'] ?? 0)).' GA page views'),
+                $this->insightCard('Best Engagement', $bestEngagementPage['page'] ?? 'No GA engagement data yet', $this->formatRatePercent((float) ($bestEngagementPage['engagement_rate'] ?? 0)).' engagement rate'),
+                $this->insightCard('Top Channel', $topChannel['channel'] ?? 'No GA channel data yet', number_format((int) ($topChannel['active_users'] ?? 0)).' active users'),
                 $this->insightCard('Data Source', 'Google Analytics', 'No quote, message, or local dashboard counters are used here.'),
             ],
             'table' => [
@@ -1077,12 +1173,12 @@ class RoutingController extends BaseController
                         'cells' => [
                             'date' => $this->stackCell(
                                 $customer->first_seen_at?->format('Y-m-d') ?? 'N/A',
-                                $customer->last_quote_at ? 'Last quote ' . $customer->last_quote_at->format('Y-m-d') : ''
+                                $customer->last_quote_at ? 'Last quote '.$customer->last_quote_at->format('Y-m-d') : ''
                             ),
                             'customer' => $this->stackCell($customer->full_name, $customer->email),
                             'route' => $this->textCell($customer->latestRouteSummary()),
                             'service' => $this->textCell($customer->latestServiceLabel()),
-                            'volume' => $this->stackCell((string) $customer->quotes_count . ' total', (string) $customer->approved_quotes_count . ' approved / ' . (string) $customer->declined_quotes_count . ' declined'),
+                            'volume' => $this->stackCell((string) $customer->quotes_count.' total', (string) $customer->approved_quotes_count.' approved / '.(string) $customer->declined_quotes_count.' declined'),
                             'status' => $this->badgeCell($customer->statusLabel(), $customer->statusBadgeClass()),
                         ],
                         'datasets' => [
@@ -1420,7 +1516,7 @@ class RoutingController extends BaseController
             ],
             'insights' => [
                 $this->insightCard('Response Rate', $this->formatPercent($messages->where('status', 'responded')->count(), $messages->count()), 'Responded messages divided by total messages.'),
-                $this->insightCard('Avg Response Time', $avgResponseHours ? number_format($avgResponseHours, 1) . ' hrs' : 'N/A', 'Based on messages that already have a recorded response.'),
+                $this->insightCard('Avg Response Time', $avgResponseHours ? number_format($avgResponseHours, 1).' hrs' : 'N/A', 'Based on messages that already have a recorded response.'),
                 $this->insightCard('Top Origin', $topOrigins->keys()->first() ?? 'No origin data yet', 'Most common page origin for messages currently tracked.'),
                 $this->insightCard('Unread > 24h', (string) $messages->filter(fn (Message $message) => $message->status === 'unread' && $message->created_at && $message->created_at->lt(now()->subDay()))->count(), 'Messages likely needing faster follow-up.'),
             ],
@@ -1462,7 +1558,7 @@ class RoutingController extends BaseController
                             'subject' => $this->textCell(Str::limit($message->subject, 54)),
                             'origin' => $this->textCell($this->safeLabel($message->origin_page, 'Unknown Origin')),
                             'status' => $this->badgeCell($statusLabel, $statusClass),
-                            'response' => $this->textCell($message->responded_at ? $message->responded_at->diffForHumans($message->created_at, true) . ' later' : 'Awaiting response'),
+                            'response' => $this->textCell($message->responded_at ? $message->responded_at->diffForHumans($message->created_at, true).' later' : 'Awaiting response'),
                         ],
                         'datasets' => [
                             'search' => Str::lower(implode(' ', [
@@ -1491,7 +1587,7 @@ class RoutingController extends BaseController
     {
         $quotes = $this->quoteRequests();
         $routeRows = $quotes
-            ->groupBy(fn (QuoteRequest $quote) => $this->safeLabel($quote->moving_from, 'Unknown Origin') . ' -> ' . $this->safeLabel($quote->moving_to, 'Unknown Destination'))
+            ->groupBy(fn (QuoteRequest $quote) => $this->safeLabel($quote->moving_from, 'Unknown Origin').' -> '.$this->safeLabel($quote->moving_to, 'Unknown Destination'))
             ->map(function ($group, string $route) {
                 $latest = $group->sortByDesc('created_at')->first();
                 $topService = $this->topCounts($group, fn (QuoteRequest $quote) => $quote->serviceTypeLabel(), 1, 'Unknown Service')->keys()->first();
@@ -1556,7 +1652,7 @@ class RoutingController extends BaseController
                 ),
             ],
             'insights' => [
-                $this->insightCard('Top Route', $routeRows->pluck('route')->first() ?? 'No route data yet', ($routeRows->pluck('total')->first() ?? 0) . ' quote requests'),
+                $this->insightCard('Top Route', $routeRows->pluck('route')->first() ?? 'No route data yet', ($routeRows->pluck('total')->first() ?? 0).' quote requests'),
                 $this->insightCard('Top Origin', $originCounts->keys()->first() ?? 'No origin data yet', 'Most frequent starting location.'),
                 $this->insightCard('Top Destination', $destinationCounts->keys()->first() ?? 'No destination data yet', 'Most frequent destination location.'),
                 $this->insightCard('Top Service', $serviceCounts->keys()->first() ?? 'No service data yet', 'Most requested service on current routes.'),
@@ -1763,7 +1859,7 @@ class RoutingController extends BaseController
 
     private function quoteRequests()
     {
-        if (!Schema::hasTable('quote_requests')) {
+        if (! Schema::hasTable('quote_requests')) {
             return collect();
         }
 
@@ -1777,7 +1873,7 @@ class RoutingController extends BaseController
     {
         app(CustomerSyncService::class)->sync();
 
-        if (!Schema::hasTable('customers')) {
+        if (! Schema::hasTable('customers')) {
             return collect();
         }
 
@@ -1789,7 +1885,7 @@ class RoutingController extends BaseController
 
     private function quotationsCollection()
     {
-        if (!Schema::hasTable('quotations') || !Schema::hasTable('quote_requests')) {
+        if (! Schema::hasTable('quotations') || ! Schema::hasTable('quote_requests')) {
             return collect();
         }
 
@@ -1802,7 +1898,7 @@ class RoutingController extends BaseController
 
     private function invoicesCollection()
     {
-        if (!Schema::hasTable('invoices')) {
+        if (! Schema::hasTable('invoices')) {
             return collect();
         }
 
@@ -1815,7 +1911,7 @@ class RoutingController extends BaseController
 
     private function invoiceRecord($invoice = null): ?Invoice
     {
-        if (!Schema::hasTable('invoices')) {
+        if (! Schema::hasTable('invoices')) {
             return null;
         }
 
@@ -1849,7 +1945,7 @@ class RoutingController extends BaseController
 
     private function messagesCollection()
     {
-        if (!Schema::hasTable('messages')) {
+        if (! Schema::hasTable('messages')) {
             return collect();
         }
 
@@ -1871,8 +1967,8 @@ class RoutingController extends BaseController
 
     private function combinedCountMaps($first, $second)
     {
-        $first = $first instanceof \Illuminate\Support\Collection ? $first : collect($first);
-        $second = $second instanceof \Illuminate\Support\Collection ? $second : collect($second);
+        $first = $first instanceof Collection ? $first : collect($first);
+        $second = $second instanceof Collection ? $second : collect($second);
 
         $allKeys = $first->keys()->merge($second->keys())->unique();
 
@@ -1911,7 +2007,7 @@ class RoutingController extends BaseController
                         $createdAt = $this->carbonDate($quote->created_at);
 
                         if (
-                            !$createdAt
+                            ! $createdAt
                             || $createdAt->lt($start)
                             || $createdAt->gt($end)
                             || $this->dashboardServiceCategoryForQuote($quote) !== $category
@@ -1955,7 +2051,7 @@ class RoutingController extends BaseController
             $items->each(function ($item) use (&$counts, $resolver, $start, $end) {
                 $date = $this->carbonDate($resolver($item));
 
-                if (!$date || $date->lt($start) || $date->gt($end)) {
+                if (! $date || $date->lt($start) || $date->gt($end)) {
                     return;
                 }
 
@@ -2012,7 +2108,7 @@ class RoutingController extends BaseController
             ->map(function ($item) use ($dateResolver, $valueResolver) {
                 $date = $this->carbonDate($dateResolver($item));
 
-                if (!$date) {
+                if (! $date) {
                     return null;
                 }
 
@@ -2051,7 +2147,7 @@ class RoutingController extends BaseController
 
     private function carbonDate($date): ?Carbon
     {
-        if (!$date) {
+        if (! $date) {
             return null;
         }
 
@@ -2296,20 +2392,79 @@ class RoutingController extends BaseController
 
     private function formatPercent($numerator, $denominator): string
     {
-        return $this->percentage($numerator, $denominator) . '%';
+        return $this->percentage($numerator, $denominator).'%';
     }
 
     private function formatRatePercent(float $rate): string
     {
-        return number_format(max(0, $rate) * 100, 1) . '%';
+        return number_format(max(0, $rate) * 100, 1).'%';
     }
 
     private function formatCurrency($amount): string
     {
-        return 'KES ' . number_format((float) $amount, 2);
+        return 'KES '.number_format((float) $amount, 2);
     }
 
     private function emailDeliveryReportPage(): View
+    {
+        return view('reports.email-delivery', $this->emailDeliveryReportViewData());
+    }
+
+    private function emailDeliveryDownloadData(): array
+    {
+        $data = $this->emailDeliveryReportViewData();
+        $summary = $data['emailDeliverySummary'];
+        $insights = $data['emailDeliveryInsights'];
+
+        return [
+            'slug' => 'email-delivery',
+            'title' => 'Email Delivery Report',
+            'subtitle' => 'Downloadable email delivery summary, success indicators, and log details.',
+            'badge' => 'Source: email_delivery_logs',
+            'cards' => [
+                $this->reportCard('Total Logs', (string) $summary['total'], 'mail', 'text-primary', $data['emailDeliveryReportData']['charts']['sparklines']['total']->all()),
+                $this->reportCard('Sent', (string) $summary['sent'], 'mail-check', 'text-success', $data['emailDeliveryReportData']['charts']['sparklines']['sent']->all(), 'bar', '#22b956'),
+                $this->reportCard('Failed', (string) $summary['failed'], 'shield-alert', 'text-danger', $data['emailDeliveryReportData']['charts']['sparklines']['failed']->all(), 'area', '#f95c5c'),
+                $this->reportCard('Pending', (string) $summary['pending'], 'clock-3', 'text-warning', $data['emailDeliveryReportData']['charts']['sparklines']['pending']->all(), 'bar', '#f59e0b'),
+            ],
+            'insights' => [
+                $this->insightCard('Success Rate', $insights['success_rate'].'%', 'Sent logs divided by all tracked email delivery logs.'),
+                $this->insightCard('Failure Rate', $insights['failure_rate'].'%', 'Failed logs divided by all tracked email delivery logs.'),
+                $this->insightCard('Top Purpose', $insights['top_purpose'], 'The busiest email journey in the current logs.'),
+                $this->insightCard('Latest Activity', $insights['latest_activity'], $insights['latest_activity_at']),
+            ],
+            'table' => [
+                'title' => 'Email Delivery Logs',
+                'description' => 'Full delivery log data available at download time.',
+                'columns' => [
+                    ['key' => 'date', 'label' => 'Date'],
+                    ['key' => 'email', 'label' => 'Email'],
+                    ['key' => 'purpose', 'label' => 'Purpose'],
+                    ['key' => 'status', 'label' => 'Status'],
+                    ['key' => 'direction', 'label' => 'Direction'],
+                    ['key' => 'transport', 'label' => 'Transport'],
+                    ['key' => 'subject', 'label' => 'Subject'],
+                    ['key' => 'response', 'label' => 'Response'],
+                ],
+                'rows' => $data['emailDeliveryReportData']['tableRows']->map(fn (array $row) => [
+                    'cells' => [
+                        'date' => $this->stackCell($row['date_label'], $row['time_label']),
+                        'email' => $this->textCell($row['email'] !== '' ? $row['email'] : 'No email recorded'),
+                        'purpose' => $this->textCell($row['purpose']),
+                        'status' => $this->badgeCell($row['status'], $row['status_badge_class']),
+                        'direction' => $this->textCell($row['direction']),
+                        'transport' => $this->textCell($row['transport']),
+                        'subject' => $this->textCell($row['subject']),
+                        'response' => $this->textCell($row['response_message'] !== '' ? $row['response_message'] : 'No response recorded'),
+                    ],
+                    'datasets' => [],
+                    'actions' => [],
+                ])->all(),
+            ],
+        ];
+    }
+
+    private function emailDeliveryReportViewData(): array
     {
         $emailDeliveryLogs = $this->emailDeliveryLogs();
         $totalLogs = $emailDeliveryLogs->count();
@@ -2381,7 +2536,7 @@ class RoutingController extends BaseController
         })->values();
         $latestActivity = $emailDeliveryLogs->first()?->created_at;
 
-        return view('reports.email-delivery', [
+        return [
             'emailDeliverySummary' => [
                 'total' => $totalLogs,
                 'sent' => $sentLogs,
@@ -2428,10 +2583,10 @@ class RoutingController extends BaseController
                 ],
                 'totalRows' => $tableRows->count(),
             ],
-        ]);
+        ];
     }
 
-    public function destroyEmailDeliveryLog(int $log): \Illuminate\Http\RedirectResponse
+    public function destroyEmailDeliveryLog(int $log): RedirectResponse
     {
         abort_unless(Schema::hasTable('email_delivery_logs'), 404);
         abort_unless(DB::table('email_delivery_logs')->where('id', $log)->exists(), 404);
@@ -2445,7 +2600,7 @@ class RoutingController extends BaseController
 
     private function emailDeliveryLogs(?int $limit = null)
     {
-        if (!Schema::hasTable('email_delivery_logs')) {
+        if (! Schema::hasTable('email_delivery_logs')) {
             return collect();
         }
 
@@ -2488,7 +2643,7 @@ class RoutingController extends BaseController
 
         return (object) [
             'id' => $log->id,
-            'created_at' => \Illuminate\Support\Carbon::parse($log->created_at),
+            'created_at' => Carbon::parse($log->created_at),
             'recipient_email' => $log->recipient_email,
             'status_label' => $statusLabel,
             'status_badge_class' => $statusBadgeClass,

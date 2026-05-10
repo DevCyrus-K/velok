@@ -1,22 +1,23 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Auth\ScreenLockController;
 use App\Http\Controllers\AccountController;
+use App\Http\Controllers\Auth\ScreenLockController;
 use App\Http\Controllers\CareerJobController;
-use App\Http\Controllers\FaqController;
-use App\Http\Controllers\GalleryController;
-use App\Http\Controllers\JobApplicationController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\EmailTrackingController;
+use App\Http\Controllers\FaqController;
+use App\Http\Controllers\GalleryController;
 use App\Http\Controllers\InvoiceController;
-use App\Http\Controllers\QuoteController;
+use App\Http\Controllers\JobApplicationController;
+use App\Http\Controllers\MessageController;
 use App\Http\Controllers\QuotationController;
+use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\RoutingController;
 use App\Http\Controllers\SettingsController;
-use App\Http\Controllers\TopbarController;
 use App\Http\Controllers\TodoController;
+use App\Http\Controllers\TopbarController;
+use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
@@ -29,7 +30,7 @@ use App\Http\Controllers\TodoController;
 |
 */
 
-require __DIR__ . '/auth.php';
+require __DIR__.'/auth.php';
 
 Route::get('/email/track/{token}', [EmailTrackingController::class, 'open'])
     ->middleware('throttle:30,1')
@@ -111,6 +112,7 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
     Route::get('invoice/invoice-details/{invoice?}', [RoutingController::class, 'invoiceDetailsPage'])->name('invoice.details');
 
     Route::prefix('customers')->name('customers.')->group(function () {
+        Route::get('export', [CustomerController::class, 'export'])->name('export');
         Route::post('import', [CustomerController::class, 'import'])->name('import');
         Route::get('{customer}', [CustomerController::class, 'show'])->name('show');
         Route::get('{customer}/edit', [CustomerController::class, 'edit'])->name('edit');
@@ -166,14 +168,17 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
     });
 
     Route::prefix('messages')->name('messages.')->group(function () {
-        Route::get('/', [ \App\Http\Controllers\MessageController::class, 'index' ])->name('index');
-        Route::get('compose', [ \App\Http\Controllers\MessageController::class, 'compose' ])->name('compose');
-        Route::post('/', [ \App\Http\Controllers\MessageController::class, 'store' ])->name('store');
-        Route::get('{message}', [ \App\Http\Controllers\MessageController::class, 'show' ])->name('show');
-        Route::post('{message}/respond', [ \App\Http\Controllers\MessageController::class, 'respond' ])->name('respond');
-        Route::post('{message}/retry', [ \App\Http\Controllers\MessageController::class, 'retry' ])->name('retry');
-        Route::delete('{message}', [ \App\Http\Controllers\MessageController::class, 'destroy' ])->name('destroy');
+        Route::get('/', [MessageController::class, 'index'])->name('index');
+        Route::get('compose', [MessageController::class, 'compose'])->name('compose');
+        Route::post('/', [MessageController::class, 'store'])->name('store');
+        Route::get('{message}', [MessageController::class, 'show'])->name('show');
+        Route::post('{message}/respond', [MessageController::class, 'respond'])->name('respond');
+        Route::post('{message}/retry', [MessageController::class, 'retry'])->name('retry');
+        Route::delete('{message}', [MessageController::class, 'destroy'])->name('destroy');
     });
+
+    Route::get('reports/{report}/download', [RoutingController::class, 'downloadReport'])
+        ->name('reports.download');
 
     Route::delete('reports/email-delivery/{log}', [RoutingController::class, 'destroyEmailDeliveryLog'])
         ->name('reports.email-delivery.destroy');
