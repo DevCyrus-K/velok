@@ -76,7 +76,15 @@ class InvoiceMail extends Mailable
                     'authorization' => app(InvoiceAuthorization::class)->data($this->invoice, app(CompanyProfile::class)->data(), $this->user),
                     'signatureDataUri' => app(UserSignature::class)->dataUri($this->user?->signaturePath()),
                     'user' => $this->user,
-                ])->setPaper('a4')->output(),
+                ])->setPaper('a4', 'portrait')
+                    ->setOptions([
+                        'dpi' => 150,
+                        'enable_html5_parser' => true,
+                        'isHtml5ParserEnabled' => true,
+                        'isRemoteEnabled' => true,
+                        'defaultFont' => 'Inter',
+                    ])
+                    ->output(),
                 $this->attachmentName(),
             )->withMime('application/pdf'),
         ];

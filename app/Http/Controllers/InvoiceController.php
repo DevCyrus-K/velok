@@ -280,9 +280,28 @@ class InvoiceController extends Controller
         $this->authorizeInvoiceAccess($invoice);
         $invoice->load(['items', 'quoteRequest.quotation']);
 
-        return Pdf::loadView('invoices.pdf', $this->invoiceDocumentData($invoice, auth()->user()))
-            ->setPaper('a4')
-            ->download($this->invoicePdfFilename($invoice));
+        $user = auth()->user();
+
+        $pdf = Pdf::loadView('invoices.pdf', $this->invoiceDocumentData($invoice, $user))
+            ->setPaper('a4', 'portrait')
+            ->setOptions([
+                'dpi' => 150,
+                'enable_html5_parser' => true,
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'Inter',
+            ]);
+
+        $invoice->logStage(
+            'PDF_DOWNLOADED',
+            'Invoice PDF downloaded',
+            'admin',
+            $user?->name,
+            null,
+            'download'
+        );
+
+        return $pdf->download($this->invoicePdfFilename($invoice));
     }
 
     public function send(Request $request, Invoice $invoice): RedirectResponse|JsonResponse

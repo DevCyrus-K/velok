@@ -1,185 +1,281 @@
 @php
-    $company = $company ?? app(\App\Support\CompanyProfile::class)->data();
-    $logoDataUri = $logoDataUri ?? app(\App\Support\CompanyProfile::class)->logoDataUri();
-    $canEmbedImages = extension_loaded('gd');
-    $paymentMethods = collect($paymentMethods ?? app(\App\Support\BookingFlow::class)->paymentMethodDisplays());
-    $thankYouMessage = $thankYouMessage ?? app(\App\Support\CompanyProfile::class)->thankYouMessage();
-    $companyName = trim((string) ($quotation->company_name ?: ($company['name'] ?? config('app.name'))));
-    $companyPhone = trim((string) ($quotation->company_phone ?: ($company['phone'] ?? '')));
-    $companyEmail = trim((string) ($quotation->company_email ?: ($company['email'] ?? '')));
-    $companyAddress = collect([$company['address_line_1'] ?? null, $company['address_line_2'] ?? null])->map(fn ($line) => trim((string) $line))->filter()->implode(', ');
-    $quoteNumber = $quote->reference();
-    $quoteDate = $quotation->quote_date?->format('d M Y') ?? now()->format('d M Y');
-    $validUntil = $quotation->quote_valid_until?->format('d M Y') ?? 'To be confirmed';
-    $moveDate = $quotation->move_date ?: $quote->move_date;
-    $pickup = $quotation->moving_from ?: $quote->moving_from;
-    $dropoff = $quotation->moving_to ?: $quote->moving_to;
-    $lineItems = collect($quotation->services_included ?: [['name' => 'Professional moving service', 'description' => $quote->serviceTypeLabel()]]);
-    $lineCount = max(1, $lineItems->count());
-    $total = round((float) ($quotation->quote_amount ?? 0), 2);
-    $baseAmount = $lineCount > 0 ? round($total / $lineCount, 2) : $total;
-    $depositAmount = $quotation->depositAmount();
-    $balance = $quotation->balanceDue();
-    $approvalUrl = $approvalUrl ?? ($quotation->approval_token ? route('quote.customer.approve', ['token' => $quotation->approval_token]) : null);
-    $pdfUrl = $pdfUrl ?? ($quotation->pdf_token ? route('quote.pdf.download', ['id' => $quotation->id, 'token' => $quotation->pdf_token]) : null);
-    $paymentTerms = $quotation->payment_terms ?: 'Deposit is required to confirm booking. Remaining balance is due on move day.';
-    $cancellationPolicy = $quotation->cancellationPolicyText();
-    $authorization = $authorization ?? [];
-    $signatureDataUri = $signatureDataUri ?? null;
-    $authorizedName = $authorization['name'] ?? $user?->name ?? $quotation->authorized_by ?? 'Authorized Signatory';
-    $authorizedTitle = $authorization['job_title'] ?? $user?->job_title ?? $quotation->authorized_role ?? 'Authorized Signatory';
+  $stylesheet = (string) file_get_contents(base_path('Invoma-template/assets/css/style.css'));
+  $stylesheet = (string) preg_replace('/@import\s+url\([^)]+\);\s*/', '', $stylesheet);
+  $fontFace = '';
+  $regularFont = '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf';
+  $boldFont = '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf';
+
+  if (is_file($regularFont)) {
+      $fontFace .= '@font-face{font-family:"Inter";src:url("file://'.$regularFont.'") format("truetype");font-weight:300;font-style:normal;}';
+      $fontFace .= '@font-face{font-family:"Inter";src:url("file://'.$regularFont.'") format("truetype");font-weight:400;font-style:normal;}';
+      $fontFace .= '@font-face{font-family:"Inter";src:url("file://'.$regularFont.'") format("truetype");font-weight:500;font-style:normal;}';
+  }
+
+  if (is_file($boldFont)) {
+      $fontFace .= '@font-face{font-family:"Inter";src:url("file://'.$boldFont.'") format("truetype");font-weight:600;font-style:normal;}';
+      $fontFace .= '@font-face{font-family:"Inter";src:url("file://'.$boldFont.'") format("truetype");font-weight:700;font-style:normal;}';
+  }
+
+  $quotation = $quotation ?? $quote;
+  $quoteRequest = $quotation instanceof \App\Models\Quotation ? $quotation->quoteRequest : $quote;
+  $company = $company ?? app(\App\Support\CompanyProfile::class)->data();
+  $user = $user ?? auth()->user();
+  $companyName = $companyName ?? (trim((string) ($quotation->company_name ?? $company['name'] ?? '')) ?: 'Kwikshift Movers');
+  $companyAddress = $companyAddress ?? collect([$company['address_line_1'] ?? null, $company['address_line_2'] ?? null])->map(fn ($line) => trim((string) $line))->filter()->implode(' ');
+  $companyPhone = $companyPhone ?? trim((string) ($quotation->company_phone ?? $company['phone'] ?? ''));
+  $companyEmail = $companyEmail ?? trim((string) ($quotation->company_email ?? $company['email'] ?? ''));
+  $companyAddressLine = trim(collect([$companyAddress, $companyPhone])->filter()->implode('<br>'));
+  $logoDataUri = $logoDataUri ?? null;
+  $signatureDataUri = $signatureDataUri ?? null;
+  $canRenderRaster = extension_loaded('gd');
+  $imageCanRender = function (?string $dataUri) use ($canRenderRaster): bool {
+      if (! is_string($dataUri) || trim($dataUri) === '') {
+          return false;
+      }
+
+      return str_starts_with($dataUri, 'data:image/svg+xml') || $canRenderRaster;
+  };
+  $logoBase64 = $logoBase64 ?? null;
+  $logoMime = $logoMime ?? 'image/png';
+  $sigBase64 = $sigBase64 ?? null;
+  $sigMime = $sigMime ?? 'image/png';
+
+  if (! $logoBase64 && $imageCanRender($logoDataUri)) {
+      [$logoMeta, $logoBody] = array_pad(explode(',', $logoDataUri, 2), 2, null);
+      $logoBase64 = $logoBody;
+      $logoMime = str($logoMeta)->between('data:', ';')->toString() ?: $logoMime;
+  }
+
+  if (! $sigBase64 && $imageCanRender($signatureDataUri)) {
+      [$sigMeta, $sigBody] = array_pad(explode(',', $signatureDataUri, 2), 2, null);
+      $sigBase64 = $sigBody;
+      $sigMime = str($sigMeta)->between('data:', ';')->toString() ?: $sigMime;
+  }
+
+  $reference = $quotation->reference ?? (method_exists($quoteRequest, 'reference') ? $quoteRequest->reference() : '#QT'.$quotation->getKey());
+  $quoteDate = $quotation->created_at?->format('d M Y') ?? $quotation->quote_date?->format('d M Y') ?? now()->format('d M Y');
+  $validUntil = $quotation->valid_until?->format('d M Y') ?? $quotation->quote_valid_until?->format('d M Y') ?? $quotation->created_at?->copy()->addDays(7)->format('d M Y') ?? now()->addDays(7)->format('d M Y');
+  $customerName = $quotation->customer_name ?? $quoteRequest?->full_name;
+  $customerEmail = $quotation->customer_email ?? $quoteRequest?->email;
+  $customerPhone = $quotation->customer_phone ?? $quoteRequest?->phone;
+  $customerAddress = trim(collect([$quotation->pickup_location ?? $quoteRequest?->moving_from, $quotation->dropoff_location ?? $quoteRequest?->moving_to])->filter()->implode(' to '));
+  $paymentMethods = collect($paymentMethods ?? [])->map(function ($method) {
+      if (is_object($method) && isset($method->display_line)) {
+          return $method;
+      }
+
+      if (is_object($method) && isset($method->display)) {
+          return (object) ['display_line' => $method->display];
+      }
+
+      return null;
+  })->filter()->values();
+  $paymentSummary = $paymentMethods->isNotEmpty() ? $paymentMethods->pluck('display_line')->implode(', ') : 'To be agreed';
+  $lineItems = collect($quotation->services_included ?: [['name' => 'Moving Service', 'description' => $quoteRequest?->serviceTypeLabel()]]);
+  $lineCount = max(1, $lineItems->count());
+  $subtotal = (float) ($quotation->subtotal ?? $quotation->quote_amount ?? 0);
+  $discount = (float) ($quotation->discount ?? 0);
+  $tax = (float) ($quotation->tax ?? 0);
+  $total = (float) ($quotation->total ?? $quotation->quote_amount ?? ($subtotal - $discount + $tax));
+  $baseAmount = $lineCount > 0 ? round($subtotal / $lineCount, 2) : $subtotal;
+  $deposit = (float) ($quotation->deposit_amount ?? $quotation->depositAmount());
+  $depositPercentage = (float) ($quotation->deposit_percentage ?? 30);
+  $balance = (float) ($quotation->balance ?? $quotation->balanceDue());
+  $paymentTerms = trim((string) ($paymentTerms ?? $quotation->payment_terms ?? ''));
+  $paymentTerms = $paymentTerms !== '' ? $paymentTerms : 'Deposit confirms booking; balance is due on move day.';
+  $cancellation = trim((string) ($cancellation ?? $quotation->cancellationPolicyText()));
+  $liability = trim((string) ($liability ?? ''));
+  $thankYou = trim((string) ($thankYou ?? $thankYouMessage ?? ''));
 @endphp
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+
 <head>
-    <meta charset="utf-8">
-    <title>Quotation {{ $quoteNumber }}</title>
+  <!-- Meta Tags -->
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="author" content="Laralink">
+  <!-- Site Title -->
+  <title>Quotation {{ $reference }}</title>
+  <style>{!! $fontFace !!}{!! $stylesheet !!}</style>
 </head>
-<body style="font-family:DejaVu Sans,Arial,sans-serif;color:#1f2937;font-size:11px;line-height:1.45;margin:0">
-    <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
-        <tr>
-            <td style="width:55%;vertical-align:top">
-                @if($logoDataUri && $canEmbedImages)
-                    <img src="{{ $logoDataUri }}" alt="{{ $companyName }}" style="max-height:46px;max-width:180px;margin-bottom:8px">
-                @endif
-                <h2 style="font-size:16px;margin:0 0 4px;color:#111827">{{ $companyName }}</h2>
-                <p style="margin:0;color:#6b7280">{{ $companyAddress }}</p>
-                <p style="margin:2px 0 0;color:#6b7280">{{ $companyPhone }} {{ $companyPhone && $companyEmail ? '|' : '' }} {{ $companyEmail }}</p>
-            </td>
-            <td style="width:45%;text-align:right;vertical-align:top">
-                <h1 style="font-size:28px;margin:0 0 6px;color:#111827">QUOTATION</h1>
-                <p style="margin:0">Quote Number: <strong>{{ $quoteNumber }}</strong></p>
-                <p style="margin:2px 0">Date: <strong>{{ $quoteDate }}</strong></p>
-                <p style="margin:2px 0">Valid Until: <strong>{{ $validUntil }}</strong></p>
-            </td>
-        </tr>
-    </table>
 
-    <table style="width:100%;border-collapse:collapse;margin:0 0 14px">
-        <tr>
-            <td style="width:50%;border:1px solid #e5e7eb;padding:10px;vertical-align:top">
-                <h3 style="font-size:12px;margin:0 0 6px;color:#111827">CUSTOMER DETAILS</h3>
-                <p style="margin:0"><strong>{{ $quote->full_name }}</strong></p>
-                <p style="margin:2px 0">{{ $quote->email }}</p>
-                <p style="margin:2px 0">{{ $quote->phone }}</p>
-                <p style="margin:8px 0 0">Service: {{ $quote->serviceTypeLabel() }}</p>
-                <p style="margin:2px 0">Move Date: {{ $moveDate?->format('d M Y') ?? 'To be confirmed' }}</p>
-            </td>
-            <td style="width:50%;border:1px solid #e5e7eb;padding:10px;vertical-align:top">
-                <h3 style="font-size:12px;margin:0 0 6px;color:#111827">MOVE DETAILS</h3>
-                <p style="margin:0">Pickup: <strong>{{ $pickup ?: 'Not specified' }}</strong></p>
-                <p style="margin:2px 0">Drop-off: <strong>{{ $dropoff ?: 'Not specified' }}</strong></p>
-                <p style="margin:8px 0 0">Item Details: {{ $quote->move_size ?: 'Not specified' }}</p>
-                <p style="margin:2px 0">Notes: {{ $quote->additional_notes ?: 'No special notes.' }}</p>
-            </td>
-        </tr>
-    </table>
-
-    <table style="width:100%;border-collapse:collapse;font-size:11px">
-        <thead>
-            <tr style="background:#f3f4f6">
-                <th style="padding:8px;text-align:left;border:1px solid #e5e7eb">#</th>
-                <th style="padding:8px;text-align:left;border:1px solid #e5e7eb">Description</th>
-                <th style="padding:8px;text-align:right;border:1px solid #e5e7eb">Qty</th>
-                <th style="padding:8px;text-align:right;border:1px solid #e5e7eb">Unit Price</th>
-                <th style="padding:8px;text-align:right;border:1px solid #e5e7eb">Amount</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($lineItems as $item)
-                @php
-                    $amount = $loop->last ? $total - ($baseAmount * max(0, $lineCount - 1)) : $baseAmount;
-                    $description = trim(collect([$item['name'] ?? 'Service', $item['description'] ?? null])->filter()->implode(' - '));
-                @endphp
+<body>
+  <div class="tm_container">
+    <div class="tm_invoice_wrap">
+      <div class="tm_invoice tm_style1 tm_type1" id="tm_download_section">
+        <div class="tm_invoice_in">
+          <div class="tm_invoice_head tm_top_head tm_mb15 tm_align_center">
+            <div class="tm_invoice_left">
+              <div class="tm_logo">@if($logoBase64)<img src="data:{{ $logoMime }};base64,{{ $logoBase64 }}" alt="Logo">@endif</div>
+            </div>
+            <div class="tm_invoice_right tm_text_right tm_mobile_hide">
+              <div class="tm_f50 tm_text_uppercase tm_white_color">Quotation</div>
+            </div>
+            <div class="tm_shape_bg tm_accent_bg tm_mobile_hide"></div>
+          </div>
+          <div class="tm_invoice_info tm_mb25">
+            <div class="tm_card_note tm_mobile_hide"><b class="tm_primary_color">Payment Method: </b>{{ $paymentSummary }}</div>
+            <div class="tm_invoice_info_list tm_white_color">
+              <p class="tm_invoice_number tm_m0">Invoice No: <b>#{{ ltrim((string) $reference, '#') }}</b></p>
+              <p class="tm_invoice_date tm_m0">Date: <b>{{ $quoteDate }}</b></p>
+            </div>
+            <div class="tm_invoice_seperator tm_accent_bg"></div>
+          </div>
+          <div class="tm_invoice_head tm_mb10">
+            <div class="tm_invoice_left">
+              <p class="tm_mb2"><b class="tm_primary_color">Invoice To:</b></p>
+              <p>
+                {{ $customerName }} <br>
+                @if($customerAddress !== ''){{ $customerAddress }} <br>@endif
+                @if($customerPhone){{ $customerPhone }} <br>@endif
+                {{ $customerEmail }}
+              </p>
+            </div>
+            <div class="tm_invoice_right tm_text_right">
+              <p class="tm_mb2"><b class="tm_primary_color">Pay To:</b></p>
+              <p>
+                {{ $companyName }} <br>
+                @if($companyAddressLine !== ''){!! $companyAddressLine !!}<br>@endif
+                {{ $companyEmail }}
+              </p>
+            </div>
+          </div>
+          <div class="tm_table tm_style1">
+            <div class="">
+              <div class="tm_table_responsive">
+                <table>
+                  <thead>
+                    <tr class="tm_accent_bg">
+                      <th class="tm_width_3 tm_semi_bold tm_white_color">Item</th>
+                      <th class="tm_width_4 tm_semi_bold tm_white_color">Description</th>
+                      <th class="tm_width_2 tm_semi_bold tm_white_color">Price</th>
+                      <th class="tm_width_1 tm_semi_bold tm_white_color">Qty</th>
+                      <th class="tm_width_2 tm_semi_bold tm_white_color tm_text_right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @forelse($lineItems as $index => $item)
+                    @php
+                      $amount = $loop->last ? $subtotal - ($baseAmount * max(0, $lineCount - 1)) : $baseAmount;
+                      $description = trim(collect([$item['name'] ?? 'Moving Service', $item['description'] ?? null])->filter()->implode(' - '));
+                    @endphp
+                    <tr>
+                      <td class="tm_width_3">{{ $index + 1 }}.</td>
+                      <td class="tm_width_4">{{ $description }}</td>
+                      <td class="tm_width_2">KES {{ number_format((float) $amount, 2) }}</td>
+                      <td class="tm_width_1">1</td>
+                      <td class="tm_width_2 tm_text_right">KES {{ number_format((float) $amount, 2) }}</td>
+                    </tr>
+                    @empty
+                    <tr>
+                      <td colspan="5" style="text-align:center;padding:16px">No items</td>
+                    </tr>
+                    @endforelse
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="tm_invoice_footer tm_border_top tm_mb15 tm_m0_md">
+              <div class="tm_left_footer">
+                <p class="tm_mb2"><b class="tm_primary_color">Payment info:</b></p>
+                @forelse($paymentMethods as $method)
+                <p class="tm_m0">{{ $method->display_line }}</p>
+                @empty
+                <p class="tm_m0">No payment methods configured.</p>
+                @endforelse
+                <p class="tm_m0">Valid Until: {{ $validUntil }}</p>
+                <p class="tm_m0">Status: {{ ucfirst((string) $quotation->status) }}</p>
+              </div>
+              <div class="tm_right_footer">
+                <table class="tm_mb15">
+                  <tbody>
+                    <tr class="tm_gray_bg ">
+                      <td class="tm_width_3 tm_primary_color tm_bold">Subtoal</td>
+                      <td class="tm_width_3 tm_primary_color tm_bold tm_text_right">KES {{ number_format($subtotal, 2) }}</td>
+                    </tr>
+                    @if($discount > 0)
+                    <tr class="tm_gray_bg">
+                      <td class="tm_width_3 tm_primary_color">Discount</td>
+                      <td class="tm_width_3 tm_primary_color tm_text_right">-KES {{ number_format($discount, 2) }}</td>
+                    </tr>
+                    @endif
+                    @if($tax > 0)
+                    <tr class="tm_gray_bg">
+                      <td class="tm_width_3 tm_primary_color">Tax</td>
+                      <td class="tm_width_3 tm_primary_color tm_text_right">KES {{ number_format($tax, 2) }}</td>
+                    </tr>
+                    @endif
+                    @if($deposit > 0)
+                    <tr class="tm_gray_bg">
+                      <td class="tm_width_3 tm_primary_color">Deposit Required ({{ number_format($depositPercentage, 0) }}%)</td>
+                      <td class="tm_width_3 tm_primary_color tm_text_right">KES {{ number_format($deposit, 2) }}</td>
+                    </tr>
+                    <tr class="tm_gray_bg">
+                      <td class="tm_width_3 tm_primary_color">Balance Due on Move Day</td>
+                      <td class="tm_width_3 tm_primary_color tm_text_right">KES {{ number_format($balance, 2) }}</td>
+                    </tr>
+                    @endif
+                    <tr class="tm_accent_bg">
+                      <td class="tm_width_3 tm_border_top_0 tm_bold tm_f16 tm_white_color">Grand Total	</td>
+                      <td class="tm_width_3 tm_border_top_0 tm_bold tm_f16 tm_white_color tm_text_right">KES {{ number_format($total, 2) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            @if($deposit > 0)
+            <div style="border: 2px solid #007aff;border-radius: 6px;padding: 14px 16px;margin: 16px 0;background: rgba(0, 122, 255, 0.1);">
+              <p style="font-family: &quot;Inter&quot;, sans-serif;font-size: 11px;font-weight: 700;color: #007aff;margin: 0 0 6px 0;text-transform: uppercase;letter-spacing: 0.5px;">DEPOSIT REQUIRED TO CONFIRM BOOKING</p>
+              <p style="font-size: 20px;font-weight: 700;color: #007aff;margin: 0 0 10px 0;">KES {{ number_format($deposit, 2) }}</p>
+              @foreach($paymentMethods as $method)
+              <p style="font-size: 10px;font-family: &quot;Inter&quot;, sans-serif;color: #666;margin: 3px 0;">{{ $method->display_line }}</p>
+              @endforeach
+              <p style="font-size: 9px;color: #007aff;margin: 8px 0 0 0;font-style: italic;">Your booking is NOT confirmed until the deposit has been received and verified.</p>
+            </div>
+            @endif
+            @if(isset($approvalUrl) && $approvalUrl)
+            <div style="border: 2px solid #34c759;border-radius: 6px;padding: 14px 16px;margin: 16px 0;background: rgba(52, 199, 89, 0.1);">
+              <p style="font-size: 11px;font-weight: 700;color: #34c759;margin: 0 0 6px 0;text-transform: uppercase;letter-spacing: 0.5px;">APPROVE THIS QUOTATION</p>
+              <p style="font-size: 10px;color: #666;margin: 0 0 10px 0;">Scan the QR code or visit the link below in your browser to approve:</p>
+              <table style="width:100%;border-collapse:collapse;border:none">
                 <tr>
-                    <td style="padding:8px;border:1px solid #e5e7eb">{{ $loop->iteration }}</td>
-                    <td style="padding:8px;border:1px solid #e5e7eb">{{ $description }}</td>
-                    <td style="padding:8px;text-align:right;border:1px solid #e5e7eb">1</td>
-                    <td style="padding:8px;text-align:right;border:1px solid #e5e7eb">KES {{ number_format($amount, 2) }}</td>
-                    <td style="padding:8px;text-align:right;border:1px solid #e5e7eb">KES {{ number_format($amount, 2) }}</td>
+                  <td style="width:90px;vertical-align:middle;border:none;padding:0">{!! QrCode::size(85)->generate($approvalUrl) !!}</td>
+                  <td style="vertical-align:middle;padding-left:12px;border:none">
+                    <a href="{{ $approvalUrl }}" style="font-size: 9px;color: #34c759;word-break: break-all;text-decoration: none;display: block;margin-bottom: 6px;">{{ $approvalUrl }}</a>
+                    @if($quotation->approval_token_expires_at)
+                    <p style="font-size: 9px;color: #b5b5b5;margin: 0 0 4px 0;">Link expires: {{ $quotation->approval_token_expires_at->format('d M Y') }}</p>
+                    @endif
+                    <p style="font-size: 9px;color: #b5b5b5;margin: 0;">By approving you agree to all terms stated in this quotation.</p>
+                  </td>
                 </tr>
-            @endforeach
-        </tbody>
-        <tfoot>
-            <tr>
-                <td colspan="4" style="padding:8px;text-align:right;font-weight:bold">Subtotal</td>
-                <td style="padding:8px;text-align:right">KES {{ number_format($total, 2) }}</td>
-            </tr>
-            <tr style="background:#f3f4f6">
-                <td colspan="4" style="padding:8px;text-align:right;font-weight:bold;font-size:13px">TOTAL</td>
-                <td style="padding:8px;text-align:right;font-weight:bold;font-size:13px">KES {{ number_format($total, 2) }}</td>
-            </tr>
-            <tr>
-                <td colspan="4" style="padding:8px;text-align:right">Deposit ({{ number_format((float) $quotation->deposit_percentage, 0) }}%)</td>
-                <td style="padding:8px;text-align:right;color:#16a34a;font-weight:bold">KES {{ number_format($depositAmount, 2) }}</td>
-            </tr>
-            <tr>
-                <td colspan="4" style="padding:8px;text-align:right;font-weight:bold">Balance Due on Move Day</td>
-                <td style="padding:8px;text-align:right;font-weight:bold">KES {{ number_format($balance, 2) }}</td>
-            </tr>
-        </tfoot>
-    </table>
-
-    <div style="border:2px solid #f59e0b;border-radius:8px;padding:16px;margin:16px 0;background:#fffbeb">
-        <h3 style="color:#d97706;margin:0 0 8px 0;font-size:13px">DEPOSIT REQUIRED TO CONFIRM BOOKING</h3>
-        <p style="font-size:20px;font-weight:bold;color:#d97706;margin:0 0 8px 0">KES {{ number_format($depositAmount, 2) }}</p>
-        <p style="font-size:11px;margin:0 0 4px 0">Payment Methods:</p>
-        @forelse($paymentMethods as $method)
-            <p style="font-size:11px;margin:0 0 2px 0">{{ $method->display }}</p>
-        @empty
-            <p style="font-size:11px;margin:0 0 2px 0">Payment details will be shared by our team.</p>
-        @endforelse
-        <p style="font-size:10px;color:#d97706;margin:8px 0 0 0">Your booking is NOT confirmed until deposit has been received and verified.</p>
-    </div>
-
-    @if($approvalUrl)
-        <div style="border:2px solid #16a34a;border-radius:8px;padding:16px;margin:16px 0;background:#f0fdf4">
-            <h3 style="color:#16a34a;margin:0 0 8px 0;font-size:13px">APPROVE THIS QUOTATION</h3>
-            <p style="font-size:11px;margin:0 0 8px 0">Scan the QR code or visit the link below to approve this quotation:</p>
-            <table style="width:100%">
-                <tr>
-                    <td style="width:100px;vertical-align:top">{!! QrCode::format('svg')->size(90)->generate($approvalUrl) !!}</td>
-                    <td style="vertical-align:top;padding-left:12px">
-                        <p style="font-size:10px;word-break:break-all;margin:0 0 4px 0"><a href="{{ $approvalUrl }}" style="color:#16a34a">{{ $approvalUrl }}</a></p>
-                        <p style="font-size:10px;color:#6b7280;margin:0">Link expires: {{ $quotation->approval_token_expires_at?->format('d M Y') ?? '7 days after sending' }}</p>
-                        <p style="font-size:10px;color:#6b7280;margin:4px 0 0 0">By approving you agree to all terms stated in this quotation.</p>
-                    </td>
-                </tr>
-            </table>
+              </table>
+            </div>
+            @endif
+            <div class="tm_invoice_footer tm_type1">
+              <div class="tm_left_footer"></div>
+              <div class="tm_right_footer">
+                <div class="tm_sign tm_text_center">
+                  @if($sigBase64)
+                  <img src="data:{{ $sigMime }};base64,{{ $sigBase64 }}" alt="Sign" style="border:none !important;outline:none !important;box-shadow:none !important;background:transparent !important;padding:0 !important;">
+                  @else
+                  <p class="tm_m0 tm_ternary_color" style="font-style:italic">Signature not available</p>
+                  @endif
+                  <p class="tm_m0 tm_ternary_color">{{ $user?->name ?? $authorization['name'] ?? $quotation->authorized_by ?? $companyName }}</p>
+                  <p class="tm_m0 tm_f16 tm_primary_color">{{ $user?->job_title ?? $authorization['job_title'] ?? $quotation->authorized_role ?? 'Authorized Signatory' }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="tm_note tm_text_center tm_font_style_normal">
+            <hr class="tm_mb15">
+            <p class="tm_mb2"><b class="tm_primary_color">Terms & Conditions:</b></p>
+            <p class="tm_m0">{{ $paymentTerms }}@if($cancellation !== '')<br>{{ $cancellation }}@endif @if($liability !== '')<br>{{ $liability }}@endif @if($thankYou !== '')<br>{{ $thankYou }}@endif</p>
+          </div><!-- .tm_note -->
         </div>
-    @endif
-
-    <div style="margin:16px 0">
-        <h3 style="font-size:12px;border-bottom:1px solid #e5e7eb;padding-bottom:4px">TERMS & AGREEMENT</h3>
-        <ol style="font-size:10px;line-height:1.6;color:#374151">
-            <li><strong>SERVICES:</strong> {{ $companyName }} agrees to provide moving services as described on {{ $moveDate?->format('d M Y') ?? 'the agreed date' }} from {{ $pickup }} to {{ $dropoff }}.</li>
-            <li><strong>PAYMENT TERMS:</strong> {{ $paymentTerms }}</li>
-            <li><strong>CANCELLATION POLICY:</strong> {{ $cancellationPolicy }}</li>
-            <li><strong>LIABILITY:</strong> {{ $companyName }} will take reasonable care of all items. Customers are advised to insure high-value items separately. Liability is limited to direct damages caused by proven negligence.</li>
-            <li><strong>ACCEPTANCE:</strong> By approving or paying the deposit, the customer agrees to all terms stated above.</li>
-        </ol>
+      </div>
     </div>
-
-    <table style="width:100%;margin-top:24px">
-        <tr>
-            <td style="width:50%;vertical-align:bottom">
-                <p style="font-size:10px;color:#6b7280;margin:0 0 4px 0">Authorized By:</p>
-                @if($signatureDataUri && $canEmbedImages)
-                    <img src="{{ $signatureDataUri }}" style="max-height:50px;max-width:160px;border:none;outline:none;box-shadow:none;background:transparent">
-                @endif
-                <p style="font-size:11px;font-weight:bold;margin:4px 0 0 0">{{ $authorizedName }}</p>
-                <p style="font-size:10px;color:#6b7280;margin:2px 0 0 0">{{ $authorizedTitle ?: 'Authorized Signatory' }}</p>
-            </td>
-            <td style="width:50%;text-align:right;vertical-align:bottom">
-                <p style="font-size:10px;color:#6b7280;margin:0 0 4px 0">Date:</p>
-                <p style="font-size:11px;font-weight:bold;margin:0">{{ now()->format('d M Y') }}</p>
-            </td>
-        </tr>
-    </table>
-
-    <div style="margin-top:24px;padding-top:12px;border-top:1px solid #e5e7eb;text-align:center">
-        <p style="font-size:11px;color:#6b7280;margin:0">{{ $thankYouMessage }}</p>
-        <p style="font-size:10px;color:#9ca3af;margin:4px 0 0 0">{{ $companyName }} · {{ $companyPhone }} · {{ $companyEmail }}</p>
-    </div>
+  </div>
 </body>
 </html>

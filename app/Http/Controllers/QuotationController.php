@@ -203,7 +203,23 @@ class QuotationController extends Controller
             'thankYouMessage' => app(CompanyProfile::class)->thankYouMessage(),
             'approvalUrl' => route('quote.customer.approve', ['token' => $quotation->approval_token]),
             'pdfUrl' => route('quote.pdf.download', ['id' => $quotation->id, 'token' => $quotation->pdf_token]),
-        ])->setPaper('a4');
+        ])->setPaper('a4', 'portrait')
+            ->setOptions([
+                'dpi' => 150,
+                'enable_html5_parser' => true,
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'Inter',
+            ]);
+
+        $quotation->logStage(
+            'PDF_DOWNLOADED',
+            'Quote PDF downloaded',
+            'admin',
+            $user?->name,
+            null,
+            'download'
+        );
 
         return $pdf->download('Quote-' . Str::slug($quotation->quoteRequest->reference()) . '-' . Str::slug($quotation->quoteRequest->full_name) . '.pdf');
     }

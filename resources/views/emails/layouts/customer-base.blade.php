@@ -1,0 +1,365 @@
+@php
+    $company = $company ?? app(\App\Support\CompanyProfile::class)->data();
+    $companyName = trim((string) ($company['name'] ?? '')) ?: 'Kwikshift Movers';
+    $companyEmail = trim((string) ($company['email'] ?? ''));
+    $companyPhone = trim((string) ($company['phone'] ?? ''));
+    $companyLogoPath = trim((string) ($company['logo_path'] ?? 'images/logo-dark.png'));
+    $currentYear = date('Y');
+@endphp
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="x-apple-disable-message-reformatting">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <title>{{ $emailTitle ?? $companyName }}</title>
+    <style>
+        :root {
+            color-scheme: light dark;
+            supported-color-schemes: light dark;
+        }
+
+        body, table, td, p, a {
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+
+        table, td {
+            mso-table-lspace: 0pt;
+            mso-table-rspace: 0pt;
+        }
+
+        table {
+            border-collapse: collapse !important;
+        }
+
+        img {
+            border: 0;
+            outline: none;
+            text-decoration: none;
+            -ms-interpolation-mode: bicubic;
+            display: block;
+        }
+
+        body {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            background-color: #f8f5f1;
+        }
+
+        .email-bg {
+            background-color: #f8f5f1 !important;
+        }
+
+        .hero-bg {
+            background-color: #22b956 !important;
+        }
+
+        .surface-bg {
+            background-color: #f8f5f1 !important;
+        }
+
+        .footer-bg {
+            background-color: #1a3f4e !important;
+        }
+
+        .footer-top {
+            border-top: 1px solid #dddddd !important;
+        }
+
+        .divider {
+            background-color: #dddddd !important;
+        }
+
+        .text-light, .text-light a {
+            color: #ffffff !important;
+        }
+
+        .text-light-soft {
+            color: #f0fff3 !important;
+        }
+
+        .text-heading, .text-heading a {
+            color: #1a3f4e !important;
+        }
+
+        .text-body, .text-body a {
+            color: #666666 !important;
+        }
+
+        .text-dark, .text-dark a {
+            color: #000000 !important;
+        }
+
+        .text-footer-sep {
+            color: #aebdcb !important;
+        }
+
+        .safe-note {
+            background-color: #f0fff3 !important;
+            border-left: 4px solid #22b956 !important;
+        }
+
+        .button {
+            display: inline-block;
+            background-color: #22b956 !important;
+            color: #ffffff !important;
+            padding: 12px 24px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body, .email-bg {
+                background-color: #11161d !important;
+            }
+
+            .hero-bg {
+                background-color: #1d9447 !important;
+            }
+
+            .surface-bg {
+                background-color: #18212b !important;
+            }
+
+            .footer-bg {
+                background-color: #0d1e26 !important;
+            }
+
+            .footer-top {
+                border-top-color: #32414f !important;
+            }
+
+            .divider {
+                background-color: #32414f !important;
+            }
+
+            .text-heading, .text-heading a, .text-dark, .text-dark a {
+                color: #f5f7fa !important;
+            }
+
+            .text-body, .text-body a {
+                color: #d1d7df !important;
+            }
+
+            .text-light-soft {
+                color: #c8f7d4 !important;
+            }
+
+            .text-footer-sep {
+                color: #91a2b3 !important;
+            }
+
+            .safe-note {
+                background-color: #1a3a1f !important;
+                border-left-color: #4ade80 !important;
+            }
+        }
+
+        [data-ogsc] .email-bg, [data-ogsb] .email-bg {
+            background-color: #11161d !important;
+        }
+
+        [data-ogsc] .hero-bg, [data-ogsb] .hero-bg {
+            background-color: #1d9447 !important;
+        }
+
+        [data-ogsc] .surface-bg, [data-ogsb] .surface-bg {
+            background-color: #18212b !important;
+        }
+
+        [data-ogsc] .footer-bg, [data-ogsb] .footer-bg {
+            background-color: #0d1e26 !important;
+        }
+
+        [data-ogsc] .footer-top, [data-ogsb] .footer-top {
+            border-top-color: #32414f !important;
+        }
+
+        [data-ogsc] .divider, [data-ogsb] .divider {
+            background-color: #32414f !important;
+        }
+
+        [data-ogsc] .text-heading, [data-ogsb] .text-heading,
+        [data-ogsc] .text-heading a, [data-ogsb] .text-heading a,
+        [data-ogsc] .text-dark, [data-ogsb] .text-dark,
+        [data-ogsc] .text-dark a, [data-ogsb] .text-dark a {
+            color: #f5f7fa !important;
+        }
+
+        [data-ogsc] .text-body, [data-ogsb] .text-body,
+        [data-ogsc] .text-body a, [data-ogsb] .text-body a {
+            color: #d1d7df !important;
+        }
+
+        [data-ogsc] .text-light-soft, [data-ogsb] .text-light-soft {
+            color: #c8f7d4 !important;
+        }
+
+        [data-ogsc] .text-footer-sep, [data-ogsb] .text-footer-sep {
+            color: #91a2b3 !important;
+        }
+
+        [data-ogsc] .safe-note, [data-ogsb] .safe-note {
+            background-color: #1a3a1f !important;
+            border-left-color: #4ade80 !important;
+        }
+
+        @media screen and (max-width: 640px) {
+            .container {
+                width: 100% !important;
+            }
+
+            .mobile-pad {
+                padding-right: 20px !important;
+                padding-left: 20px !important;
+            }
+
+            .mobile-center {
+                text-align: center !important;
+            }
+
+            .mobile-block {
+                display: block !important;
+                width: 100% !important;
+            }
+        }
+    </style>
+</head>
+<body class="email-bg" style="margin:0; padding:0; background-color:#f8f5f1;">
+    <div style="display:none; max-height:0; overflow:hidden; opacity:0; mso-hide:all;">
+        {{ $previewText ?? 'Message from ' . $companyName }}
+    </div>
+
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="email-bg" bgcolor="#f8f5f1">
+        <tr>
+            <td align="center" style="padding:24px 12px;">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="container" style="max-width:640px;">
+                    <!-- Hero Section -->
+                    <tr>
+                        <td class="hero-bg mobile-pad" bgcolor="#22b956" style="padding:32px 32px 40px 32px;">
+                            <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:0 0 16px 0;">
+                                <tr>
+                                    <td valign="middle" style="padding-right:12px;">
+                                        @if(!empty($logoDataUri))
+                                            <img src="{{ $logoDataUri }}" alt="{{ $companyName }} logo" width="44" height="40" style="width:44px; height:40px;">
+                                        @endif
+                                    </td>
+                                    <td valign="middle" class="text-light" style="font-family:Arial, Helvetica, sans-serif; font-size:20px; line-height:24px; font-weight:700; color:#ffffff;">
+                                        {{ $companyName }}
+                                    </td>
+                                </tr>
+                            </table>
+                            <h1 class="text-light" style="margin:0 0 12px 0; font-family:Arial, Helvetica, sans-serif; font-size:34px; line-height:42px; font-weight:700; color:#ffffff;">
+                                {{ $emailHeading }}
+                            </h1>
+                            <p class="text-light-soft" style="margin:0; font-family:Arial, Helvetica, sans-serif; font-size:16px; line-height:26px; color:#f0fff3;">
+                                {{ $emailSubheading ?? '' }}
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Content Section -->
+                    <tr>
+                        <td class="surface-bg mobile-pad" bgcolor="#f8f5f1" style="padding:36px 32px 32px 32px;">
+                            <p class="text-heading" style="margin:0 0 18px 0; font-family:Arial, Helvetica, sans-serif; font-size:17px; line-height:28px; color:#1a3f4e;">
+                                Dear {{ $customerName ?? 'Valued Customer' }},
+                            </p>
+                            
+                            @yield('content')
+
+                            @if(isset($safeNote))
+                            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="safe-note" bgcolor="#f0fff3" style="margin:0 0 22px 0;">
+                                <tr>
+                                    <td style="padding:16px 18px; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:24px; color:#2d5a35;">
+                                        {{ $safeNote }}
+                                    </td>
+                                </tr>
+                            </table>
+                            @endif
+
+                            <p class="text-body" style="margin:0; font-family:Arial, Helvetica, sans-serif; font-size:16px; line-height:28px; color:#666666;">
+                                Best regards,<br>
+                                <span class="text-heading" style="font-weight:700; color:#1a3f4e;">{{ $closingName ?? $companyName . ' Team' }}</span>
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer Top Section -->
+                    <tr>
+                        <td class="surface-bg footer-top mobile-pad" bgcolor="#f8f5f1" style="padding:34px 32px 20px 32px; border-top:1px solid #dddddd;">
+                            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                                <tr>
+                                    <td class="mobile-block mobile-center" valign="middle" style="padding-bottom:16px;">
+                                        <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+                                            <tr>
+                                                <td valign="middle" style="padding-right:12px;">
+                                                    @if(!empty($logoDataUri))
+                                                        <img src="{{ $logoDataUri }}" alt="{{ $companyName }} logo" width="44" height="40" style="width:44px; height:40px;">
+                                                    @endif
+                                                </td>
+                                                <td valign="middle" class="text-dark" style="font-family:Arial, Helvetica, sans-serif; font-size:20px; line-height:24px; font-weight:700; color:#000000;">
+                                                    {{ $companyName }}
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="mobile-center text-dark" style="padding-bottom:10px; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:24px; color:#000000;">
+                                        &copy; {{ $currentYear }} {{ $companyName }}. All rights reserved.
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="mobile-center text-body" style="padding-bottom:16px; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:24px; color:#666666;">
+                                        @if($companyPhone || $companyEmail)
+                                            <a href="mailto:{{ $companyEmail }}" style="color:#22b956; text-decoration:none;">{{ $companyPhone ?: $companyEmail }}</a>
+                                            @if($companyPhone && $companyEmail)
+                                                <span style="color:#999999;"> | </span>
+                                                <a href="mailto:{{ $companyEmail }}" style="color:#22b956; text-decoration:none;">{{ $companyEmail }}</a>
+                                            @endif
+                                        @endif
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Divider -->
+                    <tr>
+                        <td class="surface-bg" bgcolor="#f8f5f1" style="padding:0;">
+                            <div class="divider" style="width:100%; height:1px; line-height:1px; font-size:1px; background-color:#dddddd;">&nbsp;</div>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td class="footer-bg mobile-pad" bgcolor="#1a3f4e" style="padding:20px 32px;">
+                            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                                <tr>
+                                    <td class="mobile-center text-light" style="font-family:Arial, Helvetica, sans-serif; font-size:13px; line-height:22px; color:#ffffff;">
+                                        @if($companyEmail)
+                                            <a href="mailto:{{ $companyEmail }}" style="color:#ffffff; text-decoration:none;">Contact Us</a>
+                                            <span class="text-footer-sep" style="color:#aebdcb;"> | </span>
+                                        @endif
+                                        <a href="#" style="color:#ffffff; text-decoration:none;">Terms &amp; Conditions</a>
+                                        <span class="text-footer-sep" style="color:#aebdcb;"> | </span>
+                                        <a href="#" style="color:#ffffff; text-decoration:none;">Privacy Policy</a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

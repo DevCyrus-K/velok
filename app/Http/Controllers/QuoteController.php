@@ -121,7 +121,23 @@ class QuoteController extends Controller
             'thankYouMessage' => app(CompanyProfile::class)->thankYouMessage(),
             'approvalUrl' => route('quote.customer.approve', ['token' => $quotation->approval_token]),
             'pdfUrl' => route('quote.pdf.download', ['id' => $quotation->id, 'token' => $quotation->pdf_token]),
-        ])->setPaper('a4');
+        ])->setPaper('a4', 'portrait')
+            ->setOptions([
+                'dpi' => 150,
+                'enable_html5_parser' => true,
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'Inter',
+            ]);
+
+        $quotation->logStage(
+            'PDF_DOWNLOADED',
+            'Quote PDF downloaded',
+            'admin',
+            $user?->name,
+            null,
+            'download'
+        );
 
         return $pdf->download($this->quotePdfFilename($quote));
     }
@@ -157,7 +173,16 @@ class QuoteController extends Controller
             ],
             'signatureDataUri' => app(UserSignature::class)->dataUri($quotation->signature),
             'user' => null,
-        ])->setPaper('a4');
+            'approvalUrl' => route('quote.customer.approve', ['token' => $quotation->approval_token]),
+            'pdfUrl' => route('quote.pdf.download', ['id' => $quotation->id, 'token' => $quotation->pdf_token]),
+        ])->setPaper('a4', 'portrait')
+            ->setOptions([
+                'dpi' => 150,
+                'enable_html5_parser' => true,
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'Inter',
+            ]);
 
         $quotation->logStage(
             'PDF_DOWNLOADED',
