@@ -114,4 +114,23 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
+    'senders' => [
+        'info' => [
+            'address' => env('MAIL_INFO_ADDRESS', 'info@kwikshiftmovers.co.ke'),
+            'name' => env('MAIL_INFO_NAME', env('MAIL_FROM_NAME', 'KwikShift Movers')),
+        ],
+        'noreply' => [
+            'address' => env('MAIL_NOREPLY_ADDRESS', 'noreply@kwikshiftmovers.co.ke'),
+            'name' => env('MAIL_NOREPLY_NAME', env('MAIL_FROM_NAME', 'KwikShift Movers')),
+        ],
+        'sales' => [
+            'address' => env('MAIL_SALES_ADDRESS', 'sales@kwikshiftmovers.co.ke'),
+            'name' => env('MAIL_SALES_NAME', env('MAIL_FROM_NAME', 'KwikShift Sales')),
+        ],
+        'careers' => [
+            'address' => env('MAIL_CAREERS_ADDRESS', 'careers@kwikshiftmovers.co.ke'),
+            'name' => env('MAIL_CAREERS_NAME', env('MAIL_FROM_NAME', 'KwikShift Careers')),
+        ],
+    ],
+
 ];

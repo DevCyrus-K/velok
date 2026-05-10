@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\LeadCategory;
+use App\Support\NotificationLogger;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
@@ -44,6 +45,17 @@ class QuoteRequest extends Model
         'approval_date' => 'date',
         'created_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::created(fn (QuoteRequest $quote) => app(NotificationLogger::class)->quoteRequestReceived($quote));
+
+        static::updated(function (QuoteRequest $quote): void {
+            if ($quote->wasChanged('status')) {
+                app(NotificationLogger::class)->quoteRequestUpdated($quote);
+            }
+        });
+    }
 
     public static function statusOptions(): array
     {

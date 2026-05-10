@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Models\Message;
+use App\Support\MailSender;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Attachment;
@@ -24,11 +25,13 @@ class MessageMail extends Mailable
         private readonly ?string $attachmentPath = null,
         private readonly ?string $attachmentOriginalName = null,
         private readonly ?string $attachmentMime = null,
+        private readonly string $senderRole = MailSender::INFO,
     ) {}
 
     public function envelope(): Envelope
     {
         return new Envelope(
+            from: app(MailSender::class)->address($this->senderRole),
             subject: $this->emailSubject ?: $this->message->subject,
         );
     }

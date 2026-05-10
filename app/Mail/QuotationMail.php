@@ -5,6 +5,7 @@ namespace App\Mail;
 use App\Models\Quotation;
 use App\Models\User;
 use App\Support\CompanyProfile;
+use App\Support\MailSender;
 use App\Support\UserSignature;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Bus\Queueable;
@@ -34,6 +35,7 @@ class QuotationMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
+            from: app(MailSender::class)->address(MailSender::SALES),
             subject: $this->subjectLine(),
         );
     }

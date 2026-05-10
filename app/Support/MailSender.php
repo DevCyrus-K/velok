@@ -14,6 +14,12 @@ class MailSender
     public const SALES = 'sales';
     public const CAREERS = 'careers';
 
+    public const MESSAGE_ROLES = [
+        self::INFO,
+        self::NOREPLY,
+        self::SALES,
+    ];
+
     public function address(string $role): Address
     {
         $sender = $this->sender($role);
@@ -50,6 +56,42 @@ class MailSender
             'address' => $address,
             'name' => $name,
         ];
+    }
+
+    /**
+     * @return array<int, array{role: string, label: string, address: string, name: string}>
+     */
+    public function messageOptions(): array
+    {
+        return collect(self::MESSAGE_ROLES)
+            ->map(function (string $role): array {
+                $sender = $this->sender($role);
+
+                return [
+                    'role' => $role,
+                    'label' => $this->label($role),
+                    'address' => $sender['address'],
+                    'name' => $sender['name'],
+                ];
+            })
+            ->all();
+    }
+
+    public function label(string $role): string
+    {
+        return match (strtolower($role)) {
+            self::NOREPLY => 'No Reply',
+            self::SALES => 'Sales',
+            self::CAREERS => 'Careers',
+            default => 'Info',
+        };
+    }
+
+    public function validMessageRole(?string $role): string
+    {
+        $role = strtolower(trim((string) $role));
+
+        return in_array($role, self::MESSAGE_ROLES, true) ? $role : self::INFO;
     }
 
     private function company(): array

@@ -5,6 +5,7 @@
         ? $message->subject
         : 'Re: ' . $message->subject;
     $deliveryLog = $message->latestEmailLog;
+    $selectedSenderRole = $deliveryLog?->sender_role ?: \App\Support\MailSender::INFO;
 @endphp
 
 @section('content')
@@ -31,63 +32,84 @@
                 </div>
             </div>
             <div class="card-body">
-                <div class="row mb-4">
-                    <div class="col-md-6">
-                        <h6 class="text-muted mb-2">Sender</h6>
-                        <div class="mb-3">
-                            <label class="form-label">Name</label>
-                            <p class="fw-medium">{{ $message->name }}</p>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Email</label>
-                            <p class="fw-medium"><a href="mailto:{{ $message->email }}">{{ $message->email }}</a></p>
-                        </div>
-                        @if($message->phone)
-                            <div class="mb-3">
-                                <label class="form-label">Phone</label>
-                                <p class="fw-medium">{{ $message->phone }}</p>
+                <div class="mb-4">
+                    <button class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-1" type="button" data-bs-toggle="collapse" data-bs-target="#message-delivery-details" aria-expanded="false" aria-controls="message-delivery-details">
+                        <i data-lucide="chevron-down" class="icon-sm"></i>
+                        Message Details
+                    </button>
+                    <div class="collapse mt-3" id="message-delivery-details">
+                        <div class="border rounded p-3 bg-light-subtle">
+                            <div class="row g-3">
+                                <div class="col-md-6 col-xl-4">
+                                    <label class="form-label">From Name</label>
+                                    <p class="fw-medium mb-0">{{ $message->name }}</p>
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label class="form-label">From Email</label>
+                                    <p class="fw-medium mb-0"><a href="mailto:{{ $message->email }}">{{ $message->email }}</a></p>
+                                </div>
+                                @if($message->phone)
+                                    <div class="col-md-6 col-xl-4">
+                                        <label class="form-label">Phone</label>
+                                        <p class="fw-medium mb-0">{{ $message->phone }}</p>
+                                    </div>
+                                @endif
+                                <div class="col-md-6 col-xl-4">
+                                    <label class="form-label">Delivery From</label>
+                                    <p class="fw-medium mb-0">{{ $deliveryLog?->sender_email ?: 'Not sent yet' }}</p>
+                                    @if($deliveryLog?->sender_name)
+                                        <small class="text-muted">{{ $deliveryLog->sender_name }}</small>
+                                    @endif
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label class="form-label">Delivery To</label>
+                                    <p class="fw-medium mb-0">{{ $deliveryLog?->recipient_email ?: $message->email }}</p>
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label class="form-label">Date</label>
+                                    <p class="fw-medium mb-0">{{ $message->created_at->format('d M Y h:i A') }}</p>
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label class="form-label">Status</label>
+                                    <p class="mb-0">
+                                        @if($message->response)
+                                            <span id="message-status-badge" class="badge bg-success">Replied</span>
+                                        @elseif($message->status === 'sent')
+                                            <span id="message-status-badge" class="badge bg-info">Sent</span>
+                                        @elseif($message->status === 'read')
+                                            <span id="message-status-badge" class="badge bg-secondary">Read</span>
+                                        @else
+                                            <span id="message-status-badge" class="badge bg-danger">Unread</span>
+                                        @endif
+                                    </p>
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label class="form-label">Delivery</label>
+                                    <p class="mb-0">
+                                        @if($deliveryLog?->status === \App\Models\EmailLog::STATUS_SENT)
+                                            <span class="badge bg-success">Sent</span>
+                                        @elseif($deliveryLog?->status === \App\Models\EmailLog::STATUS_OPENED)
+                                            <span class="badge bg-info">Opened</span>
+                                        @elseif($deliveryLog?->status === \App\Models\EmailLog::STATUS_FAILED)
+                                            <span class="badge bg-danger">Failed</span>
+                                        @elseif($deliveryLog)
+                                            <span class="badge bg-warning">Sending</span>
+                                        @else
+                                            <span class="text-muted">-</span>
+                                        @endif
+                                    </p>
+                                </div>
+                                <div class="col-md-6 col-xl-4">
+                                    <label class="form-label">Category</label>
+                                    <p class="mb-0"><span class="badge badge-soft-{{ $message->categoryBadgeClass() }}">{{ $message->categoryLabel() }}</span></p>
+                                </div>
+                                @if($deliveryLog?->failed_reason)
+                                    <div class="col-12">
+                                        <label class="form-label">Delivery Error</label>
+                                        <p class="text-danger mb-0">{{ $deliveryLog->failed_reason }}</p>
+                                    </div>
+                                @endif
                             </div>
-                        @endif
-                    </div>
-                    <div class="col-md-6">
-                        <h6 class="text-muted mb-2">Details</h6>
-                        <div class="mb-3">
-                            <label class="form-label">Date</label>
-                            <p class="fw-medium">{{ $message->created_at->format('d M Y h:i A') }}</p>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Status</label>
-                            <p>
-                                @if($message->response)
-                                    <span id="message-status-badge" class="badge bg-success">Replied</span>
-                                @elseif($message->status === 'sent')
-                                    <span id="message-status-badge" class="badge bg-info">Sent</span>
-                                @elseif($message->status === 'read')
-                                    <span id="message-status-badge" class="badge bg-secondary">Read</span>
-                                @else
-                                    <span id="message-status-badge" class="badge bg-danger">Unread</span>
-                                @endif
-                            </p>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Delivery</label>
-                            <p>
-                                @if($deliveryLog?->status === \App\Models\EmailLog::STATUS_SENT)
-                                    <span class="badge bg-success">✅ Sent</span>
-                                @elseif($deliveryLog?->status === \App\Models\EmailLog::STATUS_OPENED)
-                                    <span class="badge bg-info">👁 Opened</span>
-                                @elseif($deliveryLog?->status === \App\Models\EmailLog::STATUS_FAILED)
-                                    <span class="badge bg-danger">❌ Failed</span>
-                                @elseif($deliveryLog)
-                                    <span class="badge bg-warning">Sending</span>
-                                @else
-                                    <span class="text-muted">-</span>
-                                @endif
-                            </p>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Category</label>
-                            <p><span class="badge badge-soft-{{ $message->categoryBadgeClass() }}">{{ $message->categoryLabel() }}</span></p>
                         </div>
                     </div>
                 </div>
@@ -146,6 +168,18 @@
                         <label class="form-label" for="recipient_email">To</label>
                         <input type="email" id="recipient_email" name="recipient_email" class="form-control" value="{{ $message->email }}" required>
                         <div class="invalid-feedback" data-error-for="recipient_email"></div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label" for="reply_sender_role">Send From</label>
+                        <select class="form-select" id="reply_sender_role" name="sender_role">
+                            @foreach($messageSenders as $sender)
+                                <option value="{{ $sender['role'] }}" @selected($sender['role'] === $selectedSenderRole)>
+                                    {{ $sender['label'] }} - {{ $sender['address'] }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <div class="invalid-feedback" data-error-for="sender_role"></div>
                     </div>
 
                     <div class="mb-3">

@@ -67,11 +67,20 @@ it('saves payment email analytics and sms settings', function () {
             'smtp_username' => 'resend',
             'smtp_password' => 'smtp-secret',
             'resend_api_key' => 're_secret',
+            'mail_from_messages_name' => 'Velok Info',
+            'mail_from_messages_address' => 'info@example.com',
+            'mail_from_noreply_name' => 'Velok No Reply',
+            'mail_from_noreply_address' => 'noreply@example.com',
+            'mail_from_invoices_name' => 'Velok Sales',
+            'mail_from_invoices_address' => 'sales@example.com',
         ])
         ->assertRedirect(route('settings.index') . '#email-settings');
 
     expect(AppSetting::bool('email', 'enabled'))->toBeTrue();
     expect(AppSetting::value('email', 'provider'))->toBe('resend');
+    expect(AppSetting::value('email', 'mail_from_messages_address'))->toBe('info@example.com');
+    expect(AppSetting::value('email', 'mail_from_noreply_address'))->toBe('noreply@example.com');
+    expect(AppSetting::value('email', 'mail_from_invoices_address'))->toBe('sales@example.com');
     expect(AppSetting::value('email', 'resend_api_key'))->toBe('re_secret');
     expect(AppSetting::query()->where('group', 'email')->where('key', 'resend_api_key')->value('value'))->not->toBe('re_secret');
 

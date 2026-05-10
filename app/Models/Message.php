@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Support\TopbarData;
 use App\Support\LeadCategory;
+use App\Support\NotificationLogger;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Model;
 
@@ -15,7 +16,13 @@ class Message extends Model
     {
         $flushNotifications = fn () => app(TopbarData::class)->forgetNotifications();
 
-        static::created($flushNotifications);
+        static::created(function (Message $message) use ($flushNotifications): void {
+            if ($message->origin_page !== 'compose') {
+                app(NotificationLogger::class)->messageReceived($message);
+            }
+
+            $flushNotifications();
+        });
         static::updated($flushNotifications);
         static::deleted($flushNotifications);
     }

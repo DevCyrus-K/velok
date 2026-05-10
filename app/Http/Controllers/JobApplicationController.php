@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\JobApplication;
+use App\Support\NotificationLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -35,6 +36,7 @@ class JobApplicationController extends Controller
     public function show(JobApplication $application): View
     {
         $application->load('careerJob');
+        app(NotificationLogger::class)->markReadFor($application);
 
         return view('careers.applications.show', [
             'application' => $application,

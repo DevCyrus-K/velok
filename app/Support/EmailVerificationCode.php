@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\User;
+use App\Services\MailConfigService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -31,8 +32,15 @@ class EmailVerificationCode
             default => "Your Velok verification code is {$code}. It expires in " . self::TTL_MINUTES . ' minutes.',
         };
 
-        Mail::raw($message, function ($mailMessage) use ($user, $subject): void {
-            $mailMessage->to($user->email)->subject($subject);
+        MailConfigService::apply();
+
+        $sender = app(MailSender::class)->sender(MailSender::NOREPLY);
+
+        Mail::raw($message, function ($mailMessage) use ($user, $subject, $sender): void {
+            $mailMessage
+                ->from($sender['address'], $sender['name'])
+                ->to($user->email)
+                ->subject($subject);
         });
     }
 

@@ -323,6 +323,46 @@
                                     @error('from_address')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                 </div>
 
+                                <div class="col-12">
+                                    <hr class="my-1">
+                                </div>
+
+                                <div class="col-12">
+                                    <h6 class="fw-semibold mb-1">Sender Addresses</h6>
+                                    <p class="text-muted mb-0 small">Messages use Info, OTPs and login alerts use No Reply, and invoices/quotations use Sales.</p>
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label" for="{{ $modalId }}MessagesFromAddress">Info Email</label>
+                                    <input class="form-control @error('mail_from_messages_address') is-invalid @enderror" id="{{ $modalId }}MessagesFromAddress" name="mail_from_messages_address" type="email" value="{{ old('mail_from_messages_address', $settings['email']['mail_from_messages_address'] ?? 'info@kwikshiftmovers.co.ke') }}" required>
+                                    @error('mail_from_messages_address')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label" for="{{ $modalId }}NoReplyFromAddress">No Reply Email</label>
+                                    <input class="form-control @error('mail_from_noreply_address') is-invalid @enderror" id="{{ $modalId }}NoReplyFromAddress" name="mail_from_noreply_address" type="email" value="{{ old('mail_from_noreply_address', $settings['email']['mail_from_noreply_address'] ?? 'noreply@kwikshiftmovers.co.ke') }}" required>
+                                    @error('mail_from_noreply_address')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label" for="{{ $modalId }}SalesFromAddress">Sales Email</label>
+                                    <input class="form-control @error('mail_from_invoices_address') is-invalid @enderror" id="{{ $modalId }}SalesFromAddress" name="mail_from_invoices_address" type="email" value="{{ old('mail_from_invoices_address', $settings['email']['mail_from_invoices_address'] ?? 'sales@kwikshiftmovers.co.ke') }}" required>
+                                    @error('mail_from_invoices_address')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label" for="{{ $modalId }}MessagesFromName">Info Name</label>
+                                    <input class="form-control @error('mail_from_messages_name') is-invalid @enderror" id="{{ $modalId }}MessagesFromName" name="mail_from_messages_name" type="text" value="{{ old('mail_from_messages_name', $settings['email']['mail_from_messages_name'] ?? '') }}">
+                                    @error('mail_from_messages_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label" for="{{ $modalId }}NoReplyFromName">No Reply Name</label>
+                                    <input class="form-control @error('mail_from_noreply_name') is-invalid @enderror" id="{{ $modalId }}NoReplyFromName" name="mail_from_noreply_name" type="text" value="{{ old('mail_from_noreply_name', $settings['email']['mail_from_noreply_name'] ?? '') }}">
+                                    @error('mail_from_noreply_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label" for="{{ $modalId }}SalesFromName">Sales Name</label>
+                                    <input class="form-control @error('mail_from_invoices_name') is-invalid @enderror" id="{{ $modalId }}SalesFromName" name="mail_from_invoices_name" type="text" value="{{ old('mail_from_invoices_name', $settings['email']['mail_from_invoices_name'] ?? '') }}">
+                                    @error('mail_from_invoices_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                </div>
+
                                 @if($provider === 'resend')
                                     <div class="col-md-12">
                                         <label class="form-label" for="{{ $modalId }}ResendApiKey">Resend API Key</label>

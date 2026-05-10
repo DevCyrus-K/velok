@@ -29,6 +29,7 @@ class AuthSession
         ])->save();
 
         $this->refresh($request, $user);
+        app(NotificationLogger::class)->loginSucceeded($user, $request);
 
         if ($sendLoginAlert) {
             $this->sendLoginAlert($request, $user);

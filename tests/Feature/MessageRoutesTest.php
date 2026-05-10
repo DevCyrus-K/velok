@@ -80,6 +80,8 @@ it('sends composed emails through a mailable and logs delivery', function () {
     expect($message->status)->toBe('sent')
         ->and($message->email_log_id)->toBe($log->id)
         ->and($log->status)->toBe(EmailLog::STATUS_SENT)
+        ->and($log->sender_role)->toBe('info')
+        ->and($log->sender_email)->toBe('info@kwikshiftmovers.co.ke')
         ->and($log->attempts)->toBe(1)
         ->and($log->tracking_token)->not->toBeNull();
 
@@ -107,6 +109,7 @@ it('sends replies through a mailable and updates the message response', function
             'recipient_email' => 'buyer@example.com',
             'subject' => 'Re: Listing inquiry',
             'response' => 'Yes, the property is still available for viewing.',
+            'sender_role' => 'sales',
         ]);
 
     $response->assertOk()
@@ -121,7 +124,9 @@ it('sends replies through a mailable and updates the message response', function
     expect($message->status)->toBe('responded')
         ->and($message->response)->toBe('Yes, the property is still available for viewing.')
         ->and($message->email_log_id)->toBe($log->id)
-        ->and($log->status)->toBe(EmailLog::STATUS_SENT);
+        ->and($log->status)->toBe(EmailLog::STATUS_SENT)
+        ->and($log->sender_role)->toBe('sales')
+        ->and($log->sender_email)->toBe('sales@kwikshiftmovers.co.ke');
 
     $deliveryLog = DB::table('email_delivery_logs')
         ->where('recipient_email', 'buyer@example.com')

@@ -5,6 +5,9 @@ namespace App\Http\Controllers;
 use App\Mail\MessageMail;
 use App\Models\EmailLog;
 use App\Models\Message;
+use App\Services\MailConfigService;
+use App\Support\MailSender;
+use App\Support\NotificationLogger;
 use App\Support\TopbarData;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -14,6 +17,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -44,14 +48,20 @@ class MessageController extends Controller
     public function show(Message $message)
     {
         $message->markAsRead();
+        app(NotificationLogger::class)->markReadFor($message);
         $message->load('latestEmailLog', 'respondedByUser');
 
-        return view('messages.show', compact('message'));
+        return view('messages.show', [
+            'message' => $message,
+            'messageSenders' => app(MailSender::class)->messageOptions(),
+        ]);
     }
 
     public function compose()
     {
-        return view('messages.compose');
+        return view('messages.compose', [
+            'messageSenders' => app(MailSender::class)->messageOptions(),
+        ]);
     }
 
     public function store(Request $request): JsonResponse|RedirectResponse
@@ -60,12 +70,14 @@ class MessageController extends Controller
             'email' => ['required', 'email', 'max:255'],
             'subject' => ['required', 'string', 'max:255'],
             'message' => ['required', 'string'],
+            'sender_role' => ['nullable', Rule::in(MailSender::MESSAGE_ROLES)],
             'attachment' => ['nullable', 'file', 'max:10240', 'mimetypes:'.implode(',', self::ATTACHMENT_MIMES)],
         ]);
 
         $recipient = Str::lower(trim($validated['email']));
         $subject = $this->cleanSubject($validated['subject']);
         $body = $this->cleanBody($validated['message'], 'message');
+        $senderRole = app(MailSender::class)->validMessageRole($validated['sender_role'] ?? null);
         $attachment = $this->storeAttachment($request);
 
         $message = Message::query()->create([
@@ -82,13 +94,16 @@ class MessageController extends Controller
             ...$attachment,
         ]);
 
-        $emailLog = $this->createEmailLog($recipient, $subject);
+        $emailLog = $this->createEmailLog($recipient, $subject, $senderRole);
         $message->update(['email_log_id' => $emailLog->getKey()]);
 
         try {
+            MailConfigService::apply();
+
             Mail::to($recipient)->send(new MessageMail(
                 message: $message,
                 trackingToken: $emailLog->tracking_token,
+                senderRole: $senderRole,
             ));
 
             $message->update([
@@ -97,6 +112,7 @@ class MessageController extends Controller
             ]);
 
             $this->markEmailLogSent($emailLog);
+            app(NotificationLogger::class)->messageSent($message, $recipient, $subject);
             $this->recordEmailDelivery(
                 'message',
                 EmailLog::STATUS_SENT,
@@ -108,6 +124,7 @@ class MessageController extends Controller
             return $this->emailSuccessResponse($request, $message);
         } catch (Throwable $exception) {
             $this->markEmailLogFailed($emailLog, $exception);
+            app(NotificationLogger::class)->messageFailed($message, $recipient, $exception->getMessage());
             $this->recordEmailDelivery(
                 'message',
                 EmailLog::STATUS_FAILED,
@@ -127,13 +144,15 @@ class MessageController extends Controller
             'recipient_email' => ['required', 'email', 'max:255'],
             'subject' => ['required', 'string', 'max:255'],
             'response' => ['required', 'string'],
+            'sender_role' => ['nullable', Rule::in(MailSender::MESSAGE_ROLES)],
         ]);
 
         $recipient = Str::lower(trim($validated['recipient_email']));
         $subject = $this->cleanSubject($validated['subject']);
         $body = $this->cleanBody($validated['response'], 'response');
+        $senderRole = app(MailSender::class)->validMessageRole($validated['sender_role'] ?? null);
 
-        $emailLog = $this->createEmailLog($recipient, $subject);
+        $emailLog = $this->createEmailLog($recipient, $subject, $senderRole);
 
         $message->update([
             'response' => $body,
@@ -143,15 +162,19 @@ class MessageController extends Controller
         ]);
 
         try {
+            MailConfigService::apply();
+
             Mail::to($recipient)->send(new MessageMail(
                 message: $message,
                 body: $body,
                 emailSubject: $subject,
                 trackingToken: $emailLog->tracking_token,
+                senderRole: $senderRole,
             ));
 
             $message->update(['status' => 'responded']);
             $this->markEmailLogSent($emailLog);
+            app(NotificationLogger::class)->messageSent($message, $recipient, $subject);
             $this->recordEmailDelivery(
                 'message_reply',
                 EmailLog::STATUS_SENT,
@@ -163,6 +186,7 @@ class MessageController extends Controller
             return $this->emailSuccessResponse($request, $message);
         } catch (Throwable $exception) {
             $this->markEmailLogFailed($emailLog, $exception);
+            app(NotificationLogger::class)->messageFailed($message, $recipient, $exception->getMessage());
             $this->recordEmailDelivery(
                 'message_reply',
                 EmailLog::STATUS_FAILED,
@@ -189,16 +213,28 @@ class MessageController extends Controller
 
         $recipient = Str::lower(trim($emailLog->recipient_email ?: $message->email));
         $subject = $this->cleanSubject($emailLog->subject ?: $message->subject);
+        $senderRole = app(MailSender::class)->validMessageRole($emailLog->sender_role ?: MailSender::INFO);
         $isReply = $this->isReplyLog($message, $emailLog);
         $body = $isReply ? (string) $message->response : (string) $message->message;
+        $sender = app(MailSender::class)->sender($senderRole);
 
-        $emailLog->update([
+        $emailLogUpdate = [
             'status' => EmailLog::STATUS_SENDING,
             'failed_reason' => null,
             'attempts' => $emailLog->attempts + 1,
-        ]);
+        ];
+
+        if (Schema::hasColumn('email_logs', 'sender_role')) {
+            $emailLogUpdate['sender_role'] = $senderRole;
+            $emailLogUpdate['sender_email'] = $sender['address'];
+            $emailLogUpdate['sender_name'] = $sender['name'];
+        }
+
+        $emailLog->update($emailLogUpdate);
 
         try {
+            MailConfigService::apply();
+
             Mail::to($recipient)->send(new MessageMail(
                 message: $message,
                 body: $body,
@@ -207,6 +243,7 @@ class MessageController extends Controller
                 attachmentPath: $isReply ? null : $message->attachment_path,
                 attachmentOriginalName: $isReply ? null : $message->attachment_original_name,
                 attachmentMime: $isReply ? null : $message->attachment_mime,
+                senderRole: $senderRole,
             ));
 
             $message->update([
@@ -215,6 +252,7 @@ class MessageController extends Controller
             ]);
 
             $this->markEmailLogSent($emailLog);
+            app(NotificationLogger::class)->messageSent($message, $recipient, $subject);
             $this->recordEmailDelivery(
                 $isReply ? 'message_reply' : 'message',
                 EmailLog::STATUS_SENT,
@@ -230,6 +268,7 @@ class MessageController extends Controller
             ]);
         } catch (Throwable $exception) {
             $this->markEmailLogFailed($emailLog, $exception);
+            app(NotificationLogger::class)->messageFailed($message, $recipient, $exception->getMessage());
             $this->recordEmailDelivery(
                 $isReply ? 'message_reply' : 'message',
                 EmailLog::STATUS_FAILED,
@@ -289,9 +328,11 @@ class MessageController extends Controller
         ]);
     }
 
-    private function createEmailLog(string $recipient, string $subject): EmailLog
+    private function createEmailLog(string $recipient, string $subject, string $senderRole = MailSender::INFO): EmailLog
     {
-        return EmailLog::query()->create([
+        $senderRole = app(MailSender::class)->validMessageRole($senderRole);
+        $sender = app(MailSender::class)->sender($senderRole);
+        $data = [
             'emailable_type' => null,
             'emailable_id' => null,
             'recipient_email' => Str::limit($recipient, 190, ''),
@@ -299,7 +340,15 @@ class MessageController extends Controller
             'status' => EmailLog::STATUS_SENDING,
             'tracking_token' => (string) Str::uuid(),
             'attempts' => 1,
-        ]);
+        ];
+
+        if (Schema::hasColumn('email_logs', 'sender_role')) {
+            $data['sender_role'] = $senderRole;
+            $data['sender_email'] = Str::limit($sender['address'], 190, '');
+            $data['sender_name'] = Str::limit($sender['name'], 190, '');
+        }
+
+        return EmailLog::query()->create($data);
     }
 
     private function markEmailLogSent(EmailLog $emailLog): void
@@ -420,6 +469,9 @@ class MessageController extends Controller
             'status' => $emailLog->status,
             'failed_reason' => $emailLog->failed_reason,
             'attempts' => $emailLog->attempts,
+            'sender_role' => $emailLog->sender_role,
+            'sender_email' => $emailLog->sender_email,
+            'sender_name' => $emailLog->sender_name,
         ];
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\NotificationLogger;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
@@ -34,6 +35,17 @@ class JobApplication extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::created(fn (JobApplication $application) => app(NotificationLogger::class)->careerApplicationReceived($application));
+
+        static::updated(function (JobApplication $application): void {
+            if ($application->wasChanged('status')) {
+                app(NotificationLogger::class)->careerApplicationUpdated($application);
+            }
+        });
+    }
 
     public function careerJob(): BelongsTo
     {

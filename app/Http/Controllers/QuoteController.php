@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\QuoteRequestFormRequest;
 use App\Models\QuoteRequest;
 use App\Support\CompanyProfile;
+use App\Support\NotificationLogger;
 use App\Support\QuotationEmail;
 use App\Support\UserSignature;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -62,6 +63,7 @@ class QuoteController extends Controller
     public function show(QuoteRequest $quote): View
     {
         $quote->load(['quote', 'quotation', 'invoice']);
+        app(NotificationLogger::class)->markReadFor($quote);
 
         return view('quotes.show', [
             'quote' => $quote,

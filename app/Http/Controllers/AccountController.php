@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\AccountProfileRequest;
 use App\Models\User;
+use App\Support\NotificationLogger;
 use App\Support\TopbarData;
 use App\Support\TwoFactorOtp;
 use App\Support\UserSignature;
@@ -29,6 +30,7 @@ class AccountController extends Controller
     {
         /** @var User $user */
         $user = $request->user();
+        app(NotificationLogger::class)->markReadFor($user);
 
         return view('account.show', [
             'user' => $user,
@@ -73,6 +75,12 @@ class AccountController extends Controller
 
         $user->save();
         $this->refreshUserSession($request, $user);
+        app(NotificationLogger::class)->accountActivity(
+            $user,
+            $emailChanged ? 'Account email changed' : 'Account profile updated',
+            $user->email.' updated profile details.',
+            'circle-user'
+        );
 
         return redirect()
             ->route('account.show')
@@ -113,6 +121,7 @@ class AccountController extends Controller
 
         $request->session()->regenerate();
         $this->refreshUserSession($request, $user);
+        app(NotificationLogger::class)->passwordChanged($user, $request);
 
         return redirect()
             ->route('account.show')
@@ -167,6 +176,7 @@ class AccountController extends Controller
             $user->forceFill(['two_factor_enabled' => true])->save();
             $request->session()->forget('two_factor_setup_pending');
             $this->refreshUserSession($request, $user);
+            app(NotificationLogger::class)->accountActivity($user, 'Two-factor enabled', $user->email.' enabled two-factor authentication.', 'shield-check');
 
             return redirect()
                 ->route('account.show')
@@ -214,6 +224,7 @@ class AccountController extends Controller
         $this->twoFactorOtp->clear($user);
         $request->session()->forget('two_factor_setup_pending');
         $this->refreshUserSession($request, $user);
+        app(NotificationLogger::class)->accountActivity($user, 'Two-factor disabled', $user->email.' disabled two-factor authentication.', 'shield-x');
 
         return redirect()
             ->route('account.show')
@@ -237,6 +248,7 @@ class AccountController extends Controller
         }
 
         $request->session()->regenerate();
+        app(NotificationLogger::class)->accountActivity($request->user(), 'Other devices logged out', $request->user()->email.' logged out other sessions.', 'monitor-x');
 
         return redirect()
             ->route('account.show')
@@ -252,6 +264,8 @@ class AccountController extends Controller
         $request->session()->put('user_email', $user->email);
         $request->session()->put('user_id', $user->id);
         $request->session()->put('user_avatar', $this->topbarData->avatarUrl($user));
+        $request->session()->put('user_avatar_initials', $this->topbarData->initials($user));
+        $request->session()->put('user_has_avatar', $this->topbarData->hasAvatar($user));
     }
 
     private function activeSessions(Request $request): array

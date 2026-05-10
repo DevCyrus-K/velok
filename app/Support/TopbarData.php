@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\Message;
+use App\Models\ActivityNotification;
 use App\Models\User;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
@@ -43,6 +44,10 @@ class TopbarData
     public function notifications(): array
     {
         return Cache::remember(self::NOTIFICATIONS_CACHE_KEY, now()->addSeconds(30), function (): array {
+            if ($this->hasActivityNotifications()) {
+                return $this->activityNotifications();
+            }
+
             $count = Message::query()
                 ->where('status', 'unread')
                 ->count();
@@ -71,6 +76,44 @@ class TopbarData
                 'items' => $items,
             ];
         });
+    }
+
+    private function activityNotifications(): array
+    {
+        $count = ActivityNotification::query()->whereNull('read_at')->count();
+
+        $items = ActivityNotification::query()
+            ->latest('occurred_at')
+            ->latest('id')
+            ->take(5)
+            ->get()
+            ->map(fn (ActivityNotification $notification): array => [
+                'id' => $notification->id,
+                'name' => $notification->title,
+                'subject' => $notification->body ?: $notification->title,
+                'created_at' => $notification->occurred_at?->toIso8601String(),
+                'created_at_human' => $notification->occurred_at?->diffForHumans() ?? '',
+                'url' => $notification->url ?: '#',
+                'icon' => $notification->icon,
+                'severity' => $notification->severity,
+            ])
+            ->all();
+
+        return [
+            'count' => $count,
+            'display_count' => $this->displayCount($count),
+            'has_unread' => $count > 0,
+            'items' => $items,
+        ];
+    }
+
+    private function hasActivityNotifications(): bool
+    {
+        try {
+            return \Illuminate\Support\Facades\Schema::hasTable('activity_notifications');
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     public function avatarUrl(Authenticatable $user): string

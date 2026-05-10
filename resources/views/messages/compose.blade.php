@@ -23,6 +23,18 @@
                     </div>
 
                     <div class="mb-3">
+                        <label class="form-label" for="sender_role">Send From</label>
+                        <select class="form-select" id="sender_role" name="sender_role">
+                            @foreach($messageSenders as $sender)
+                                <option value="{{ $sender['role'] }}" @selected($sender['role'] === \App\Support\MailSender::INFO)>
+                                    {{ $sender['label'] }} - {{ $sender['address'] }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <div class="invalid-feedback" data-error-for="sender_role"></div>
+                    </div>
+
+                    <div class="mb-3">
                         <label class="form-label" for="subject">Subject <span class="text-danger">*</span></label>
                         <input type="text" id="subject" name="subject" class="form-control" maxlength="255" required>
                         <div class="invalid-feedback" data-error-for="subject"></div>

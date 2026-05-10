@@ -6,6 +6,7 @@ use App\Mail\AccountLockedMail;
 use App\Models\User;
 use App\Services\MailConfigService;
 use App\Support\EmailLogRecorder;
+use App\Support\NotificationLogger;
 use RuntimeException;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Foundation\Http\FormRequest;
@@ -74,6 +75,7 @@ class LoginRequest extends FormRequest
         }
 
         if (! $authenticated) {
+            app(NotificationLogger::class)->loginFailed((string) $this->input('email'), $this);
             $this->recordFailedLogin();
 
             throw ValidationException::withMessages([
@@ -157,6 +159,18 @@ class LoginRequest extends FormRequest
         }
 
         RateLimiter::hit($notificationKey, self::LOGIN_DECAY_SECONDS);
+        app(NotificationLogger::class)->log([
+            'type' => 'account_locked',
+            'title' => 'Account lock warning',
+            'body' => $user->email.' reached the failed login limit.',
+            'url' => route('account.show'),
+            'icon' => 'shield-alert',
+            'severity' => 'danger',
+            'metadata' => [
+                'ip' => $this->ip(),
+                'email' => $email,
+            ],
+        ], $user);
 
         $subject = 'Security alert - '.config('app.name');
         $emailLog = app(EmailLogRecorder::class)->create($user->email, $subject, $user);

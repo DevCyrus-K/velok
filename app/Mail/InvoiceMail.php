@@ -6,6 +6,7 @@ use App\Models\Invoice;
 use App\Models\User;
 use App\Support\CompanyProfile;
 use App\Support\InvoiceAuthorization;
+use App\Support\MailSender;
 use App\Support\PaymentSettings;
 use App\Support\UserSignature;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -36,6 +37,7 @@ class InvoiceMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
+            from: app(MailSender::class)->address(MailSender::SALES),
             subject: $this->subjectLine(),
         );
     }

@@ -7,6 +7,7 @@ use App\Support\CompanyProfile;
 use App\Support\PaymentSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -174,6 +175,12 @@ class SettingsController extends Controller
             'smtp_password' => ['nullable', 'string', 'max:500'],
             'brevo_api_key' => ['nullable', 'string', 'max:500'],
             'resend_api_key' => ['nullable', 'string', 'max:500'],
+            'mail_from_messages_name' => ['nullable', 'string', 'max:120'],
+            'mail_from_messages_address' => ['required', 'email', 'max:160'],
+            'mail_from_noreply_name' => ['nullable', 'string', 'max:120'],
+            'mail_from_noreply_address' => ['required', 'email', 'max:160'],
+            'mail_from_invoices_name' => ['nullable', 'string', 'max:120'],
+            'mail_from_invoices_address' => ['required', 'email', 'max:160'],
         ]);
 
         $values = [
@@ -185,6 +192,12 @@ class SettingsController extends Controller
             'smtp_port' => (string) ($validated['smtp_port'] ?? 587),
             'smtp_encryption' => $validated['smtp_encryption'] ?? 'tls',
             'smtp_username' => filled($validated['smtp_username'] ?? null) ? $validated['smtp_username'] : $this->defaultSmtpUsername($validated['provider']),
+            'mail_from_messages_name' => $this->cleanText($validated['mail_from_messages_name'] ?? ''),
+            'mail_from_messages_address' => Str::lower(trim($validated['mail_from_messages_address'])),
+            'mail_from_noreply_name' => $this->cleanText($validated['mail_from_noreply_name'] ?? ''),
+            'mail_from_noreply_address' => Str::lower(trim($validated['mail_from_noreply_address'])),
+            'mail_from_invoices_name' => $this->cleanText($validated['mail_from_invoices_name'] ?? ''),
+            'mail_from_invoices_address' => Str::lower(trim($validated['mail_from_invoices_address'])),
         ];
 
         AppSetting::setMany('email', $values);
@@ -252,6 +265,12 @@ class SettingsController extends Controller
                 'smtp_port' => '587',
                 'smtp_encryption' => 'tls',
                 'smtp_username' => '',
+                'mail_from_messages_name' => config('mail.senders.info.name', config('mail.from.name')),
+                'mail_from_messages_address' => config('mail.senders.info.address', 'info@kwikshiftmovers.co.ke'),
+                'mail_from_noreply_name' => config('mail.senders.noreply.name', config('mail.from.name')),
+                'mail_from_noreply_address' => config('mail.senders.noreply.address', 'noreply@kwikshiftmovers.co.ke'),
+                'mail_from_invoices_name' => config('mail.senders.sales.name', config('mail.from.name')),
+                'mail_from_invoices_address' => config('mail.senders.sales.address', 'sales@kwikshiftmovers.co.ke'),
             ]),
             'analytics' => AppSetting::groupValues('analytics', [
                 'enabled' => '0',
