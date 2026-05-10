@@ -33,6 +33,8 @@ it('returns topbar data with a capped notification badge when unread messages ex
     $response
         ->assertOk()
         ->assertJsonPath('user.name', 'Lead Manager')
+        ->assertJsonPath('user.initials', 'LM')
+        ->assertJsonPath('user.has_avatar', false)
         ->assertJsonPath('notifications.count', 12)
         ->assertJsonPath('notifications.display_count', '9+');
 
@@ -51,6 +53,8 @@ it('renders the authenticated name and the single notification badge immediately
     $html = view('layouts.partials.topbar')->render();
 
     expect($html)->toContain('Closer Jane');
+    expect($html)->toContain('id="user-avatar-initials"');
+    expect($html)->toContain('>CJ<');
     expect($html)->toContain('>1<');
     expect($html)->not->toContain('Loading notifications...');
 });
@@ -69,7 +73,10 @@ it('renders the cleaned navigation search and menu labels', function () {
     expect($topbar)->toContain('Search pages...');
     expect($topbar)->toContain('button-toggle-menu');
     expect($topbar)->toContain('aria-controls="navbar-nav"');
-    expect($topbar)->toContain('Gallery');
+    expect($topbar)->toContain('Help Center');
+    expect($topbar)->toContain('<span class="align-middle">Settings</span>');
+    expect($topbar)->not->toContain('<span class="align-middle">Help</span>');
+    expect($topbar)->not->toContain('Gallery');
     expect($topbar)->not->toContain('Photos');
     expect($topbar)->not->toContain('Pricing');
 

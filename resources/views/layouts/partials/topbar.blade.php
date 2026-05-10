@@ -1,9 +1,17 @@
 @php
-     $topbarUser = $topbarUser ?? [
-          'name' => session('user_name', auth()->user()?->name ?? 'User'),
+     $topbarFallbackName = session('user_name', auth()->user()?->name ?? 'User');
+     $topbarUser = array_replace([
+          'name' => $topbarFallbackName,
           'email' => session('user_email', auth()->user()?->email ?? ''),
           'avatar' => session('user_avatar', '/images/users/avatar-1.jpg'),
-     ];
+          'initials' => session('user_avatar_initials', 'U'),
+          'has_avatar' => session('user_has_avatar', false),
+     ], is_array($topbarUser ?? null) ? $topbarUser : []);
+
+     $topbarUser['name'] = trim((string) ($topbarUser['name'] ?? 'User')) ?: 'User';
+     $topbarUser['initials'] = trim((string) ($topbarUser['initials'] ?? 'U')) ?: 'U';
+     $topbarUser['has_avatar'] = filter_var($topbarUser['has_avatar'] ?? false, FILTER_VALIDATE_BOOLEAN);
+     $topbarAvatarPlaceholder = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
 
      $topbarNotifications = $topbarNotifications ?? [
           'count' => 0,
@@ -19,8 +27,7 @@
           ['title' => 'Invoices', 'section' => 'Sales', 'url' => route('invoice.index'), 'icon' => 'receipt-text', 'keywords' => 'billing payments'],
           ['title' => 'Customers', 'section' => 'Sales', 'url' => route('any', 'customers'), 'icon' => 'book-user', 'keywords' => 'contacts clients'],
           ['title' => 'Messages', 'section' => 'Sales', 'url' => route('messages.index'), 'icon' => 'mail', 'keywords' => 'inbox notifications email'],
-          ['title' => 'Gallery', 'section' => 'Content', 'url' => route('gallery.index'), 'icon' => 'images', 'keywords' => 'photos images media'],
-          ['title' => 'FAQs', 'section' => 'Content', 'url' => route('faqs.index'), 'icon' => 'circle-help', 'keywords' => 'help questions answers'],
+          ['title' => 'Help Center', 'section' => 'Content', 'url' => route('faqs.index'), 'icon' => 'circle-help', 'keywords' => 'help questions answers faq faqs'],
           ['title' => 'Reviews', 'section' => 'Content', 'url' => route('reviews.index'), 'icon' => 'star', 'keywords' => 'testimonials ratings'],
           ['title' => 'Careers', 'section' => 'Content', 'url' => route('careers.jobs.index'), 'icon' => 'briefcase', 'keywords' => 'jobs applications hiring'],
           ['title' => 'Reports', 'section' => 'Insights', 'url' => route('second', ['reports', 'overview']), 'icon' => 'chart-column', 'keywords' => 'analytics performance'],
@@ -75,6 +82,17 @@
           height: 32px;
           object-fit: cover;
           width: 32px;
+     }
+     .topbar-user-initials {
+          align-items: center;
+          background-color: rgba(var(--bs-primary-rgb), 0.12);
+          color: var(--bs-primary);
+          display: inline-flex;
+          font-size: 0.75rem;
+          font-weight: 700;
+          justify-content: center;
+          line-height: 1;
+          text-transform: uppercase;
      }
      @media (max-width: 767.98px) {
           .topbar .navbar-header {
@@ -167,7 +185,8 @@
                     <div class="dropdown topbar-item">
                          <a type="button" class="topbar-button p-0" id="page-header-user-dropdown" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                               <span class="d-flex align-items-center gap-2">
-                                   <img class="topbar-user-avatar rounded-circle" src="{{ $topbarUser['avatar'] }}" alt="user-image" id="user-avatar" width="32" height="32">
+                                   <img class="topbar-user-avatar rounded-circle {{ $topbarUser['has_avatar'] ? '' : 'd-none' }}" src="{{ $topbarUser['has_avatar'] ? $topbarUser['avatar'] : $topbarAvatarPlaceholder }}" alt="{{ $topbarUser['name'] }} avatar" id="user-avatar" width="32" height="32">
+                                   <span class="topbar-user-avatar topbar-user-initials rounded-circle {{ $topbarUser['has_avatar'] ? 'd-none' : '' }}" id="user-avatar-initials" aria-label="{{ $topbarUser['name'] }} initials">{{ $topbarUser['initials'] }}</span>
                                    <span class="d-lg-flex flex-column gap-1 d-none">
                                         <h5 class="my-0 text-reset fs-14" id="user-name">{{ $topbarUser['name'] }}</h5>
                                    </span>
@@ -183,11 +202,11 @@
                                    <i data-lucide="chart-column" class="fs-16 text-muted align-middle me-2"></i><span class="align-middle">Reports</span>
                               </a>
                               <a class="dropdown-item" href="{{ route('faqs.index') }}">
-                                   <i data-lucide="circle-help" class="fs-16 text-muted align-middle me-2"></i><span class="align-middle">Help</span>
+                                   <i data-lucide="circle-help" class="fs-16 text-muted align-middle me-2"></i><span class="align-middle">Help Center</span>
                               </a>
-                              <a class="dropdown-item" href="{{ route('gallery.index') }}">
-                                   <i data-lucide="images" class="fs-16 text-muted align-middle me-2"></i>
-                                   <span class="align-middle">Gallery</span>
+                              <a class="dropdown-item" href="{{ route('settings.index') }}">
+                                   <i data-lucide="settings" class="fs-16 text-muted align-middle me-2"></i>
+                                   <span class="align-middle">Settings</span>
                               </a>
 
                               <div class="dropdown-divider my-1"></div>
@@ -298,8 +317,7 @@
           })
           .then(data => {
                if (data.user) {
-                    document.getElementById('user-name').textContent = data.user.name ?? 'User';
-                    document.getElementById('user-avatar').src = data.user.avatar ?? '/images/users/avatar-1.jpg';
+                    updateTopbarUser(data.user);
                }
 
                if (data.notifications) {
@@ -309,6 +327,31 @@
           .catch(error => {
                console.error('Error fetching topbar data:', error);
           });
+     }
+
+     function updateTopbarUser(user) {
+          const name = String(user.name ?? 'User').trim() || 'User';
+          const initials = String(user.initials ?? '').trim() || initialsFromName(name);
+          const hasAvatar = toBoolean(user.has_avatar) && Boolean(user.avatar);
+          const nameLabel = document.getElementById('user-name');
+          const avatarImage = document.getElementById('user-avatar');
+          const avatarInitials = document.getElementById('user-avatar-initials');
+
+          if (nameLabel) {
+               nameLabel.textContent = name;
+          }
+
+          if (avatarImage) {
+               avatarImage.src = hasAvatar ? user.avatar : @json($topbarAvatarPlaceholder);
+               avatarImage.alt = `${name} avatar`;
+               avatarImage.classList.toggle('d-none', !hasAvatar);
+          }
+
+          if (avatarInitials) {
+               avatarInitials.textContent = initials;
+               avatarInitials.setAttribute('aria-label', `${name} initials`);
+               avatarInitials.classList.toggle('d-none', hasAvatar);
+          }
      }
 
      function updateNotificationsUI(notifications) {
@@ -342,6 +385,23 @@
           }
 
           return String(Math.max(count, 0));
+     }
+
+     function initialsFromName(name) {
+          const parts = String(name ?? 'User').trim().split(/\s+/).filter(Boolean);
+
+          if (parts.length === 0) {
+               return 'U';
+          }
+
+          const first = parts[0].charAt(0);
+          const last = parts.length > 1 ? parts[parts.length - 1].charAt(0) : '';
+
+          return `${first}${last}`.toUpperCase();
+     }
+
+     function toBoolean(value) {
+          return value === true || value === 1 || value === '1' || value === 'true';
      }
 
      function escapeHtml(text) {

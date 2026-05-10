@@ -13,7 +13,7 @@ use Illuminate\Support\Str;
 class TopbarData
 {
     private const DEFAULT_AVATAR = '/images/users/avatar-1.jpg';
-    private const USER_CACHE_PREFIX = 'topbar.user.';
+    private const USER_CACHE_PREFIX = 'topbar.user.v2.';
     private const NOTIFICATIONS_CACHE_KEY = 'topbar.notifications';
 
     public function forUser(?Authenticatable $user): array
@@ -34,6 +34,8 @@ class TopbarData
                 'name' => (string) data_get($user, 'name', 'User'),
                 'email' => (string) data_get($user, 'email', ''),
                 'avatar' => $this->avatarUrl($user),
+                'initials' => $this->initials($user),
+                'has_avatar' => $this->hasAvatar($user),
             ];
         });
     }
@@ -81,9 +83,11 @@ class TopbarData
                 ?? $user->getAttribute('profile_photo_path');
         }
 
-        if (! is_string($avatar) || $avatar === '') {
+        if (! is_string($avatar) || trim($avatar) === '') {
             return self::DEFAULT_AVATAR;
         }
+
+        $avatar = trim($avatar);
 
         if (Str::startsWith($avatar, ['http://', 'https://', '/'])) {
             return $avatar;
@@ -100,10 +104,18 @@ class TopbarData
             return 'U';
         }
 
-        return Str::of($name)
+        $parts = Str::of($name)
+            ->squish()
             ->explode(' ')
             ->filter()
-            ->take(2)
+            ->values();
+
+        if ($parts->isEmpty()) {
+            return 'U';
+        }
+
+        return collect([$parts->first(), $parts->count() > 1 ? $parts->last() : null])
+            ->filter()
             ->map(fn (string $part) => Str::upper(Str::substr($part, 0, 1)))
             ->implode('');
     }
