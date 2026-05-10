@@ -8,6 +8,7 @@ use App\Support\PaymentSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\File;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -59,7 +60,7 @@ class SettingsController extends Controller
 
     public function update(Request $request, string $section): RedirectResponse
     {
-        abort_unless(in_array($section, ['payments', 'invoice', 'email', 'analytics', 'sms'], true), 404);
+        abort_unless(in_array($section, ['payments', 'invoice', 'email', 'analytics', 'sms', 'company'], true), 404);
 
         match ($section) {
             'payments' => $this->updatePayments($request),
@@ -67,6 +68,7 @@ class SettingsController extends Controller
             'email' => $this->updateEmail($request),
             'analytics' => $this->updateAnalytics($request),
             'sms' => $this->updateSms($request),
+            'company' => $this->updateCompany($request),
         };
 
         $target = $request->boolean('manage_apps')
@@ -249,6 +251,41 @@ class SettingsController extends Controller
         $this->storePresentSecrets('sms', $validated);
     }
 
+    private function updateCompany(Request $request): void
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:160'],
+            'email' => ['nullable', 'email', 'max:160'],
+            'phone' => ['nullable', 'string', 'max:60'],
+            'address_line_1' => ['nullable', 'string', 'max:255'],
+            'address_line_2' => ['nullable', 'string', 'max:255'],
+            'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,svg', 'max:4096'],
+        ]);
+
+        $logoPath = null;
+        if ($request->hasFile('logo')) {
+            $file = $request->file('logo');
+            $directory = public_path('images/company');
+            if (! File::exists($directory)) {
+                File::makeDirectory($directory, 0755, true);
+            }
+
+            $extension = strtolower((string) $file->getClientOriginalExtension());
+            $filename = 'company-logo.' . ($extension ?: 'png');
+            $file->move($directory, $filename);
+            $logoPath = 'images/company/' . $filename;
+        }
+
+        AppSetting::setMany('company', [
+            'name' => $this->cleanText($validated['name']),
+            'email' => isset($validated['email']) ? Str::lower(trim($validated['email'])) : '',
+            'phone' => $this->cleanText($validated['phone'] ?? ''),
+            'address_line_1' => $this->cleanText($validated['address_line_1'] ?? ''),
+            'address_line_2' => $this->cleanText($validated['address_line_2'] ?? ''),
+            'logo_path' => $logoPath ?: (app(CompanyProfile::class)->data()['logo_path'] ?? 'images/logo-dark.png'),
+        ]);
+    }
+
     private function settings(): array
     {
         return [
@@ -287,6 +324,7 @@ class SettingsController extends Controller
                 'twilio_account_sid' => '',
                 'twilio_from' => '',
             ]),
+            'company' => app(CompanyProfile::class)->data(),
         ];
     }
 

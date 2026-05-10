@@ -7,6 +7,7 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\EmailTrackingController;
 use App\Http\Controllers\FaqController;
 use App\Http\Controllers\GalleryController;
+use App\Http\Controllers\HelpCenterController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\JobApplicationController;
 use App\Http\Controllers\MessageController;
@@ -210,6 +211,9 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
 
     Route::delete('reports/email-delivery/{log}', [RoutingController::class, 'destroyEmailDeliveryLog'])
         ->name('reports.email-delivery.destroy');
+
+    Route::get('help-center', [HelpCenterController::class, 'index'])
+        ->name('help.center');
 
     Route::get('', [RoutingController::class, 'index'])->name('root');
     Route::get('{first}/{second}/{third}', [RoutingController::class, 'thirdLevel'])->name('third');

@@ -213,4 +213,61 @@
         </div>
     </div>
 </div>
+
+<div class="row g-3 mt-1" id="company-settings">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title mb-1">Company Settings</h4>
+                <p class="text-muted mb-0">Keep your brand and contact details consistent across PDFs, emails, and customer-facing pages.</p>
+            </div>
+            <div class="card-body">
+                <form action="{{ route('settings.update', 'company') }}" method="POST" class="row g-3" enctype="multipart/form-data">
+                    @csrf
+                    @method('PATCH')
+                    <div class="col-md-6">
+                        <label class="form-label" for="companyName">Company Name</label>
+                        <input id="companyName" name="name" type="text" class="form-control @error('name') is-invalid @enderror" value="{{ old('name', $settings['company']['name'] ?? '') }}" required>
+                        @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="companyEmail">Company Email</label>
+                        <input id="companyEmail" name="email" type="email" class="form-control @error('email') is-invalid @enderror" value="{{ old('email', $settings['company']['email'] ?? '') }}">
+                        @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="companyPhone">Company Phone</label>
+                        <input id="companyPhone" name="phone" type="text" class="form-control @error('phone') is-invalid @enderror" value="{{ old('phone', $settings['company']['phone'] ?? '') }}">
+                        @error('phone')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="companyAddress1">Address Line 1</label>
+                        <input id="companyAddress1" name="address_line_1" type="text" class="form-control @error('address_line_1') is-invalid @enderror" value="{{ old('address_line_1', $settings['company']['address_line_1'] ?? '') }}">
+                        @error('address_line_1')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="companyAddress2">Address Line 2</label>
+                        <input id="companyAddress2" name="address_line_2" type="text" class="form-control @error('address_line_2') is-invalid @enderror" value="{{ old('address_line_2', $settings['company']['address_line_2'] ?? '') }}">
+                        @error('address_line_2')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="companyLogo">Company Logo</label>
+                        <input id="companyLogo" name="logo" type="file" accept=".jpg,.jpeg,.png,.webp,.svg" class="form-control @error('logo') is-invalid @enderror">
+                        @error('logo')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-6 d-flex align-items-end">
+                        @if(!empty($settings['company']['logo_path']))
+                            <img src="{{ asset(ltrim($settings['company']['logo_path'], '/')) }}" alt="Company logo preview" style="height:40px; width:auto; object-fit:contain;">
+                        @endif
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">
+                            <i data-lucide="save" class="icon-sm me-1"></i>Save Company Settings
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
 @endsection

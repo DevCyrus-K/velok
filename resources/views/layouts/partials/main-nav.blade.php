@@ -207,6 +207,15 @@
                          <span class="nav-text">Manage Apps</span>
                     </a>
                </li>
+
+               <li class="menu-item">
+                    <a class="menu-link {{ request()->routeIs('help.center') ? 'active' : '' }}" href="{{ route('help.center') }}">
+                         <span class="nav-icon">
+                              <i data-lucide="help-circle"></i>
+                         </span>
+                         <span class="nav-text">Help Center</span>
+                    </a>
+               </li>
           </ul>
      </div>
 </div>

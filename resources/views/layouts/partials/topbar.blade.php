@@ -27,7 +27,7 @@
           ['title' => 'Invoices', 'section' => 'Sales', 'url' => route('invoice.index'), 'icon' => 'receipt-text', 'keywords' => 'billing payments'],
           ['title' => 'Customers', 'section' => 'Sales', 'url' => route('any', 'customers'), 'icon' => 'book-user', 'keywords' => 'contacts clients'],
           ['title' => 'Messages', 'section' => 'Sales', 'url' => route('messages.index'), 'icon' => 'mail', 'keywords' => 'inbox notifications email'],
-          ['title' => 'Help Center', 'section' => 'Content', 'url' => route('faqs.index'), 'icon' => 'circle-help', 'keywords' => 'help questions answers faq faqs'],
+          ['title' => 'Help Center', 'section' => 'Content', 'url' => route('help.center'), 'icon' => 'circle-help', 'keywords' => 'help questions answers faq faqs'],
           ['title' => 'Reviews', 'section' => 'Content', 'url' => route('reviews.index'), 'icon' => 'star', 'keywords' => 'testimonials ratings'],
           ['title' => 'Careers', 'section' => 'Content', 'url' => route('careers.jobs.index'), 'icon' => 'briefcase', 'keywords' => 'jobs applications hiring'],
           ['title' => 'Reports', 'section' => 'Insights', 'url' => route('second', ['reports', 'overview']), 'icon' => 'chart-column', 'keywords' => 'analytics performance'],
@@ -211,7 +211,7 @@
                               <a class="dropdown-item" href="{{ route('second', [ 'reports' , 'overview']) }}">
                                    <i data-lucide="chart-column" class="fs-16 text-muted align-middle me-2"></i><span class="align-middle">Reports</span>
                               </a>
-                              <a class="dropdown-item" href="{{ route('faqs.index') }}">
+                              <a class="dropdown-item" href="{{ route('help.center') }}">
                                    <i data-lucide="circle-help" class="fs-16 text-muted align-middle me-2"></i><span class="align-middle">Help Center</span>
                               </a>
                               <a class="dropdown-item" href="{{ route('settings.index') }}">
