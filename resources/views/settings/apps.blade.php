@@ -204,39 +204,39 @@
 
                                 <div class="col-md-6">
                                     <label class="form-label" for="{{ $modalId }}MpesaTillNumber">Till Number</label>
-                                    <input autocomplete="new-password" class="form-control @error('mpesa_till_number') is-invalid @enderror" id="{{ $modalId }}MpesaTillNumber" name="mpesa_till_number" placeholder="{{ ($paymentSecrets['mpesa_till_number'] ?? false) ? 'Saved - leave blank to keep' : '' }}" type="password" inputmode="numeric">
+                                    <input autocomplete="new-password" class="form-control @error('mpesa_till_number') is-invalid @enderror" id="{{ $modalId }}MpesaTillNumber" name="mpesa_till_number" placeholder="{{ ($paymentSecrets['mpesa_till_number'] ?? false) ? 'Saved - leave blank to keep' : '' }}" type="text" inputmode="numeric" data-mpesa-type="till">
                                     @error('mpesa_till_number')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label" for="{{ $modalId }}MpesaTillAccountName">Till Account Name</label>
-                                    <input class="form-control @error('mpesa_till_account_name') is-invalid @enderror" id="{{ $modalId }}MpesaTillAccountName" name="mpesa_till_account_name" type="text" value="{{ old('mpesa_till_account_name', $paymentSettings['mpesa_till_account_name'] ?? '') }}">
+                                    <input class="form-control @error('mpesa_till_account_name') is-invalid @enderror" id="{{ $modalId }}MpesaTillAccountName" name="mpesa_till_account_name" type="text" value="{{ old('mpesa_till_account_name', $paymentSettings['mpesa_till_account_name'] ?? '') }}" data-mpesa-type="till">
                                     @error('mpesa_till_account_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                 </div>
 
                                 <div class="col-md-6">
                                     <label class="form-label" for="{{ $modalId }}MpesaBusinessNumber">Paybill Business Number</label>
-                                    <input autocomplete="new-password" class="form-control @error('mpesa_paybill_business_number') is-invalid @enderror" id="{{ $modalId }}MpesaBusinessNumber" name="mpesa_paybill_business_number" placeholder="{{ ($paymentSecrets['mpesa_paybill_business_number'] ?? false) ? 'Saved - leave blank to keep' : '' }}" type="password" inputmode="numeric">
+                                    <input autocomplete="new-password" class="form-control @error('mpesa_paybill_business_number') is-invalid @enderror" id="{{ $modalId }}MpesaBusinessNumber" name="mpesa_paybill_business_number" placeholder="{{ ($paymentSecrets['mpesa_paybill_business_number'] ?? false) ? 'Saved - leave blank to keep' : '' }}" type="text" inputmode="numeric" data-mpesa-type="paybill">
                                     @error('mpesa_paybill_business_number')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label" for="{{ $modalId }}MpesaPaybillAccountNumber">Paybill Account Number</label>
-                                    <input autocomplete="new-password" class="form-control @error('mpesa_paybill_account_number') is-invalid @enderror" id="{{ $modalId }}MpesaPaybillAccountNumber" name="mpesa_paybill_account_number" placeholder="{{ ($paymentSecrets['mpesa_paybill_account_number'] ?? false) ? 'Saved - leave blank to keep. You can use {invoice_number}.' : 'Example: {invoice_number}' }}" type="password">
+                                    <input autocomplete="new-password" class="form-control @error('mpesa_paybill_account_number') is-invalid @enderror" id="{{ $modalId }}MpesaPaybillAccountNumber" name="mpesa_paybill_account_number" placeholder="{{ ($paymentSecrets['mpesa_paybill_account_number'] ?? false) ? 'Saved - leave blank to keep. You can use {invoice_number}.' : 'Example: {invoice_number}' }}" type="text" data-mpesa-type="paybill">
                                     @error('mpesa_paybill_account_number')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                 </div>
 
                                 <div class="col-md-6">
                                     <label class="form-label" for="{{ $modalId }}MpesaPaybillAccountName">Paybill Account Name</label>
-                                    <input class="form-control @error('mpesa_paybill_account_name') is-invalid @enderror" id="{{ $modalId }}MpesaPaybillAccountName" name="mpesa_paybill_account_name" type="text" value="{{ old('mpesa_paybill_account_name', $paymentSettings['mpesa_paybill_account_name'] ?? '') }}">
+                                    <input class="form-control @error('mpesa_paybill_account_name') is-invalid @enderror" id="{{ $modalId }}MpesaPaybillAccountName" name="mpesa_paybill_account_name" type="text" value="{{ old('mpesa_paybill_account_name', $paymentSettings['mpesa_paybill_account_name'] ?? '') }}" data-mpesa-type="paybill">
                                     @error('mpesa_paybill_account_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label" for="{{ $modalId }}MpesaPochiPhone">Pochi Phone Number</label>
-                                    <input autocomplete="new-password" class="form-control @error('mpesa_pochi_phone') is-invalid @enderror" id="{{ $modalId }}MpesaPochiPhone" name="mpesa_pochi_phone" placeholder="{{ ($paymentSecrets['mpesa_pochi_phone'] ?? false) ? 'Saved - leave blank to keep' : '07XXXXXXXX or 01XXXXXXXX' }}" type="password" inputmode="numeric">
+                                    <input autocomplete="new-password" class="form-control @error('mpesa_pochi_phone') is-invalid @enderror" id="{{ $modalId }}MpesaPochiPhone" name="mpesa_pochi_phone" placeholder="{{ ($paymentSecrets['mpesa_pochi_phone'] ?? false) ? 'Saved - leave blank to keep' : '07XXXXXXXX or 01XXXXXXXX' }}" type="text" inputmode="numeric" data-mpesa-type="pochi">
                                     @error('mpesa_pochi_phone')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label" for="{{ $modalId }}MpesaPochiName">Pochi Registered Name</label>
-                                    <input class="form-control @error('mpesa_pochi_registered_name') is-invalid @enderror" id="{{ $modalId }}MpesaPochiName" name="mpesa_pochi_registered_name" type="text" value="{{ old('mpesa_pochi_registered_name', $paymentSettings['mpesa_pochi_registered_name'] ?? '') }}">
+                                    <input class="form-control @error('mpesa_pochi_registered_name') is-invalid @enderror" id="{{ $modalId }}MpesaPochiName" name="mpesa_pochi_registered_name" type="text" value="{{ old('mpesa_pochi_registered_name', $paymentSettings['mpesa_pochi_registered_name'] ?? '') }}" data-mpesa-type="pochi">
                                     @error('mpesa_pochi_registered_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                 </div>
 
@@ -269,7 +269,7 @@
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label" for="{{ $modalId }}BankAccountNumber">Bank Account Number</label>
-                                    <input autocomplete="new-password" class="form-control @error('bank_account_number') is-invalid @enderror" id="{{ $modalId }}BankAccountNumber" name="bank_account_number" placeholder="{{ ($paymentSecrets['bank_account_number'] ?? false) ? 'Saved - leave blank to keep' : '' }}" type="password" inputmode="numeric">
+                                    <input autocomplete="new-password" class="form-control @error('bank_account_number') is-invalid @enderror" id="{{ $modalId }}BankAccountNumber" name="bank_account_number" placeholder="{{ ($paymentSecrets['bank_account_number'] ?? false) ? 'Saved - leave blank to keep' : '' }}" type="text" inputmode="numeric">
                                     @error('bank_account_number')<div class="invalid-feedback">{{ $message }}</div>@enderror
                                 </div>
                                 <div class="col-md-6">
@@ -509,7 +509,9 @@
 @section('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        const activeModal = @json($errors->any() ? old('active_modal') : ($activeModal ?? null));
+        // Only show modal if there are validation errors
+        const hasErrors = @json($errors->any());
+        const activeModal = hasErrors ? @json(old('active_modal')) : null;
 
         if (activeModal && window.bootstrap) {
             const modalElement = document.getElementById(activeModal);
@@ -518,6 +520,35 @@
                 new bootstrap.Modal(modalElement).show();
             }
         }
+
+        // M-Pesa payment type toggle
+        const mpesaRadios = document.querySelectorAll('input[name="mpesa_type"]');
+        
+        function updateMpesaFieldVisibility() {
+            const selectedType = document.querySelector('input[name="mpesa_type"]:checked')?.value;
+            
+            // Hide/show fields based on selected type
+            document.querySelectorAll('[data-mpesa-type]').forEach(field => {
+                const fieldType = field.getAttribute('data-mpesa-type');
+                const parentCol = field.closest('.col-md-6');
+                
+                if (parentCol) {
+                    if (fieldType === selectedType) {
+                        parentCol.style.display = 'block';
+                    } else {
+                        parentCol.style.display = 'none';
+                    }
+                }
+            });
+        }
+
+        // Add change listeners to all M-Pesa radio buttons
+        mpesaRadios.forEach(radio => {
+            radio.addEventListener('change', updateMpesaFieldVisibility);
+        });
+
+        // Initialize visibility on page load
+        updateMpesaFieldVisibility();
     });
 </script>
 @endsection
