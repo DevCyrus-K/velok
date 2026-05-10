@@ -46,7 +46,10 @@ class ActivityNotification extends Model
     public function markAsRead(): void
     {
         if (! $this->read_at) {
-            $this->update(['read_at' => now()]);
+            $this->update([
+                'read_at' => now(),
+                'updated_at' => now(),
+            ]);
         }
     }
 }

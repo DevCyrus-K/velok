@@ -309,6 +309,11 @@
                                     $quoteIdTitle = $quotation ? 'Download Quote' : 'Edit Request';
                                     $routeTitle = trim(collect([$quote->moving_from, $quote->moving_to])->filter()->implode(' to '));
                                     $routeLabel = $shortLocation($quote->moving_from) . ' to ' . $shortLocation($quote->moving_to);
+                                    $whatsappUrl = $quote->whatsapp_url ?: $quote->whatsappUrl();
+                                    $invoiceRoute = $quote->invoice
+                                        ? route('invoice.details', ['invoice' => $quote->invoice->id])
+                                        : route('invoice.create', ['quote' => $quote->id]);
+                                    $invoiceActionLabel = $quote->invoice ? 'View invoice' : 'Create invoice';
                                 @endphp
                                 <tr data-quote-row
                                     data-search="{{ strtolower(implode(' ', [$quote->reference(), $quote->full_name, $quote->email, $quote->phone, $quote->moving_from, $quote->moving_to, $quote->serviceTypeLabel(), $quote->move_size, $quote->statusLabel()])) }}"
@@ -335,7 +340,17 @@
                                         </div>
                                     </td>
                                     <td class="quote-phone-col" data-label="Phone">
-                                        <span class="text-muted">{{ $quote->phone }}</span>
+                                        <div class="d-flex flex-wrap align-items-center gap-1">
+                                            <a class="btn btn-icon btn-sm btn-soft-primary" href="{{ $quote->telLink() }}" data-bs-toggle="tooltip" data-bs-title="Call" aria-label="Call {{ $quote->full_name }}">
+                                                <i data-lucide="phone" class="align-middle"></i>
+                                            </a>
+                                            @if($whatsappUrl)
+                                                <a class="btn btn-icon btn-sm btn-soft-success" href='{{ $whatsappUrl }}' target="_blank" rel="noopener" data-bs-toggle="tooltip" data-bs-title="WhatsApp" aria-label="WhatsApp {{ $quote->full_name }}">
+                                                    <x-icons.whatsapp class="align-middle" />
+                                                </a>
+                                            @endif
+                                            <span class="text-muted ms-1">{{ $quote->phone }}</span>
+                                        </div>
                                     </td>
                                     <td data-label="Created">
                                         {{ $quote->created_at?->format('d M, Y') ?? 'N/A' }}
@@ -361,6 +376,9 @@
                                                 <a class="btn btn-icon btn-sm btn-soft-info" href="{{ route('quotes.download', $quote) }}" data-bs-toggle="tooltip" data-bs-title="Download" aria-label="Download quote {{ $quote->reference() }}">
                                                     <i data-lucide="download" class="align-middle"></i>
                                                 </a>
+                                                <a class="btn btn-icon btn-sm btn-soft-secondary" href="{{ $invoiceRoute }}" data-bs-toggle="tooltip" data-bs-title="{{ $invoiceActionLabel }}" aria-label="{{ $invoiceActionLabel }} for {{ $quote->reference() }}">
+                                                    <i data-lucide="receipt-text" class="align-middle"></i>
+                                                </a>
                                                 @if($canDeleteQuotation)
                                                     <form action="{{ route('quotations.destroy', $quotation) }}" data-delete-confirm data-delete-message="Do you want to delete this quotation?" data-delete-title="Delete quotation?" method="POST" class="d-inline-flex">
                                                         @csrf
@@ -373,6 +391,9 @@
                                             @else
                                                 <a class="btn btn-icon btn-sm btn-soft-warning" href="{{ route('quotes.edit', $quote) }}" data-bs-toggle="tooltip" data-bs-title="Edit" aria-label="Edit request {{ $quote->reference() }}">
                                                     <i data-lucide="edit-3" class="align-middle"></i>
+                                                </a>
+                                                <a class="btn btn-icon btn-sm btn-soft-secondary" href="{{ $invoiceRoute }}" data-bs-toggle="tooltip" data-bs-title="{{ $invoiceActionLabel }}" aria-label="{{ $invoiceActionLabel }} for {{ $quote->reference() }}">
+                                                    <i data-lucide="receipt-text" class="align-middle"></i>
                                                 </a>
                                                 @if($canDeleteRequest)
                                                     <form action="{{ route('quotes.destroy', $quote) }}" data-delete-confirm data-delete-message="Do you want to delete this quote request?" data-delete-title="Delete quote request?" method="POST" class="d-inline-flex">
@@ -401,7 +422,12 @@
                     </table>
                 </div>
                 <div class="card-body border-top py-3">
-                    <small class="text-muted" id="quote-count">{{ $summary['total'] }} quotes</small>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted" id="quote-count">{{ $summary['total'] }} quotes</small>
+                        <div>
+                            {{ $quotes->links() }}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

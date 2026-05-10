@@ -275,7 +275,7 @@
                         <td class="text-right">{{ $authorization['date_label'] }}</td>
                     </tr>
                 </table>
-                @if($signatureDataUri)
+                @if($signatureDataUri && $canEmbedImages)
                     <div style="margin-top: 10px;">
                         <p class="muted">Signature</p>
                         <img alt="Authorized signature" class="signature" src="{{ $signatureDataUri }}" style="border:none; outline:none; box-shadow:none; background:transparent; padding:0; max-height:60px; max-width:200px;">

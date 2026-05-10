@@ -377,7 +377,7 @@
                     <span class="value">{{ $authorization['date_label'] }}</span>
                 </p>
                 @if ($authorization['is_complete'] ?? false)
-                    @if ($signatureDataUri)
+                    @if ($signatureDataUri && $canEmbedImages)
                         <div style="margin-top: 10px;">
                             <span class="label">Signature:</span><br>
                             <img alt="Authorized signature" src="{{ $signatureDataUri }}" style="border:none; outline:none; box-shadow:none; background:transparent; padding:0; max-height:60px; max-width:200px;">

@@ -82,7 +82,7 @@
 
      .dashboard-list-card {
           width: 100%;
-          height: 470px;
+          height: 520px;
           min-height: 0;
      }
 
@@ -99,6 +99,33 @@
           flex-shrink: 0;
      }
 
+     .dashboard-section-title {
+          display: inline-flex;
+          align-items: center;
+          gap: .65rem;
+     }
+
+     .dashboard-section-icon {
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 36px;
+     }
+
+     .dashboard-user-row {
+          box-sizing: border-box;
+          min-height: 74px;
+          padding: .8rem 1rem;
+     }
+
+     .dashboard-call-cta {
+          min-height: 36px;
+          white-space: nowrap;
+     }
+
      .dashboard-list-body {
           min-height: 0;
      }
@@ -106,6 +133,13 @@
      .dashboard-scroll-panel {
           height: 100%;
           min-height: 0;
+          overflow: auto;
+     }
+
+     .dashboard-users-scroll {
+          max-height: 390px;
+          overflow-x: hidden;
+          overflow-y: auto;
      }
 
      .dashboard-table-wrap {
@@ -126,10 +160,6 @@
           box-shadow: inset 0 -1px 0 var(--bs-border-color);
      }
 
-     .dashboard-scroll-panel .simplebar-content-wrapper {
-          overflow: auto;
-     }
-
      @media (max-width: 767.98px) {
           .dashboard-chart-card .card-header,
           .dashboard-list-card .card-header {
@@ -143,7 +173,7 @@
           }
 
           .dashboard-list-card {
-               height: 470px;
+               height: 520px;
           }
 
           .dashboard-overview-card .card-body {
@@ -269,7 +299,10 @@
      <div class="col-xl-4 col-lg-6">
           <div class="card d-flex flex-column dashboard-list-card">
                <div class="card-header d-flex align-items-center justify-content-between">
-                    <div>
+                    <div class="dashboard-section-title">
+                         <span class="dashboard-section-icon bg-primary-subtle text-primary">
+                              <i data-lucide="users" class="icon-sm"></i>
+                         </span>
                          <h4 class="card-title mb-0">New Users</h4>
                     </div>
                     <div>
@@ -278,16 +311,27 @@
                </div>
 
                <div class="flex-grow-1 overflow-hidden d-flex flex-column dashboard-list-body">
-                    <div class="flex-grow-1 overflow-hidden dashboard-scroll-panel" data-simplebar>
+                    <div class="flex-grow-1 dashboard-scroll-panel dashboard-users-scroll">
                          @forelse($recentCustomers as $customer)
-                         <div class="d-flex flex-wrap gap-3 border-bottom p-3">
-                              <div class="avatar-sm rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center fw-semibold">
+                         <div class="dashboard-user-row d-flex align-items-center justify-content-between gap-3 border-bottom">
+                              <div class="avatar-sm rounded-circle bg-primary-subtle text-primary d-flex align-items-center justify-content-center fw-semibold flex-shrink-0">
                                    {{ $customer->initials() }}
                               </div>
-                              <div class="flex-grow-1">
+                              <div class="flex-grow-1 min-w-0">
                                    <div class="text-dark fs-15 fw-medium">{{ $customer->full_name }}</div>
-                                   <p class="mb-1 text-muted">{{ $customer->email }}</p>
-                                   <small class="text-muted d-block">{{ $customer->latestServiceLabel() }} • {{ $customer->latestRouteSummary() }}</small>
+                                   <p class="mb-1 text-muted text-truncate">{{ $customer->email }}</p>
+                                   <small class="text-muted d-block">{{ $customer->phone ?? 'N/A' }}</small>
+                              </div>
+                              <div class="flex-shrink-0">
+                                   @if($customer->phone)
+                                   <a href="{{ $customer->telLink() }}" class="btn btn-sm btn-success dashboard-call-cta d-inline-flex align-items-center gap-1" title="Call {{ $customer->full_name }}">
+                                        <i data-lucide="phone-call" class="icon-xs"></i>Call
+                                   </a>
+                                   @else
+                                   <button class="btn btn-sm btn-light dashboard-call-cta d-inline-flex align-items-center gap-1" type="button" disabled>
+                                        <i data-lucide="phone-off" class="icon-xs"></i>Call
+                                   </button>
+                                   @endif
                               </div>
                          </div>
                          @empty
@@ -309,12 +353,15 @@
      <div class="col-xl-4 col-lg-6">
           <div class="card d-flex flex-column dashboard-list-card">
                <div class="card-header d-flex align-items-center justify-content-between">
-                    <div>
+                    <div class="dashboard-section-title">
+                         <span class="dashboard-section-icon bg-warning-subtle text-warning">
+                              <i data-lucide="file-text" class="icon-sm"></i>
+                         </span>
                          <h4 class="card-title mb-0">Recent Quotes</h4>
                     </div>
                </div>
                <div class="flex-grow-1 overflow-hidden d-flex flex-column dashboard-list-body">
-                    <div class="table-responsive dashboard-table-wrap">
+                    <div class="table-responsive dashboard-table-wrap dashboard-scroll-panel">
                               <table class="table table-sm table-hover mb-0 align-middle">
                                    <thead>
                                         <tr>
@@ -375,7 +422,10 @@
      <div class="col-xl-4 col-lg-6">
           <div class="card d-flex flex-column dashboard-list-card">
                <div class="card-header d-flex align-items-center justify-content-between">
-                    <div>
+                    <div class="dashboard-section-title">
+                         <span class="dashboard-section-icon bg-success-subtle text-success">
+                              <i data-lucide="mail-check" class="icon-sm"></i>
+                         </span>
                          <h4 class="card-title mb-0">Email Delivery Status</h4>
                     </div>
                     <div class="dropdown dashboard-period-dropdown">
@@ -392,7 +442,7 @@
                </div>
 
                <div class="flex-grow-1 overflow-hidden d-flex flex-column dashboard-list-body">
-                    <div class="table-responsive dashboard-table-wrap">
+                    <div class="table-responsive dashboard-table-wrap dashboard-scroll-panel">
                               <table class="table table-sm table-hover mb-0">
                                    <thead>
                                         <tr>

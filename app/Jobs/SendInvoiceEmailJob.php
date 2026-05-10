@@ -89,7 +89,22 @@ class SendInvoiceEmailJob implements ShouldQueue
             $data['sent_at'] = now();
         }
 
+        if ($status === Invoice::STATUS_SENT && Schema::hasColumn('invoices', 'sent_via')) {
+            $data['sent_via'] = 'email';
+        }
+
         $invoice->update($data);
+
+        if ($status === Invoice::STATUS_SENT) {
+            $invoice->logStage(
+                'INVOICE_SENT',
+                'Invoice sent via email',
+                'admin',
+                $this->userId ? User::query()->find($this->userId)?->name : null,
+                null,
+                'email'
+            );
+        }
     }
 
     private function recordDelivery(Invoice $invoice, string $status, string $recipient, string $message): void

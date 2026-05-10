@@ -265,20 +265,23 @@ class RoutingController extends BaseController
             ];
         }
 
-        $customers = Customer::query()
-            ->orderByDesc('last_quote_at')
-            ->orderByDesc('id')
-            ->get();
+        $customersQuery = Customer::query()
+            ->orderByDesc(DB::raw('COALESCE(last_quote_at, first_seen_at, created_at)'))
+            ->orderByDesc('id');
+
+        $customers = $customersQuery->paginate(15);
+        
+        $allCustomers = $customersQuery->get();
 
         return [
             'customers' => $customers,
-            'recentCustomers' => $customers->take(8),
+            'recentCustomers' => $allCustomers->take(8),
             'summary' => [
-                'total' => $customers->count(),
-                'lead' => $customers->where('status', Customer::STATUS_LEAD)->count(),
-                'active_client' => $customers->where('status', Customer::STATUS_ACTIVE_CLIENT)->count(),
-                'completed' => $customers->where('status', Customer::STATUS_COMPLETED)->count(),
-                'inactive' => $customers->where('status', Customer::STATUS_INACTIVE)->count(),
+                'total' => $allCustomers->count(),
+                'lead' => $allCustomers->where('status', Customer::STATUS_LEAD)->count(),
+                'active_client' => $allCustomers->where('status', Customer::STATUS_ACTIVE_CLIENT)->count(),
+                'completed' => $allCustomers->where('status', Customer::STATUS_COMPLETED)->count(),
+                'inactive' => $allCustomers->where('status', Customer::STATUS_INACTIVE)->count(),
             ],
         ];
     }
@@ -1878,7 +1881,7 @@ class RoutingController extends BaseController
         }
 
         return Customer::query()
-            ->orderByDesc('last_quote_at')
+            ->orderByDesc(DB::raw('COALESCE(last_quote_at, first_seen_at, created_at)'))
             ->orderByDesc('id')
             ->get();
     }
@@ -1906,7 +1909,7 @@ class RoutingController extends BaseController
             ->with(['items', 'quoteRequest.quotation', 'emailLogs'])
             ->orderByDesc('invoice_date')
             ->orderByDesc('id')
-            ->get();
+            ->paginate(15);
     }
 
     private function invoiceRecord($invoice = null): ?Invoice
@@ -1915,7 +1918,7 @@ class RoutingController extends BaseController
             return null;
         }
 
-        $query = Invoice::query()->with(['items', 'quoteRequest.quotation', 'emailLogs']);
+        $query = Invoice::query()->with(['items', 'quoteRequest.quotation', 'emailLogs', 'stages']);
 
         if ($invoice !== null && trim((string) $invoice) !== '') {
             $invoiceKey = trim((string) $invoice);
@@ -1952,7 +1955,7 @@ class RoutingController extends BaseController
         return Message::query()
             ->orderByDesc('created_at')
             ->orderByDesc('id')
-            ->get();
+            ->paginate(15);
     }
 
     private function topCounts($items, callable $resolver, int $limit = 6, string $fallback = 'Unknown')

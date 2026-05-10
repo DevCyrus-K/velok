@@ -12,7 +12,12 @@
                               <p class="text-muted mb-0">{{ $customer->reference() }}</p>
                          </div>
                          <div class="d-flex flex-wrap gap-2">
-                              <a class="btn btn-outline-primary btn-sm" href="mailto:{{ $customer->email }}">Send Email</a>
+                              <a class="btn btn-success btn-sm d-inline-flex align-items-center gap-1" href="{{ $customer->telLink() }}">
+                                   <i data-lucide="phone-call" class="icon-xs"></i>Call
+                              </a>
+                              <a class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1" href="mailto:{{ $customer->email }}">
+                                   <i data-lucide="mail" class="icon-xs"></i>Email
+                              </a>
                          </div>
                     </div>
 

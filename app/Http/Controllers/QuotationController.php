@@ -6,6 +6,7 @@ use App\Http\Requests\QuotationFormRequest;
 use App\Models\Quotation;
 use App\Models\QuoteRequest;
 use App\Models\User;
+use App\Support\BookingFlow;
 use App\Support\CompanyProfile;
 use App\Support\QuotationEmail;
 use App\Support\UserSignature;
@@ -15,6 +16,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -67,6 +69,7 @@ class QuotationController extends Controller
                     'move_date' => $validated['move_date'],
                     'quote_amount' => $validated['quote_amount'],
                     'deposit_percentage' => $validated['deposit_percentage'],
+                    'deposit_amount' => $this->depositAmount($validated),
                     'cancellation_notice_hours' => $validated['cancellation_notice_hours'],
                     'cancellation_policy' => $validated['cancellation_policy'] ?: self::DEFAULT_CANCELLATION_POLICY,
                     'services_included' => $services,
@@ -83,6 +86,14 @@ class QuotationController extends Controller
             );
 
             $quote->update(['status' => QuoteRequest::STATUS_CREATED]);
+            $quotation->logStage(
+                'QUOTE_CREATED',
+                'Quotation created by admin',
+                'admin',
+                auth()->user()?->name,
+                null,
+                'system'
+            );
 
             return $quotation;
         });
@@ -112,6 +123,7 @@ class QuotationController extends Controller
                 'move_date' => $validated['move_date'],
                 'quote_amount' => $validated['quote_amount'],
                 'deposit_percentage' => $validated['deposit_percentage'],
+                'deposit_amount' => $this->depositAmount($validated),
                 'cancellation_notice_hours' => $validated['cancellation_notice_hours'],
                 'cancellation_policy' => $validated['cancellation_policy'] ?: self::DEFAULT_CANCELLATION_POLICY,
                 'services_included' => $services,
@@ -134,6 +146,14 @@ class QuotationController extends Controller
             $quote->update([
                 'status' => $this->quoteRequestStatusAfterQuotationSave($quotation, $action),
             ]);
+            $quotation->logStage(
+                'QUOTE_UPDATED',
+                'Quotation updated by admin',
+                'admin',
+                auth()->user()?->name,
+                null,
+                'system'
+            );
         });
 
         return $this->quotationActionResponse($quotation, $action, 'Quotation updated successfully!');
@@ -141,11 +161,16 @@ class QuotationController extends Controller
 
     public function show(Quotation $quotation, Request $request)
     {
-        $quotation->loadMissing(['quoteRequest', 'invoice', 'emailLogs']);
+        $quotation->loadMissing(['quoteRequest', 'invoice', 'emailLogs', 'stages']);
+        app(BookingFlow::class)->ensureQuotationTokens($quotation);
+        $quotation->refresh()->loadMissing(['quoteRequest', 'invoice', 'emailLogs', 'stages']);
 
         return view('quotations.show', [
             'quotation' => $quotation,
             'authorization' => $this->authorizationViewData($request->user(), $quotation, $quotation->quoteRequest),
+            'approvalUrl' => route('quote.customer.approve', ['token' => $quotation->approval_token]),
+            'pdfUrl' => route('quote.pdf.download', ['id' => $quotation->id, 'token' => $quotation->pdf_token]),
+            'whatsappUrl' => $this->buildWhatsAppMessage($quotation),
         ]);
     }
 
@@ -161,6 +186,8 @@ class QuotationController extends Controller
     public function pdf(Quotation $quotation, Request $request)
     {
         $quotation->loadMissing('quoteRequest');
+        app(BookingFlow::class)->ensureQuotationTokens($quotation);
+        $quotation->refresh()->loadMissing('quoteRequest');
         $authorization = $this->authorizationViewData($request->user(), $quotation, $quotation->quoteRequest);
         $user = $request->user();
 
@@ -172,6 +199,10 @@ class QuotationController extends Controller
             'authorization' => $authorization,
             'signatureDataUri' => $this->userSignature->dataUri($authorization['signature_path']),
             'user' => $user,
+            'paymentMethods' => app(BookingFlow::class)->paymentMethodDisplays(),
+            'thankYouMessage' => app(CompanyProfile::class)->thankYouMessage(),
+            'approvalUrl' => route('quote.customer.approve', ['token' => $quotation->approval_token]),
+            'pdfUrl' => route('quote.pdf.download', ['id' => $quotation->id, 'token' => $quotation->pdf_token]),
         ])->setPaper('a4');
 
         return $pdf->download('Quote-' . Str::slug($quotation->quoteRequest->reference()) . '-' . Str::slug($quotation->quoteRequest->full_name) . '.pdf');
@@ -206,7 +237,8 @@ class QuotationController extends Controller
         ])->validate();
 
         try {
-            $result = $quotationEmail->queue($quotation, $validated, $request->user());
+            app(BookingFlow::class)->ensureQuotationTokens($quotation);
+            $result = $quotationEmail->send($quotation, $validated, $request->user());
         } catch (Throwable $exception) {
             report($exception);
 
@@ -248,6 +280,39 @@ class QuotationController extends Controller
             ->with('toast-success', $message);
     }
 
+    public function markSent(Request $request, Quotation $quotation): JsonResponse
+    {
+        $validated = $request->validate([
+            'channel' => ['required', 'string', 'in:email,whatsapp,link'],
+        ]);
+
+        $quotation->loadMissing('quoteRequest');
+        app(BookingFlow::class)->ensureQuotationTokens($quotation);
+
+        DB::transaction(function () use ($quotation, $validated): void {
+            $quotation->update([
+                'status' => Quotation::STATUS_SENT,
+                'sent_at' => now(),
+                'sent_via' => $validated['channel'],
+            ]);
+
+            $quotation->quoteRequest?->update([
+                'status' => QuoteRequest::STATUS_EMAILED,
+            ]);
+        });
+
+        $quotation->logStage(
+            'QUOTE_SENT',
+            "Quotation sent via {$validated['channel']}",
+            'admin',
+            auth()->user()?->name,
+            null,
+            $validated['channel']
+        );
+
+        return response()->json(['success' => true]);
+    }
+
     public function approve(Quotation $quotation): RedirectResponse
     {
         $quotation->loadMissing('quoteRequest');
@@ -268,6 +333,14 @@ class QuotationController extends Controller
                 'status' => QuoteRequest::STATUS_CREATED,
                 'approval_date' => $quotation->quoteRequest?->approval_date ?: now()->toDateString(),
             ]);
+            $quotation->logStage(
+                'APPROVED_ADMIN',
+                'Quotation approved by admin',
+                'admin',
+                auth()->user()?->name,
+                null,
+                'system'
+            );
         });
 
         return redirect()
@@ -288,6 +361,14 @@ class QuotationController extends Controller
         DB::transaction(function () use ($quotation): void {
             $quotation->update(['status' => Quotation::STATUS_DECLINED]);
             $quotation->quoteRequest?->update(['status' => QuoteRequest::STATUS_CLOSED]);
+            $quotation->logStage(
+                'REJECTED',
+                'Quotation rejected by admin',
+                'admin',
+                auth()->user()?->name,
+                null,
+                'system'
+            );
         });
 
         return redirect()
@@ -318,6 +399,53 @@ class QuotationController extends Controller
         return redirect()
             ->route('quotations.show', $copy)
             ->with('toast-success', 'Quotation duplicated as a draft.');
+    }
+
+    public function markDepositReceived(Request $request, Quotation $quotation): RedirectResponse|JsonResponse
+    {
+        $validated = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0'],
+            'reference' => ['required', 'string', 'max:190'],
+            'method' => ['required', 'string', 'max:80'],
+        ]);
+
+        $quotation->loadMissing('quoteRequest');
+
+        $quotation->update([
+            'deposit_amount' => round((float) $validated['amount'], 2),
+            'deposit_paid' => true,
+            'deposit_paid_at' => now(),
+            'deposit_reference' => (string) Str::of($validated['reference'])->squish(),
+            'deposit_method' => (string) Str::of($validated['method'])->squish(),
+        ]);
+
+        $quotation->logStage(
+            'DEPOSIT_RECEIVED',
+            'Deposit received - KES '
+                .number_format((float) $validated['amount'], 2)
+                .' - Ref: '.$validated['reference']
+                .' via '.$validated['method'],
+            'admin',
+            auth()->user()?->name
+        );
+
+        $quotation->logStage(
+            'BOOKING_CONFIRMED',
+            'Booking confirmed after deposit receipt',
+            'system'
+        );
+
+        try {
+            $this->notifyCustomerDepositReceived($quotation);
+        } catch (Throwable $exception) {
+            report($exception);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json(['success' => true]);
+        }
+
+        return back()->with('toast-success', 'Deposit marked as received and booking confirmed.');
     }
 
     public function destroy(Quotation $quotation)
@@ -354,6 +482,11 @@ class QuotationController extends Controller
             'company' => app(CompanyProfile::class)->data(),
             'serviceTypeOptions' => QuoteRequest::serviceTypeOptions(),
         ];
+    }
+
+    private function depositAmount(array $validated): float
+    {
+        return round((float) ($validated['quote_amount'] ?? 0) * ((float) ($validated['deposit_percentage'] ?? 0) / 100), 2);
     }
 
     private function autofillData(QuoteRequest $quote, Quotation $quotation): array
@@ -431,7 +564,7 @@ class QuotationController extends Controller
             $quotationEmail = app(QuotationEmail::class);
 
             try {
-                $result = $quotationEmail->queue($quotation, [
+                $result = $quotationEmail->send($quotation, [
                     'recipient_email' => $quotation->quoteRequest->email,
                     'subject' => $quotationEmail->defaultSubject($quotation),
                     'message' => $quotationEmail->defaultMessage($quotation, auth()->user()),
@@ -441,7 +574,7 @@ class QuotationController extends Controller
                 report($exception);
 
                 return redirect()->route('quotations.show', $quotation)
-                    ->with('toast-error', 'Quotation saved, but the email could not be queued.');
+                    ->with('toast-error', 'Quotation saved, but the email could not be sent.');
             }
 
             if ($result['status'] === 'sent') {
@@ -461,6 +594,67 @@ class QuotationController extends Controller
 
         return redirect()->route('quotations.show', $quotation)
             ->with('toast-success', $message);
+    }
+
+    private function buildWhatsAppMessage(Quotation $quotation): ?string
+    {
+        $quotation->loadMissing('quoteRequest');
+        app(BookingFlow::class)->ensureQuotationTokens($quotation);
+        $quotation->refresh()->loadMissing('quoteRequest');
+
+        $approvalUrl = route('quote.customer.approve', ['token' => $quotation->approval_token]);
+        $pdfUrl = route('quote.pdf.download', ['id' => $quotation->id, 'token' => $quotation->pdf_token]);
+        $moveDate = $quotation->move_date?->format('d M Y') ?? $quotation->quoteRequest?->move_date?->format('d M Y') ?? 'To be confirmed';
+        $validUntil = $quotation->quote_valid_until?->format('d M Y') ?? now()->addDays(7)->format('d M Y');
+        $companyName = trim((string) (config('app.name') ?: 'Kwikshift'));
+
+        $message = "Hello {$quotation->customer_name}! 👋\n\n"
+            ."Thank you for choosing *{$companyName}* 🚛\n\n"
+            ."Please find your quotation details:\n\n"
+            ."📋 *Quote Number:* {$quotation->reference}\n"
+            ."📅 *Move Date:* {$moveDate}\n"
+            ."📍 *From:* {$quotation->pickup_location}\n"
+            ."📍 *To:* {$quotation->dropoff_location}\n"
+            ."💰 *Total:* KES ".number_format($quotation->total, 2)."\n"
+            ."💳 *Deposit Required:* KES ".number_format($quotation->depositAmount(), 2)."\n"
+            ."⏳ *Valid Until:* {$validUntil}\n\n"
+            ."📄 *Download Quote PDF:*\n{$pdfUrl}\n\n"
+            ."✅ *Approve Your Quotation:*\n{$approvalUrl}\n\n"
+            ."💳 *Pay Deposit to Confirm Booking:*\n"
+            .app(BookingFlow::class)->paymentMethodsText()."\n\n"
+            ."_For any questions reply to this message_\n\n"
+            ."*{$companyName} Team* 🚛";
+
+        return app(BookingFlow::class)->whatsappUrl($quotation->customer_phone, $message);
+    }
+
+    private function notifyCustomerDepositReceived(Quotation $quotation): void
+    {
+        $quotation->loadMissing('quoteRequest');
+        $preference = $quotation->contact_preference;
+
+        if (in_array($preference, ['email', 'both'], true)) {
+            Mail::to($quotation->customer_email)
+                ->send(new \App\Mail\DepositReceivedMail($quotation));
+        }
+
+        if (in_array($preference, ['whatsapp', 'both'], true)) {
+            $message = "Hello {$quotation->customer_name}! ✅\n\n"
+                ."*Deposit Received!*\n"
+                ."Amount: KES ".number_format($quotation->depositAmount(), 2)."\n"
+                ."Reference: {$quotation->deposit_reference}\n\n"
+                ."*Your booking is now CONFIRMED* 🎉\n"
+                ."📅 Move Date: ".($quotation->move_date?->format('d M Y') ?? 'To be confirmed')."\n"
+                ."📍 Pickup: {$quotation->pickup_location}\n"
+                ."📍 Drop-off: {$quotation->dropoff_location}\n\n"
+                ."Balance Due on Move Day: KES ".number_format($quotation->balanceDue(), 2)."\n\n"
+                ."We will see you on ".($quotation->move_date?->format('d M Y') ?? 'move day')."! 🚛\n"
+                ."*".config('app.name')." Team*";
+
+            $quotation->update([
+                'deposit_whatsapp_url' => app(BookingFlow::class)->whatsappUrl($quotation->customer_phone, $message),
+            ]);
+        }
     }
 
     private function quoteRequestStatusAfterQuotationSave(Quotation $quotation, string $action): string

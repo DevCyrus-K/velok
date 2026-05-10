@@ -57,9 +57,32 @@
                               </div>
                          </form>
                     </div>
-                    <p class="text-muted text-center mt-4 mb-0">Don't have an account? <a class="link-primary fst-italic text-decoration-underline fw-semibold" href="{{ route('register') }}">Sign up</a> </p>
+                    <p class="text-muted text-center mt-4 mb-0">Don't have an account? <a class="link-primary fst-italic text-decoration-underline fw-semibold" href="{{ route('register') }}" data-signup-disabled>Sign up</a> </p>
                </div> <!-- end col -->
           </div> <!-- end card-body -->
      </div> <!-- end card -->
 </div>
+@endsection
+
+@section('scripts')
+<script>
+     document.addEventListener('DOMContentLoaded', function () {
+          const signupLink = document.querySelector('[data-signup-disabled]');
+
+          if (!signupLink) {
+               return;
+          }
+
+          signupLink.addEventListener('click', function (event) {
+               event.preventDefault();
+
+               if (window.showToast) {
+                    window.showToast('Contact admin. Signups are not allowed currently.', 'info');
+                    return;
+               }
+
+               alert('Contact admin. Signups are not allowed currently.');
+          });
+     });
+</script>
 @endsection

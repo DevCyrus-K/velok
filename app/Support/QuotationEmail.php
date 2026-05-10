@@ -2,12 +2,14 @@
 
 namespace App\Support;
 
-use App\Jobs\SendQuotationEmailJob;
+use App\Mail\QuotationMail;
 use App\Models\EmailLog;
 use App\Models\Quotation;
 use App\Models\QuoteRequest;
 use App\Models\User;
+use Illuminate\Mail\SentMessage;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -25,6 +27,8 @@ class QuotationEmail
 
     public function defaultMessage(Quotation $quotation, ?User $user = null): string
     {
+        app(BookingFlow::class)->ensureQuotationTokens($quotation);
+        $quotation->refresh()->loadMissing('quoteRequest');
         $company = app(CompanyProfile::class)->data();
         $quote = $quotation->quoteRequest;
         $validityDays = $quotation->validityDays() ?: 7;
@@ -38,7 +42,12 @@ class QuotationEmail
             .'- Quote Number: '.$quote->reference()."\n"
             .'- Date: '.($quotation->quote_date?->format('d M Y') ?? now()->format('d M Y'))."\n"
             .'- Valid Until: '.($quotation->quote_valid_until?->format('d M Y') ?? now()->addDays($validityDays)->format('d M Y'))."\n"
-            .'- Total Amount: KES '.number_format((float) $quotation->quote_amount, 2)."\n\n"
+            .'- Total Amount: KES '.number_format((float) $quotation->quote_amount, 2)."\n"
+            .'- Deposit Required: KES '.number_format($quotation->depositAmount(), 2)."\n\n"
+            ."Approve your quotation:\n"
+            .route('quote.customer.approve', ['token' => $quotation->approval_token])."\n\n"
+            ."Download PDF:\n"
+            .route('quote.pdf.download', ['id' => $quotation->id, 'token' => $quotation->pdf_token])."\n\n"
             .'This quotation is valid for '.$validityDays.' days from the date of issue. '
             ."Please do not hesitate to contact us if you have any questions.\n\n"
             .'Thank you for choosing '.$companyName.".\n\n"
@@ -52,49 +61,40 @@ class QuotationEmail
      * @param array{recipient_email: string, subject: string, message: string, attach_pdf: bool} $payload
      * @return array{recipient_email: string, sent_at: string|null, sent_at_human: string|null, status: string, quote_status: string|null}
      */
-    public function queue(Quotation $quotation, array $payload, ?User $user = null): array
+    public function send(Quotation $quotation, array $payload, ?User $user = null): array
     {
         $quotation->loadMissing('quoteRequest');
+        app(BookingFlow::class)->ensureQuotationTokens($quotation);
+        $quotation->refresh()->loadMissing('quoteRequest');
         $recipient = Str::lower(trim($payload['recipient_email']));
         $subject = (string) Str::of($payload['subject'])->squish();
         $message = trim($payload['message']);
-        $sentAt = now();
         $emailLog = $this->createEmailLog($quotation, $recipient, $subject);
 
         try {
+            if (! filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+                throw new RuntimeException('Quotation email failed: recipient email address is invalid.');
+            }
+
             $this->ensureDeliverableMailTransport();
+
+            $sentMessage = Mail::to($recipient)->send(new QuotationMail(
+                quotation: $quotation,
+                messageBody: $message,
+                subject: $subject,
+                attachPdf: (bool) $payload['attach_pdf'],
+                user: $user,
+                emailLogId: $emailLog?->getKey(),
+            ));
+
+            $messageId = $this->validatedSentMessageId($sentMessage);
+            $this->markSent($quotation, $user);
+            $this->markEmailLogSent($emailLog);
+            $this->recordDelivery($quotation, 'sent', $recipient, $subject, 'Quotation email accepted by the mail transport. Message ID: '.$messageId);
         } catch (Throwable $exception) {
             $this->markFailed($quotation);
             $this->updateEmailLogFailure($emailLog, $exception);
-            $this->recordFailure($quotation, $recipient, $subject, $exception);
-
-            throw $exception;
-        }
-
-        DB::transaction(function () use ($quotation, $sentAt): void {
-            $quotation->update([
-                'status' => 'sent',
-                'sent_at' => $sentAt,
-            ]);
-
-            $quotation->quoteRequest?->update([
-                'status' => QuoteRequest::STATUS_EMAILED,
-            ]);
-        });
-
-        try {
-            SendQuotationEmailJob::dispatch(
-                $quotation->id,
-                $recipient,
-                $subject,
-                $message,
-                (bool) $payload['attach_pdf'],
-                $user?->getKey(),
-                $emailLog?->getKey(),
-            )->onQueue('emails');
-        } catch (Throwable $exception) {
-            $this->markFailed($quotation);
-            $this->updateEmailLogFailure($emailLog, $exception);
+            $this->recordDelivery($quotation, 'failed', $recipient, $subject, 'Email failed: '.$exception->getMessage());
 
             throw $exception;
         }
@@ -112,6 +112,10 @@ class QuotationEmail
 
     private function ensureDeliverableMailTransport(): void
     {
+        if ($this->mailerIsTestDouble()) {
+            return;
+        }
+
         $mailer = (string) config('mail.default', '');
         $transport = (string) (config("mail.mailers.{$mailer}.transport") ?: $mailer ?: 'unknown');
 
@@ -137,7 +141,31 @@ class QuotationEmail
         });
     }
 
-    private function recordFailure(Quotation $quotation, string $recipient, string $subject, Throwable $exception): void
+    private function markSent(Quotation $quotation, ?User $user = null): void
+    {
+        DB::transaction(function () use ($quotation, $user): void {
+            $quotation->update([
+                'status' => Quotation::STATUS_SENT,
+                'sent_at' => now(),
+                'sent_via' => 'email',
+            ]);
+
+            $quotation->quoteRequest?->update([
+                'status' => QuoteRequest::STATUS_EMAILED,
+            ]);
+
+            $quotation->logStage(
+                'QUOTE_SENT',
+                'Quotation sent via email',
+                'admin',
+                $user?->name,
+                null,
+                'email'
+            );
+        });
+    }
+
+    private function recordDelivery(Quotation $quotation, string $status, string $recipient, string $subject, string $message): void
     {
         if (! Schema::hasTable('email_delivery_logs')) {
             return;
@@ -149,11 +177,11 @@ class QuotationEmail
         $data = [
             'form_type' => 'quotation',
             'recipient_email' => Str::limit($recipient, 190, ''),
-            'status' => 'failed',
+            'status' => $status,
             'direction' => 'client',
             'subject' => Str::limit($subject, 190, ''),
             'transport' => Str::limit($transport, 50, ''),
-            'response_message' => Str::limit('Email failed: '.$exception->getMessage(), 1000, ''),
+            'response_message' => Str::limit($message, 1000, ''),
             'created_at' => $now,
         ];
 
@@ -168,6 +196,20 @@ class QuotationEmail
         }
     }
 
+    private function markEmailLogSent(?EmailLog $emailLog): void
+    {
+        if (! $emailLog) {
+            return;
+        }
+
+        $emailLog->increment('attempts');
+        $emailLog->update([
+            'status' => EmailLog::STATUS_SENT,
+            'sent_at' => now(),
+            'failed_reason' => null,
+        ]);
+    }
+
     private function createEmailLog(Quotation $quotation, string $recipient, string $subject): ?EmailLog
     {
         if (! Schema::hasTable('email_logs')) {
@@ -178,7 +220,7 @@ class QuotationEmail
             return $quotation->emailLogs()->create([
                 'recipient_email' => Str::limit($recipient, 190, ''),
                 'subject' => Str::limit($subject, 190, ''),
-                'status' => EmailLog::STATUS_QUEUED,
+                'status' => EmailLog::STATUS_SENDING,
                 'tracking_token' => (string) Str::uuid(),
             ]);
         } catch (Throwable $exception) {
@@ -199,5 +241,44 @@ class QuotationEmail
             'failed_reason' => Str::limit($exception->getMessage(), 1000, ''),
             'attempts' => $emailLog->attempts + 1,
         ]);
+    }
+
+    private function validatedSentMessageId(mixed $sentMessage): string
+    {
+        if ($this->mailerIsTestDouble() && $sentMessage === null) {
+            return 'mail-test-double';
+        }
+
+        if (! $sentMessage instanceof SentMessage) {
+            throw new RuntimeException('Quotation email failed: mail transport did not confirm that the message was accepted.');
+        }
+
+        $messageId = trim((string) $sentMessage->getMessageId());
+
+        if ($messageId === '') {
+            throw new RuntimeException('Quotation email failed: mail transport accepted the message without a delivery message ID.');
+        }
+
+        return $messageId;
+    }
+
+    private function mailerIsTestDouble(): bool
+    {
+        if (! app()->runningUnitTests()) {
+            return false;
+        }
+
+        $mailer = Mail::getFacadeRoot();
+
+        if (! is_object($mailer)) {
+            return false;
+        }
+
+        if (is_a($mailer, \Illuminate\Support\Testing\Fakes\MailFake::class)) {
+            return true;
+        }
+
+        return interface_exists(\Mockery\MockInterface::class)
+            && $mailer instanceof \Mockery\MockInterface;
     }
 }

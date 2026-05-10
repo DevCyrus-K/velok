@@ -154,12 +154,21 @@
             . $companyContactLine . ".\n\n"
             . 'Thank you for choosing ' . $companyName . '.';
         $invoiceStatus = (string) $invoice->status;
+        $linkedQuotation = $invoice->quoteRequest?->quotation;
+        $linkedQuote = $invoice->quoteRequest;
         $isDraftInvoice = $invoiceStatus === \App\Models\Invoice::STATUS_DRAFT;
         $isSentInvoice = $invoiceStatus === \App\Models\Invoice::STATUS_SENT;
         $isPaidInvoice = $invoiceStatus === \App\Models\Invoice::STATUS_PAID;
         $isOverdueInvoice = $invoiceStatus === \App\Models\Invoice::STATUS_OVERDUE;
         $isVoidInvoice = in_array($invoiceStatus, [\App\Models\Invoice::STATUS_VOID, \App\Models\Invoice::STATUS_CANCELLED], true);
-        $canSendInvoice = $isDraftInvoice || $isSentInvoice || $isOverdueInvoice || $invoiceStatus === \App\Models\Invoice::STATUS_UNPAID;
+        $canSendInvoice = in_array($invoiceStatus, [
+            \App\Models\Invoice::STATUS_DRAFT,
+            \App\Models\Invoice::STATUS_SENT,
+            \App\Models\Invoice::STATUS_OVERDUE,
+            \App\Models\Invoice::STATUS_UNPAID,
+            \App\Models\Invoice::STATUS_PENDING,
+            \App\Models\Invoice::STATUS_FAILED,
+        ], true);
         $canDeleteInvoice = $isDraftInvoice || $isVoidInvoice;
         $canMarkPaid = in_array($invoiceStatus, [
             \App\Models\Invoice::STATUS_SENT,
@@ -194,6 +203,17 @@
                             <i data-lucide="mail" class="icon-sm"></i>
                             <span data-invoice-send-label>{{ ($isSentInvoice || $isOverdueInvoice) ? 'Resend' : 'Send' }}</span>
                         </button>
+                    @endif
+                    @if($linkedQuotation)
+                        <a class="btn btn-outline-info" href="{{ route('quotations.show', $linkedQuotation) }}">
+                            <i data-lucide="file-text" class="icon-sm"></i>
+                            View Quotation
+                        </a>
+                    @elseif($linkedQuote)
+                        <a class="btn btn-outline-info" href="{{ route('quotes.show', $linkedQuote) }}">
+                            <i data-lucide="message-square-quote" class="icon-sm"></i>
+                            View Quote
+                        </a>
                     @endif
                     <a class="btn btn-primary" href="{{ route('invoices.download', $invoice) }}">
                         <i data-lucide="download" class="icon-sm"></i>
@@ -270,6 +290,27 @@
         </div>
     </div>
 
+    @if($linkedQuotation && ! $linkedQuotation->deposit_paid && $linkedQuotation->status === \App\Models\Quotation::STATUS_APPROVED)
+        <div class="card border-warning border-opacity-50 d-print-none">
+            <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div>
+                    <h5 class="mb-1">Deposit Pending</h5>
+                    <p class="mb-0 text-muted">KES {{ number_format($linkedQuotation->depositAmount(), 2) }} awaiting payment</p>
+                </div>
+                <a class="btn btn-warning" href="{{ route('quotations.show', $linkedQuotation) }}">Mark Deposit Received</a>
+            </div>
+        </div>
+    @elseif($linkedQuotation && $linkedQuotation->deposit_paid)
+        <div class="card border-success border-opacity-50 d-print-none">
+            <div class="card-body">
+                <h5 class="mb-1">Deposit Received</h5>
+                <p class="mb-1">KES {{ number_format($linkedQuotation->depositAmount(), 2) }}</p>
+                <p class="mb-1">Ref: {{ $linkedQuotation->deposit_reference }}</p>
+                <p class="mb-0 text-muted">{{ $linkedQuotation->deposit_paid_at?->format('d M Y \a\t H:i') }}</p>
+            </div>
+        </div>
+    @endif
+
     <div class="row">
         <div class="col-12">
             <div class="card">
@@ -316,7 +357,14 @@
                             <address>
                                 Move date: {{ $invoice->move_date?->format('d M, Y') ?? 'Not scheduled' }}<br />
                                 Move size: {{ $invoice->move_size ?: 'Not recorded' }}<br />
-                                Quote ref: {{ $invoice->quote_reference ?: 'Not linked' }}
+                                Quote ref:
+                                @if($linkedQuotation)
+                                    <a href="{{ route('quotations.show', $linkedQuotation) }}">{{ $invoice->quote_reference ?: $linkedQuote?->reference() }}</a>
+                                @elseif($linkedQuote)
+                                    <a href="{{ route('quotes.show', $linkedQuote) }}">{{ $invoice->quote_reference ?: $linkedQuote->reference() }}</a>
+                                @else
+                                    {{ $invoice->quote_reference ?: 'Not linked' }}
+                                @endif
                             </address>
                         </div>
                     </div>
@@ -440,6 +488,10 @@
                             </div>
                         </div>
                     </div>
+
+                    @if($invoice->stages->isNotEmpty())
+                        @include('partials.booking-timeline', ['stageable' => $invoice])
+                    @endif
 
                 </div>
             </div>
@@ -587,7 +639,7 @@
                 }
 
                 if (sendState) {
-                    sendState.textContent = data.status === 'sent' ? 'Sent ✓' : 'Queued ✓';
+                    sendState.textContent = data.status === 'sent' ? 'Sent ✓' : 'Delivery checked ✓';
                 }
 
                 if (statusBadge) {
@@ -595,9 +647,9 @@
                     statusBadge.textContent = data.status_label || 'Pending';
                 }
 
-                refreshTooltip(sendButton, 'Invoice email queued');
+                refreshTooltip(sendButton, 'Invoice email sent');
                 modal?.hide();
-                showToast(`Invoice email queued for ${data.recipient_email || formData.get('recipient_email')}`);
+                showToast(`Invoice email sent to ${data.recipient_email || formData.get('recipient_email')}`);
             } catch (error) {
                 setError(error.message);
             } finally {

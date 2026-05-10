@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Str;
 
 class Invoice extends Model
@@ -38,6 +39,7 @@ class Invoice extends Model
 		'tax',
 		'status',
 		'sent_at',
+		'sent_via',
 		'sent_to_email',
 		'paid_at',
 		'total_amount',
@@ -112,6 +114,33 @@ class Invoice extends Model
 	public function emailLogs()
 	{
 		return $this->morphMany(EmailLog::class, 'emailable')->latest();
+	}
+
+	public function stages(): MorphMany
+	{
+		return $this->morphMany(BookingStage::class, 'stageable')
+			->orderBy('created_at', 'asc');
+	}
+
+	public function logStage(
+		string $stage,
+		string $description,
+		string $triggeredBy = 'system',
+		string $actorName = null,
+		string $actorIp = null,
+		string $channel = null,
+		array $metadata = []
+	): void {
+		$this->stages()->create([
+			'stage' => $stage,
+			'description' => $description,
+			'triggered_by' => $triggeredBy,
+			'actor_name' => $actorName,
+			'actor_ip' => $actorIp,
+			'channel' => $channel,
+			'metadata' => $metadata,
+			'created_at' => now(),
+		]);
 	}
 
 	public function paymentMethodLabel(): string

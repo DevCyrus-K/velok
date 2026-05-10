@@ -5,6 +5,7 @@ namespace App\Mail;
 use App\Models\Quotation;
 use App\Models\User;
 use App\Support\CompanyProfile;
+use App\Support\BookingFlow;
 use App\Support\MailSender;
 use App\Support\UserSignature;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -21,15 +22,20 @@ class QuotationMail extends Mailable
     use Queueable;
     use SerializesModels;
 
+    private readonly ?string $subjectOverride;
+
     public function __construct(
         public Quotation $quotation,
         private readonly string $messageBody,
-        private readonly ?string $subject = null,
+        ?string $subject = null,
         private readonly bool $attachPdf = true,
         private readonly ?User $user = null,
         private readonly ?int $emailLogId = null,
     ) {
+        $this->subjectOverride = $subject;
         $this->quotation->loadMissing('quoteRequest');
+        app(BookingFlow::class)->ensureQuotationTokens($this->quotation);
+        $this->quotation->refresh()->loadMissing('quoteRequest');
     }
 
     public function envelope(): Envelope
@@ -53,7 +59,8 @@ class QuotationMail extends Mailable
                 'logoDataUri' => app(CompanyProfile::class)->logoDataUri(),
                 'messageBody' => $this->messageBody,
                 'attachPdf' => $this->attachPdf,
-                'viewUrl' => route('quotations.show', $this->quotation),
+                'viewUrl' => route('quote.customer.approve', ['token' => $this->quotation->approval_token]),
+                'pdfUrl' => route('quote.pdf.download', ['id' => $this->quotation->id, 'token' => $this->quotation->pdf_token]),
                 'trackingToken' => $this->trackingToken(),
             ],
         );
@@ -74,6 +81,10 @@ class QuotationMail extends Mailable
                     'logoDataUri' => app(CompanyProfile::class)->logoDataUri(),
                     'user' => $this->user,
                     'signatureDataUri' => app(UserSignature::class)->dataUri($this->user?->signaturePath()),
+                    'paymentMethods' => app(BookingFlow::class)->paymentMethodDisplays(),
+                    'thankYouMessage' => app(CompanyProfile::class)->thankYouMessage(),
+                    'approvalUrl' => route('quote.customer.approve', ['token' => $this->quotation->approval_token]),
+                    'pdfUrl' => route('quote.pdf.download', ['id' => $this->quotation->id, 'token' => $this->quotation->pdf_token]),
                     'authorization' => [
                         'name' => $this->user?->name ?: ($this->quotation->authorized_by ?: 'Pending'),
                         'job_title' => $this->user?->job_title ?: ($this->quotation->authorized_role ?: 'Authorized Signatory'),
@@ -93,7 +104,7 @@ class QuotationMail extends Mailable
         $company = app(CompanyProfile::class)->data();
         $companyName = trim((string) ($company['name'] ?? '')) ?: 'Company';
 
-        return $this->subject ?: 'Quotation '.$this->quotation->quoteRequest->reference().' from '.$companyName;
+        return $this->subjectOverride ?: 'Quotation '.$this->quotation->quoteRequest->reference().' from '.$companyName;
     }
 
     private function attachmentName(): string

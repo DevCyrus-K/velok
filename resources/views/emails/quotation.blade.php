@@ -64,8 +64,13 @@
                             </table>
 
                             <p style="margin:0 0 20px 0; text-align:center;">
-                                <a href="{{ $viewUrl }}" style="display:inline-block; background:#22b956; color:#ffffff; text-decoration:none; font-size:15px; font-weight:700; padding:12px 20px; border-radius:6px;">View Quotation Details</a>
+                                <a href="{{ $viewUrl }}" style="display:inline-block; background:#22b956; color:#ffffff; text-decoration:none; font-size:15px; font-weight:700; padding:12px 20px; border-radius:6px;">Approve Quotation</a>
                             </p>
+                            @if(! empty($pdfUrl))
+                                <p style="margin:0 0 20px 0; text-align:center;">
+                                    <a href="{{ $pdfUrl }}" style="color:#1f7a3b; font-size:13px; font-weight:700;">Download PDF quotation</a>
+                                </p>
+                            @endif
 
                             <div style="height:1px; line-height:1px; background:#e3e9e5; margin:24px 0;"></div>
 

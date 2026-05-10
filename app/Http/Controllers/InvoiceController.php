@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\SendInvoiceEmailJob;
+use App\Mail\InvoiceMail;
 use App\Models\EmailLog;
 use App\Models\Invoice;
 use App\Models\QuoteRequest;
@@ -13,12 +13,15 @@ use App\Support\PaymentSettings;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Mail\SentMessage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use RuntimeException;
 use Throwable;
 
 class InvoiceController extends Controller
@@ -187,7 +190,7 @@ class InvoiceController extends Controller
         $emailSent = $shouldSendEmail ? $this->sendAndMarkInvoice($invoice) : null;
         $toastKey = $emailSent === false ? 'toast-error' : 'toast-success';
         $toastMessage = match ($emailSent) {
-            true => 'Invoice created and email queued successfully.',
+            true => 'Invoice created and emailed successfully.',
             false => 'Invoice created, but the email failed to send. Status marked as Failed.',
             default => 'Invoice created successfully.',
         };
@@ -286,8 +289,15 @@ class InvoiceController extends Controller
         $this->authorizeInvoiceAccess($invoice);
         $invoice->load(['items', 'quoteRequest.quotation']);
 
-        if (! in_array($invoice->status, [Invoice::STATUS_DRAFT, Invoice::STATUS_SENT, Invoice::STATUS_OVERDUE, Invoice::STATUS_UNPAID], true)) {
-            $message = 'Only draft, sent, overdue, or unpaid invoices can be emailed.';
+        if (! in_array($invoice->status, [
+            Invoice::STATUS_DRAFT,
+            Invoice::STATUS_SENT,
+            Invoice::STATUS_OVERDUE,
+            Invoice::STATUS_UNPAID,
+            Invoice::STATUS_PENDING,
+            Invoice::STATUS_FAILED,
+        ], true)) {
+            $message = 'Only draft, sent, overdue, unpaid, pending, or failed invoices can be emailed.';
 
             if ($request->expectsJson()) {
                 return response()->json(['message' => $message], 422);
@@ -310,49 +320,27 @@ class InvoiceController extends Controller
             'attach_pdf' => ['required', 'boolean'],
         ])->validate();
 
-        $invoice->update(['status' => Invoice::STATUS_PENDING]);
-        $emailLog = $this->createInvoiceEmailLog(
-            $invoice,
-            Str::lower(trim($validated['recipient_email'])),
-            $this->squish($validated['subject']),
-        );
+        $sendResult = $this->sendInvoiceEmailNow($invoice, $validated, $request->user());
+        $freshInvoice = $sendResult['invoice'] ?? $invoice->fresh();
 
-        try {
-            SendInvoiceEmailJob::dispatch(
-                $invoice->id,
-                Str::lower(trim($validated['recipient_email'])),
-                $this->squish($validated['subject']),
-                trim($validated['message']),
-                (bool) $validated['attach_pdf'],
-                $request->user()?->getKey(),
-                $emailLog?->getKey(),
-            )->onQueue('emails');
-        } catch (Throwable $exception) {
-            $invoice->update(['status' => Invoice::STATUS_FAILED]);
-            $this->markEmailLogFailed($emailLog, $exception);
-            $this->recordInvoiceEmailDelivery(
-                $invoice,
-                Invoice::STATUS_FAILED,
-                $this->squish($validated['subject']),
-                Str::lower(trim($validated['recipient_email'])),
-                $exception,
-            );
-            report($exception);
+        if (! $sendResult['sent'] || $freshInvoice?->status === Invoice::STATUS_FAILED) {
+            $message = 'Invoice email failed. Delivery status was logged.';
 
             if ($request->expectsJson()) {
                 return response()->json([
-                    'message' => 'Invoice email could not be queued. Status marked as Failed.',
+                    'message' => $message,
+                    'status' => $freshInvoice->status,
+                    'status_label' => $freshInvoice->statusLabel(),
+                    'status_badge_class' => $freshInvoice->statusBadgeClass(),
                 ], 500);
             }
 
-            return back()->with('toast-error', 'Invoice email could not be queued. Status marked as Failed.');
+            return back()->with('toast-error', $message);
         }
 
         if ($request->expectsJson()) {
-            $freshInvoice = $invoice->fresh();
-
             return response()->json([
-                'message' => 'Invoice email queued successfully.',
+                'message' => 'Invoice email sent successfully.',
                 'recipient_email' => Str::lower(trim($validated['recipient_email'])),
                 'status' => $freshInvoice?->status,
                 'status_label' => $freshInvoice?->statusLabel(),
@@ -360,7 +348,7 @@ class InvoiceController extends Controller
             ]);
         }
 
-        return back()->with('toast-success', 'Invoice email queued successfully.');
+        return back()->with('toast-success', 'Invoice email sent successfully.');
     }
 
     public function destroy(Invoice $invoice): RedirectResponse
@@ -396,6 +384,22 @@ class InvoiceController extends Controller
             'status' => Invoice::STATUS_PAID,
             'paid_at' => $invoice->paid_at ?: now(),
         ]);
+
+        $invoice->logStage(
+            'PAYMENT_RECEIVED',
+            'Invoice marked as paid',
+            'admin',
+            auth()->user()?->name,
+            null,
+            'system'
+        );
+
+        try {
+            \Illuminate\Support\Facades\Mail::to($invoice->customer_email)
+                ->send(new \App\Mail\PaymentReceivedMail($invoice));
+        } catch (Throwable $exception) {
+            report($exception);
+        }
 
         if (request()->expectsJson()) {
             return response()->json([
@@ -702,40 +706,106 @@ class InvoiceController extends Controller
 
     private function sendAndMarkInvoice(Invoice $invoice): bool
     {
-        $invoice->loadMissing(['items', 'quoteRequest']);
-        $subject = $this->defaultInvoiceSubject($invoice);
-        $recipient = Str::lower(trim((string) $invoice->customer_email));
+        $result = $this->sendInvoiceEmailNow($invoice, [
+            'recipient_email' => $invoice->customer_email,
+            'subject' => $this->defaultInvoiceSubject($invoice),
+            'message' => $this->defaultInvoiceMessage($invoice),
+            'attach_pdf' => true,
+        ], auth()->user());
+
+        return $result['sent'];
+    }
+
+    /**
+     * @param array{recipient_email: string, subject: string, message: string, attach_pdf: bool} $payload
+     * @return array{sent: bool, invoice: Invoice|null, exception: Throwable|null}
+     */
+    private function sendInvoiceEmailNow(Invoice $invoice, array $payload, ?User $user = null): array
+    {
+        $invoice->loadMissing(['items', 'quoteRequest.quotation']);
+        $recipient = Str::lower(trim((string) $payload['recipient_email']));
+        $subject = $this->squish((string) $payload['subject']);
+        $message = trim((string) $payload['message']);
+        $emailLog = null;
 
         try {
             if (! filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
-                throw new \RuntimeException('Invoice email failed: recipient email address is invalid.');
+                throw new RuntimeException('Invoice email failed: recipient email address is invalid.');
             }
 
+            $this->ensureDeliverableMailTransport('Invoice');
             $invoice->update(['status' => Invoice::STATUS_PENDING]);
             $emailLog = $this->createInvoiceEmailLog($invoice, $recipient, $subject);
 
-            SendInvoiceEmailJob::dispatch(
-                $invoice->id,
-                $recipient,
-                $subject,
-                $this->defaultInvoiceMessage($invoice),
-                true,
-                auth()->id(),
-                $emailLog?->getKey(),
-            )->onQueue('emails');
+            $sentMessage = Mail::to($recipient)->send(new InvoiceMail(
+                invoice: $invoice,
+                subject: $subject,
+                messageBody: $message,
+                attachPdf: (bool) $payload['attach_pdf'],
+                user: $user,
+                emailLogId: $emailLog?->getKey(),
+            ));
 
-            return true;
+            $messageId = $this->validatedSentMessageId($sentMessage, 'Invoice');
+            $this->markInvoiceSent($invoice, $recipient, $user);
+            $this->markEmailLogSent($emailLog);
+            $this->recordInvoiceEmailDelivery(
+                $invoice,
+                Invoice::STATUS_SENT,
+                $subject,
+                $recipient,
+                null,
+                'Invoice email accepted by the mail transport. Message ID: '.$messageId,
+            );
+
+            return [
+                'sent' => true,
+                'invoice' => $invoice->fresh(),
+                'exception' => null,
+            ];
         } catch (Throwable $exception) {
             $invoice->update(['status' => Invoice::STATUS_FAILED]);
-            $this->markEmailLogFailed($emailLog ?? null, $exception);
+            $this->markEmailLogFailed($emailLog, $exception);
             $this->recordInvoiceEmailDelivery($invoice, Invoice::STATUS_FAILED, $subject, $recipient, $exception);
             report($exception);
 
-            return false;
+            return [
+                'sent' => false,
+                'invoice' => $invoice->fresh(),
+                'exception' => $exception,
+            ];
         }
     }
 
-    private function recordInvoiceEmailDelivery(Invoice $invoice, string $status, string $subject, ?string $recipient = null, ?Throwable $exception = null): void
+    private function markInvoiceSent(Invoice $invoice, string $recipient, ?User $user = null): void
+    {
+        $data = ['status' => Invoice::STATUS_SENT];
+
+        if (Schema::hasColumn('invoices', 'sent_to_email')) {
+            $data['sent_to_email'] = $recipient;
+        }
+
+        if (Schema::hasColumn('invoices', 'sent_at')) {
+            $data['sent_at'] = now();
+        }
+
+        if (Schema::hasColumn('invoices', 'sent_via')) {
+            $data['sent_via'] = 'email';
+        }
+
+        $invoice->update($data);
+
+        $invoice->logStage(
+            'INVOICE_SENT',
+            'Invoice sent via email',
+            'admin',
+            $user?->name,
+            null,
+            'email'
+        );
+    }
+
+    private function recordInvoiceEmailDelivery(Invoice $invoice, string $status, string $subject, ?string $recipient = null, ?Throwable $exception = null, ?string $responseMessage = null): void
     {
         if (!Schema::hasTable('email_delivery_logs')) {
             return;
@@ -749,9 +819,11 @@ class InvoiceController extends Controller
             'direction' => 'client',
             'subject' => Str::limit($subject, 190, ''),
             'transport' => Str::limit((string) config('mail.default'), 190, ''),
-            'response_message' => $exception
+            'response_message' => $responseMessage
+                ? Str::limit($responseMessage, 1000, '')
+                : ($exception
                 ? Str::limit($exception->getMessage(), 1000, '')
-                : 'Invoice email sent successfully.',
+                : 'Invoice email sent successfully.'),
             'created_at' => $now,
         ];
 
@@ -776,7 +848,7 @@ class InvoiceController extends Controller
             return $invoice->emailLogs()->create([
                 'recipient_email' => Str::limit($recipient, 190, ''),
                 'subject' => Str::limit($subject, 190, ''),
-                'status' => EmailLog::STATUS_QUEUED,
+                'status' => EmailLog::STATUS_SENDING,
                 'tracking_token' => (string) Str::uuid(),
             ]);
         } catch (Throwable $exception) {
@@ -784,6 +856,20 @@ class InvoiceController extends Controller
 
             return null;
         }
+    }
+
+    private function markEmailLogSent(?EmailLog $emailLog): void
+    {
+        if (! $emailLog) {
+            return;
+        }
+
+        $emailLog->increment('attempts');
+        $emailLog->update([
+            'status' => EmailLog::STATUS_SENT,
+            'sent_at' => now(),
+            'failed_reason' => null,
+        ]);
     }
 
     private function markEmailLogFailed(?EmailLog $emailLog, Throwable $exception): void
@@ -797,6 +883,62 @@ class InvoiceController extends Controller
             'failed_reason' => Str::limit($exception->getMessage(), 1000, ''),
             'attempts' => $emailLog->attempts + 1,
         ]);
+    }
+
+    private function ensureDeliverableMailTransport(string $documentLabel): void
+    {
+        if ($this->mailerIsTestDouble()) {
+            return;
+        }
+
+        $mailer = (string) config('mail.default', '');
+        $transport = (string) (config("mail.mailers.{$mailer}.transport") ?: $mailer ?: 'unknown');
+
+        if (in_array(Str::lower($transport), ['array', 'log'], true)) {
+            throw new RuntimeException(
+                "{$documentLabel} email failed: MAIL_MAILER={$transport} only stores email locally. "
+                .'Configure smtp, resend, postmark, mailgun, or ses before sending invoices.'
+            );
+        }
+    }
+
+    private function validatedSentMessageId(mixed $sentMessage, string $documentLabel): string
+    {
+        if ($this->mailerIsTestDouble() && $sentMessage === null) {
+            return 'mail-test-double';
+        }
+
+        if (! $sentMessage instanceof SentMessage) {
+            throw new RuntimeException("{$documentLabel} email failed: mail transport did not confirm that the message was accepted.");
+        }
+
+        $messageId = trim((string) $sentMessage->getMessageId());
+
+        if ($messageId === '') {
+            throw new RuntimeException("{$documentLabel} email failed: mail transport accepted the message without a delivery message ID.");
+        }
+
+        return $messageId;
+    }
+
+    private function mailerIsTestDouble(): bool
+    {
+        if (! app()->runningUnitTests()) {
+            return false;
+        }
+
+        $mailer = Mail::getFacadeRoot();
+
+        if (! is_object($mailer)) {
+            return false;
+        }
+
+        if (is_a($mailer, \Illuminate\Support\Testing\Fakes\MailFake::class)) {
+            return true;
+        }
+
+        return interface_exists(\Mockery\MockInterface::class)
+            && $mailer instanceof \Mockery\MockInterface;
     }
 
     private function squish(string $value): string

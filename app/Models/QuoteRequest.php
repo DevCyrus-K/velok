@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Support\LeadCategory;
 use App\Support\NotificationLogger;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Str;
 
 class QuoteRequest extends Model
@@ -27,6 +29,8 @@ class QuoteRequest extends Model
         'full_name',
         'email',
         'phone',
+        'contact_preference',
+        'whatsapp_url',
         'moving_from',
         'moving_to',
         'move_date',
@@ -185,18 +189,45 @@ class QuoteRequest extends Model
         return 'https://wa.me/' . $number;
     }
 
-    public function quotation()
+    public function quotation(): HasOne
     {
         return $this->hasOne(Quotation::class, 'quote_request_id');
     }
 
-    public function quote()
+    public function quote(): HasOne
     {
         return $this->hasOne(Quotation::class, 'quote_request_id');
     }
 
-    public function invoice()
+    public function invoice(): HasOne
     {
         return $this->hasOne(Invoice::class, 'quote_request_id');
+    }
+
+    public function stages(): MorphMany
+    {
+        return $this->morphMany(BookingStage::class, 'stageable')
+            ->orderBy('created_at', 'asc');
+    }
+
+    public function logStage(
+        string $stage,
+        string $description,
+        string $triggeredBy = 'system',
+        string $actorName = null,
+        string $actorIp = null,
+        string $channel = null,
+        array $metadata = []
+    ): void {
+        $this->stages()->create([
+            'stage' => $stage,
+            'description' => $description,
+            'triggered_by' => $triggeredBy,
+            'actor_name' => $actorName,
+            'actor_ip' => $actorIp,
+            'channel' => $channel,
+            'metadata' => $metadata,
+            'created_at' => now(),
+        ]);
     }
 }

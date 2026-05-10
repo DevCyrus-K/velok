@@ -23,14 +23,17 @@ class InvoiceMail extends Mailable
     use Queueable;
     use SerializesModels;
 
+    private readonly ?string $subjectOverride;
+
     public function __construct(
         public Invoice $invoice,
-        private readonly ?string $subject = null,
+        ?string $subject = null,
         private readonly ?string $messageBody = null,
         private readonly bool $attachPdf = true,
         private readonly ?User $user = null,
         private readonly ?int $emailLogId = null,
     ) {
+        $this->subjectOverride = $subject;
         $this->invoice->loadMissing(['items', 'quoteRequest.quotation']);
     }
 
@@ -83,7 +86,7 @@ class InvoiceMail extends Mailable
     {
         $companyName = trim((string) (app(CompanyProfile::class)->data()['name'] ?? '')) ?: 'Company';
 
-        return $this->subject ?: 'Invoice ' . $this->invoice->invoice_number . ' from ' . $companyName;
+        return $this->subjectOverride ?: 'Invoice ' . $this->invoice->invoice_number . ' from ' . $companyName;
     }
 
     private function attachmentName(): string

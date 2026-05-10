@@ -16,6 +16,7 @@
     $requestGroup = $quote->statusGroup();
     $quotation = $quotation ?? $quote->quote;
     $invoice = $invoice ?? $quote->invoice;
+    $whatsappUrl = $quote->whatsapp_url ?: $quote->whatsappUrl();
 @endphp
 <div class="row">
     <div class="col-12">
@@ -47,6 +48,16 @@
                             <div class="fw-semibold text-dark">{{ $quote->full_name }}</div>
                             <small class="text-muted d-block mt-2">{{ $quote->email }}</small>
                             <small class="text-muted d-block">{{ $quote->phone }}</small>
+                            <div class="d-flex flex-wrap gap-2 mt-3">
+                                <a class="btn btn-sm btn-primary" href="{{ $quote->telLink() }}">
+                                    <i data-lucide="phone" class="align-middle me-1"></i>Call
+                                </a>
+                                @if($whatsappUrl)
+                                    <a class="btn btn-sm btn-success" href="{{ $whatsappUrl }}" target="_blank" rel="noopener">
+                                        <x-icons.whatsapp class="icon-sm me-1" />WhatsApp
+                                    </a>
+                                @endif
+                            </div>
                         </div>
                     </div>
                     <div class="col-md-6 col-xl-3">
@@ -96,6 +107,10 @@
                                         <tr>
                                             <th class="ps-0 text-muted fw-medium">Contact Info</th>
                                             <td>{{ $quote->email }} • {{ $quote->phone }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th class="ps-0 text-muted fw-medium">Preferred Contact</th>
+                                            <td>{{ ucfirst($quote->contact_preference ?? 'both') }}</td>
                                         </tr>
                                         <tr>
                                             <th class="ps-0 text-muted fw-medium">Service Type</th>
@@ -158,16 +173,50 @@
                                         </button>
                                     </form>
                                     <a class="btn btn-primary d-none" id="createQuotationButton" href="{{ route('quotations.create', $quote) }}">
-                                        <i data-lucide="plus" class="align-middle me-1"></i>Create Quote
+                                        <i data-lucide="plus" class="align-middle me-1"></i>Create Quotation
                                     </a>
                                 @elseif($requestGroup === 'approved')
                                     @if($quotation)
                                         <a class="btn btn-info" href="{{ route('quotations.show', $quotation) }}">
-                                            <i data-lucide="file-text" class="align-middle me-1"></i>View Quote
+                                            <i data-lucide="file-text" class="align-middle me-1"></i>View Quotation
                                         </a>
+                                        @if($quotation->status === \App\Models\Quotation::STATUS_DRAFT)
+                                            <a class="btn btn-outline-primary" href="{{ route('quotations.edit', $quotation) }}">
+                                                <i data-lucide="edit-3" class="align-middle me-1"></i>Edit Quotation
+                                            </a>
+                                        @endif
+                                        <a class="btn btn-outline-info" href="{{ route('quotes.download', $quote) }}">
+                                            <i data-lucide="download" class="align-middle me-1"></i>Download Quotation
+                                        </a>
+                                        @if(in_array($quotation->status, [\App\Models\Quotation::STATUS_DRAFT, \App\Models\Quotation::STATUS_SENT], true))
+                                            <form action="{{ route('quotations.send', $quotation) }}" method="POST">
+                                                @csrf
+                                                <button class="btn btn-outline-success w-100" type="submit">
+                                                    <i data-lucide="mail" class="align-middle me-1"></i>Send Quotation via Email
+                                                </button>
+                                            </form>
+                                        @endif
+                                        @if(in_array($quotation->status, [\App\Models\Quotation::STATUS_DRAFT, \App\Models\Quotation::STATUS_DECLINED, \App\Models\Quotation::STATUS_REJECTED], true) && ! $invoice)
+                                            <form action="{{ route('quotations.destroy', $quotation) }}" data-delete-confirm data-delete-message="Do you want to delete this quotation?" data-delete-title="Delete quotation?" method="POST">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button class="btn btn-outline-danger w-100" type="submit">
+                                                    <i data-lucide="trash-2" class="align-middle me-1"></i>Delete Quotation
+                                                </button>
+                                            </form>
+                                        @endif
+                                        @if(!$invoice)
+                                            <a class="btn btn-outline-secondary" href="{{ route('invoice.create', ['quote' => $quote->id]) }}">
+                                                <i data-lucide="receipt-text" class="align-middle me-1"></i>Create Invoice
+                                            </a>
+                                        @else
+                                            <a class="btn btn-outline-secondary" href="{{ route('invoice.details', ['invoice' => $invoice->id]) }}">
+                                                <i data-lucide="receipt-text" class="align-middle me-1"></i>View Invoice
+                                            </a>
+                                        @endif
                                     @else
                                         <a class="btn btn-primary" id="createQuotationButton" href="{{ route('quotations.create', $quote) }}">
-                                            <i data-lucide="plus" class="align-middle me-1"></i>Create Quote
+                                            <i data-lucide="plus" class="align-middle me-1"></i>Create Quotation
                                         </a>
                                     @endif
                                 @else
@@ -179,6 +228,11 @@
                                         </button>
                                     </form>
                                 @endif
+                                @if(!$invoice && $requestGroup !== 'approved')
+                                    <a class="btn btn-outline-secondary" href="{{ route('invoice.create', ['quote' => $quote->id]) }}">
+                                        <i data-lucide="receipt-text" class="align-middle me-1"></i>Create Invoice
+                                    </a>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -187,6 +241,14 @@
         </div>
     </div>
 </div>
+
+@if($quote->stages->isNotEmpty())
+    <div class="card d-print-none">
+        <div class="card-body">
+            @include('partials.booking-timeline', ['stageable' => $quote])
+        </div>
+    </div>
+@endif
 @endsection
 
 @section('scripts')

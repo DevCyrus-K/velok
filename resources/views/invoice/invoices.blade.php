@@ -90,9 +90,13 @@
 
 @section('content')
 @php
-    $invoices = collect($invoices ?? []);
-    $invoiceCount = $invoices->count();
-    $firstInvoice = $invoices->first();
+    $invoices = $invoices ?? collect();
+    $invoiceRows = $invoices instanceof \Illuminate\Contracts\Pagination\Paginator
+        ? collect($invoices->items())
+        : collect($invoices);
+    $invoiceCount = $invoiceRows->count();
+    $invoiceTotal = method_exists($invoices, 'total') ? $invoices->total() : $invoiceCount;
+    $firstInvoice = $invoiceRows->first();
     $fallbackDetailsRoute = $firstInvoice ? route('invoice.details', ['invoice' => $firstInvoice->id]) : route('invoice.details');
 @endphp
 
@@ -167,7 +171,7 @@
                             </tr>
                         </thead>
                         <tbody id="invoice-table-body">
-                            @foreach ($invoices as $invoice)
+                            @foreach ($invoiceRows as $invoice)
                                 @php
                                     $invoiceDate = $invoice->invoice_date ?? $invoice->created_at;
                                     $createdLabel = $invoiceDate?->format('d M, Y') ?? 'N/A';
@@ -197,6 +201,8 @@
                                         \App\Models\Invoice::STATUS_SENT,
                                         \App\Models\Invoice::STATUS_OVERDUE,
                                         \App\Models\Invoice::STATUS_UNPAID,
+                                        \App\Models\Invoice::STATUS_PENDING,
+                                        \App\Models\Invoice::STATUS_FAILED,
                                     ], true);
                                     $printRoute = route('invoice.details', ['invoice' => $invoice->id, 'print' => 1]);
                                     $searchText = Str::lower(implode(' ', array_filter([
@@ -324,7 +330,12 @@
 
                 <div class="align-items-center justify-content-between row g-0 text-center text-sm-start p-3 border-top">
                     <div class="col-sm">
-                        <div class="text-muted" id="invoice-count">Showing {{ $invoiceCount }} of {{ $invoiceCount }} invoices</div>
+                        <div class="text-muted" id="invoice-count">Showing {{ $invoiceCount }} of {{ $invoiceTotal }} invoices</div>
+                    </div>
+                    <div class="col-sm-auto mt-3 mt-sm-0">
+                        @if (method_exists($invoices, 'links'))
+                            {{ $invoices->links() }}
+                        @endif
                     </div>
                 </div>
             </div>
@@ -332,7 +343,7 @@
     </div>
 </div>
 
-@foreach ($invoices as $invoice)
+@foreach ($invoiceRows as $invoice)
     <template data-invoice-preview-template="invoice-{{ $invoice->id }}">
         @include('invoice.partials.preview', ['invoice' => $invoice])
     </template>

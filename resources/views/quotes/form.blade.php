@@ -68,6 +68,27 @@
                             @enderror
                         </div>
                         <div class="col-md-6">
+                            <label class="form-label d-block">Preferred Contact Method</label>
+                            @php($selectedContactPreference = old('contact_preference', $quote->contact_preference ?? 'both'))
+                            <div class="d-flex flex-wrap gap-3">
+                                <div class="form-check">
+                                    <input class="form-check-input" id="contact_preference_email" name="contact_preference" type="radio" value="email" @checked($selectedContactPreference === 'email')>
+                                    <label class="form-check-label" for="contact_preference_email">Email</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" id="contact_preference_whatsapp" name="contact_preference" type="radio" value="whatsapp" @checked($selectedContactPreference === 'whatsapp')>
+                                    <label class="form-check-label" for="contact_preference_whatsapp">WhatsApp</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" id="contact_preference_both" name="contact_preference" type="radio" value="both" @checked($selectedContactPreference === 'both')>
+                                    <label class="form-check-label" for="contact_preference_both">Both</label>
+                                </div>
+                            </div>
+                            @error('contact_preference')
+                                <div class="invalid-feedback d-block">{{ $message }}</div>
+                            @enderror
+                        </div>
+                        <div class="col-md-6">
                             <label class="form-label" for="move_date">Preferred Move Date</label>
                             <input class="form-control @error('move_date') is-invalid @enderror" id="move_date" name="move_date"
                                 type="date" value="{{ old('move_date', $quote->move_date?->format('Y-m-d')) }}">

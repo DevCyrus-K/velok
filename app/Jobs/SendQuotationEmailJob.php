@@ -93,6 +93,7 @@ class SendQuotationEmailJob implements ShouldQueue
                 $quotation->update([
                     'status' => 'sent',
                     'sent_at' => now(),
+                    'sent_via' => 'email',
                 ]);
 
                 $quotation->quoteRequest?->update([

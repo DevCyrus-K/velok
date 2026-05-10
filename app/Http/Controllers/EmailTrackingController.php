@@ -14,10 +14,23 @@ class EmailTrackingController extends Controller
             ->first();
 
         if ($log) {
+            $firstOpen = ! $log->opened_at;
             $log->update([
                 'status' => EmailLog::STATUS_OPENED,
                 'opened_at' => $log->opened_at ?: now(),
             ]);
+
+            if ($firstOpen && $log->emailable && method_exists($log->emailable, 'logStage')) {
+                $log->emailable->logStage(
+                    'EMAIL_OPENED',
+                    'Customer opened an email',
+                    'customer',
+                    null,
+                    request()->ip(),
+                    'email',
+                    ['subject' => $log->subject]
+                );
+            }
         }
 
         $gif = base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');

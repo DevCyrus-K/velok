@@ -17,6 +17,51 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class CustomerController extends Controller
 {
+    public function create(): View
+    {
+        return view('customers.create', [
+            'statusOptions' => Customer::statusOptions(),
+        ]);
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'full_name' => ['required', 'string', 'max:160'],
+            'email' => ['required', 'email', 'max:190'],
+            'phone' => ['required', 'string', 'max:50'],
+            'status' => ['nullable', 'string', 'in:'.implode(',', array_keys(Customer::statusOptions()))],
+        ]);
+
+        $email = Str::lower(trim($validated['email']));
+        $phone = trim($validated['phone']);
+        $contactKey = Customer::makeContactKey($email, $phone);
+
+        if (Customer::query()->where('contact_key', $contactKey)->exists()) {
+            return back()
+                ->withInput()
+                ->withErrors(['phone' => 'A customer with this email and phone number already exists.']);
+        }
+
+        $customer = Customer::query()->create([
+            'contact_key' => $contactKey,
+            'source_quote_request_id' => null,
+            'full_name' => $this->squish($validated['full_name']),
+            'email' => $email,
+            'phone' => $phone,
+            'quotes_count' => 0,
+            'approved_quotes_count' => 0,
+            'declined_quotes_count' => 0,
+            'status' => $validated['status'] ?? Customer::STATUS_LEAD,
+            'first_seen_at' => now(),
+            'last_quote_at' => null,
+        ]);
+
+        return redirect()
+            ->route('customers.show', $customer)
+            ->with('toast-success', 'Customer added successfully.');
+    }
+
     public function show(Customer $customer): View
     {
         return view('customers.show', [

@@ -11,6 +11,7 @@ use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\JobApplicationController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\QuotationController;
+use App\Http\Controllers\QuoteApprovalController;
 use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\RoutingController;
@@ -36,11 +37,33 @@ Route::get('/email/track/{token}', [EmailTrackingController::class, 'open'])
     ->middleware('throttle:30,1')
     ->name('email.track.open');
 
+Route::get('/quote/approve/{token}', [QuoteApprovalController::class, 'show'])
+    ->middleware('throttle:10,1')
+    ->name('quote.customer.approve');
+
+Route::post('/quote/approve/{token}', [QuoteApprovalController::class, 'approve'])
+    ->middleware('throttle:5,1')
+    ->name('quote.customer.approve.submit');
+
+Route::get('/quote/approval/{quotation}/thank-you', [QuoteApprovalController::class, 'thankyou'])
+    ->middleware('throttle:10,1')
+    ->name('quote.approval.thankyou');
+
+Route::get('/quotes/{id}/pdf/{token}', [QuoteController::class, 'publicPdfDownload'])
+    ->middleware('throttle:20,1')
+    ->name('quote.pdf.download');
+
 Route::middleware('auth')->get('/kwikshift-gallery-image', [RoutingController::class, 'galleryAsset'])
     ->name('gallery.asset');
 
 Route::middleware('auth')->get('/topbar/data', [TopbarController::class, 'getTopbarData'])
     ->name('topbar.data');
+
+Route::middleware('auth')->post('/topbar/notifications/{notification}/read', [TopbarController::class, 'markNotificationRead'])
+    ->name('topbar.notifications.read');
+
+Route::middleware('auth')->post('/topbar/notifications/read-all', [TopbarController::class, 'markAllNotificationsRead'])
+    ->name('topbar.notifications.read-all');
 
 Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
     Route::get('lock-screen', [ScreenLockController::class, 'show'])->name('lock-screen');
@@ -72,6 +95,7 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
         Route::post('', [QuoteController::class, 'store'])->name('store');
         Route::get('{quote}/download', [QuoteController::class, 'download'])->name('download');
         Route::post('{quote}/send', [QuoteController::class, 'send'])->middleware('throttle:5,1')->name('send');
+        Route::post('{quotation}/mark-sent', [QuotationController::class, 'markSent'])->name('mark-sent');
         Route::get('{quote}', [QuoteController::class, 'show'])->name('show');
         Route::get('{quote}/edit', [QuoteController::class, 'edit'])->name('edit');
         Route::put('{quote}', [QuoteController::class, 'update'])->name('update');
@@ -90,6 +114,7 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
         Route::post('{quotation}/send', [QuotationController::class, 'send'])->middleware('throttle:5,1')->name('send');
         Route::patch('{quotation}/approve', [QuotationController::class, 'approve'])->name('approve');
         Route::patch('{quotation}/reject', [QuotationController::class, 'reject'])->name('reject');
+        Route::post('{quotation}/deposit', [QuotationController::class, 'markDepositReceived'])->name('deposit');
         Route::post('{quotation}/duplicate', [QuotationController::class, 'duplicate'])->name('duplicate');
         Route::delete('{quotation}', [QuotationController::class, 'destroy'])->name('destroy');
     });
@@ -112,6 +137,8 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
     Route::get('invoice/invoice-details/{invoice?}', [RoutingController::class, 'invoiceDetailsPage'])->name('invoice.details');
 
     Route::prefix('customers')->name('customers.')->group(function () {
+        Route::get('create', [CustomerController::class, 'create'])->name('create');
+        Route::post('', [CustomerController::class, 'store'])->name('store');
         Route::get('export', [CustomerController::class, 'export'])->name('export');
         Route::post('import', [CustomerController::class, 'import'])->name('import');
         Route::get('{customer}', [CustomerController::class, 'show'])->name('show');

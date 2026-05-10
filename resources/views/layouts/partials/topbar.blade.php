@@ -164,15 +164,25 @@
                                         <div class="col">
                                              <h6 class="m-0 fs-16 fw-semibold">Notifications</h6>
                                         </div>
+                                        <div class="col-auto">
+                                             <button class="btn btn-sm btn-link p-0 text-decoration-none" id="mark-all-notifications-read" type="button" @unless($topbarNotifications['has_unread']) hidden @endunless>
+                                                  <i data-lucide="check-check" class="icon-xs me-1"></i>Mark all
+                                             </button>
+                                        </div>
                                    </div>
                               </div>
                               <div data-simplebar style="max-height: 280px;" id="notifications-container">
                                    @forelse ($topbarNotifications['items'] as $notification)
-                                   <a href="{{ $notification['url'] }}" class="dropdown-item py-3 {{ $loop->last ? '' : 'border-bottom' }}">
-                                        <p class="mb-0"><span class="fw-medium">{{ $notification['name'] }}</span></p>
-                                        <p class="mb-0 text-wrap small">{{ $notification['subject'] }}</p>
-                                        <p class="mb-0 text-muted small">{{ $notification['created_at_human'] }}</p>
-                                   </a>
+                                   <div class="dropdown-item py-3 {{ $loop->last ? '' : 'border-bottom' }} d-flex align-items-start gap-2">
+                                        <a href="{{ $notification['url'] }}" class="text-reset text-decoration-none flex-grow-1" data-notification-link data-notification-id="{{ $notification['id'] }}" data-notification-read-url="{{ $notification['mark_read_url'] }}">
+                                             <p class="mb-0"><span class="fw-medium">{{ $notification['name'] }}</span></p>
+                                             <p class="mb-0 text-wrap small">{{ $notification['subject'] }}</p>
+                                             <p class="mb-0 text-muted small" data-notification-time="{{ $notification['created_at'] }}" title="{{ $notification['created_at_local'] ?? $notification['created_at_human'] }}">{{ $notification['created_at_human'] }}</p>
+                                        </a>
+                                        <button class="btn btn-sm btn-soft-secondary flex-shrink-0" type="button" data-notification-mark-read data-notification-id="{{ $notification['id'] }}" data-notification-read-url="{{ $notification['mark_read_url'] }}" title="Mark as read" aria-label="Mark notification as read">
+                                             <i data-lucide="check" class="icon-xs"></i>
+                                        </button>
+                                   </div>
                                    @empty
                                    <div class="text-center p-3">
                                         <p class="text-muted mb-0">No new notifications</p>
@@ -230,6 +240,8 @@
 <script>
      document.addEventListener('DOMContentLoaded', function() {
           initTopbarSearch();
+          initNotificationActions();
+          updateRenderedNotificationTimes();
           refreshTopbarData();
           window.setInterval(refreshTopbarData, 30000);
      });
@@ -360,10 +372,15 @@
           const badgeLabel = document.getElementById('notification-count-label');
           const badgeScreenReader = document.getElementById('notification-count-sr');
           const container = document.getElementById('notifications-container');
+          const markAllButton = document.getElementById('mark-all-notifications-read');
 
           badge.hidden = count < 1;
           badgeLabel.textContent = notifications.display_count ?? formatNotificationCount(count);
-          badgeScreenReader.textContent = `${count} unread messages`;
+          badgeScreenReader.textContent = `${count} unread notifications`;
+
+          if (markAllButton) {
+               markAllButton.hidden = count < 1;
+          }
 
           if (!Array.isArray(notifications.items) || notifications.items.length === 0) {
                container.innerHTML = '<div class="text-center p-3"><p class="text-muted mb-0">No new notifications</p></div>';
@@ -371,12 +388,128 @@
           }
 
           container.innerHTML = notifications.items.map((notification, index) => `
-               <a href="${escapeAttribute(notification.url ?? '#')}" class="dropdown-item py-3 ${index === notifications.items.length - 1 ? '' : 'border-bottom'}">
-                    <p class="mb-0"><span class="fw-medium">${escapeHtml(notification.name ?? 'New message')}</span></p>
-                    <p class="mb-0 text-wrap small">${escapeHtml(notification.subject ?? 'New notification')}</p>
-                    <p class="mb-0 text-muted small">${escapeHtml(notification.created_at_human ?? '')}</p>
-               </a>
+               <div class="dropdown-item py-3 ${index === notifications.items.length - 1 ? '' : 'border-bottom'} d-flex align-items-start gap-2">
+                    <a href="${escapeAttribute(notification.url ?? '#')}" class="text-reset text-decoration-none flex-grow-1" data-notification-link data-notification-id="${escapeAttribute(notification.id ?? '')}" data-notification-read-url="${escapeAttribute(notification.mark_read_url ?? '')}">
+                         <p class="mb-0"><span class="fw-medium">${escapeHtml(notification.name ?? 'New notification')}</span></p>
+                         <p class="mb-0 text-wrap small">${escapeHtml(notification.subject ?? 'New notification')}</p>
+                         <p class="mb-0 text-muted small" data-notification-time="${escapeAttribute(notification.created_at ?? '')}" title="${escapeAttribute(notification.created_at_local ?? notification.created_at_human ?? '')}">${escapeHtml(formatNotificationTime(notification))}</p>
+                    </a>
+                    <button class="btn btn-sm btn-soft-secondary flex-shrink-0" type="button" data-notification-mark-read data-notification-id="${escapeAttribute(notification.id ?? '')}" data-notification-read-url="${escapeAttribute(notification.mark_read_url ?? '')}" title="Mark as read" aria-label="Mark notification as read">
+                         <i data-lucide="check" class="icon-xs"></i>
+                    </button>
+               </div>
           `).join('');
+
+          if (window.lucide?.createIcons) {
+               window.lucide.createIcons();
+          }
+     }
+
+     function initNotificationActions() {
+          const container = document.getElementById('notifications-container');
+          const markAllButton = document.getElementById('mark-all-notifications-read');
+
+          container?.addEventListener('click', async function(event) {
+               const markButton = event.target.closest('[data-notification-mark-read]');
+               const link = event.target.closest('[data-notification-link]');
+
+               if (markButton) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    await markNotificationRead(markButton.dataset.notificationReadUrl);
+                    return;
+               }
+
+               if (link) {
+                    const url = link.getAttribute('href') || '#';
+                    const readUrl = link.dataset.notificationReadUrl;
+
+                    if (!readUrl || url === '#') {
+                         return;
+                    }
+
+                    event.preventDefault();
+
+                    try {
+                         await markNotificationRead(readUrl);
+                    } finally {
+                         window.location.href = url;
+                    }
+               }
+          });
+
+          markAllButton?.addEventListener('click', async function(event) {
+               event.preventDefault();
+               await markNotificationRead(@json(route('topbar.notifications.read-all')));
+          });
+     }
+
+     async function markNotificationRead(url) {
+          if (!url) {
+               return;
+          }
+
+          const response = await fetch(url, {
+               method: 'POST',
+               headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || @json(csrf_token()),
+               },
+          });
+
+          if (!response.ok) {
+               throw new Error('Notification could not be marked as read.');
+          }
+
+          const data = await response.json();
+
+          if (data.notifications) {
+               updateNotificationsUI(data.notifications);
+          } else {
+               refreshTopbarData();
+          }
+     }
+
+     function updateRenderedNotificationTimes() {
+          document.querySelectorAll('[data-notification-time]').forEach((element) => {
+               const isoDate = element.getAttribute('data-notification-time');
+
+               if (!isoDate) {
+                    return;
+               }
+
+               element.textContent = relativeTimeLabel(new Date(isoDate));
+          });
+     }
+
+     function formatNotificationTime(notification) {
+          if (notification?.created_at) {
+               return relativeTimeLabel(new Date(notification.created_at));
+          }
+
+          return notification?.created_at_human ?? '';
+     }
+
+     function relativeTimeLabel(date) {
+          if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+               return '';
+          }
+
+          const seconds = Math.round((date.getTime() - Date.now()) / 1000);
+          const absoluteSeconds = Math.abs(seconds);
+          const units = [
+               ['year', 31536000],
+               ['month', 2592000],
+               ['day', 86400],
+               ['hour', 3600],
+               ['minute', 60],
+               ['second', 1],
+          ];
+          const [unit, unitSeconds] = units.find(([, value]) => absoluteSeconds >= value) || ['second', 1];
+          const value = Math.round(seconds / unitSeconds);
+
+          return new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(value, unit);
      }
 
      function formatNotificationCount(count) {

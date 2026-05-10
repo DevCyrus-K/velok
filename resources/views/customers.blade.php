@@ -1,5 +1,42 @@
 @extends('layouts.vertical', ['title' => 'Customers'])
 
+@section('css')
+<style>
+     .customer-card-title {
+          display: inline-flex;
+          align-items: center;
+          gap: .65rem;
+     }
+
+     .customer-card-icon {
+          width: 38px;
+          height: 38px;
+          border-radius: 10px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex: 0 0 38px;
+     }
+
+     .customer-table-wrap {
+          max-height: 620px;
+          overflow: auto;
+     }
+
+     .customer-table-wrap .table {
+          min-width: 840px;
+     }
+
+     .customer-table-wrap thead th {
+          position: sticky;
+          top: 0;
+          z-index: 2;
+          background: var(--bs-light-bg-subtle);
+          box-shadow: inset 0 -1px 0 var(--bs-border-color);
+     }
+</style>
+@endsection
+
 @section('content')
 @php
      $errors = $errors ?? new \Illuminate\Support\ViewErrorBag();
@@ -103,9 +140,13 @@
           <div class="card">
                <div class="card-body">
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
-                         <div>
-                              <h5 class="card-title mb-1">Customers</h5>
-                              <!-- <p class="text-muted mb-0"></p> -->
+                         <div class="customer-card-title">
+                              <span class="customer-card-icon bg-primary-subtle text-primary">
+                                   <i data-lucide="users" class="icon-sm"></i>
+                              </span>
+                              <div>
+                                   <h5 class="card-title mb-0">Customers</h5>
+                              </div>
                          </div>
                          <div class="dropdown">
                               <a aria-expanded="false" class="dropdown-toggle btn btn-sm btn-outline-light rounded"
@@ -149,6 +190,9 @@
                               </div>
                          </div>
                          <div class="d-flex flex-wrap gap-2">
+                              <a class="btn btn-sm btn-success" href="{{ route('customers.create') }}">
+                                   <i class="icon-sm me-1" data-lucide="user-plus"></i>Add User
+                              </a>
                               <button class="btn btn-sm btn-outline-primary" id="customer-import-trigger" type="button">
                                    <i class="icon-sm me-1" data-lucide="upload"></i>Import CSV
                               </button>
@@ -176,7 +220,7 @@
                     </div>
                     @endif
 
-                    <div class="table-responsive">
+                    <div class="table-responsive customer-table-wrap">
                          <table class="table align-middle mb-0 table-hover table-centered">
                               <thead class="bg-light-subtle">
                                    <tr>
@@ -250,7 +294,12 @@
                          </table>
                     </div>
                     <div class="pt-3 border-top mt-3">
-                         <small class="text-muted" id="customer-count">{{ $customers->count() }} customers</small>
+                         <div class="d-flex justify-content-between align-items-center">
+                              <small class="text-muted" id="customer-count">{{ $customers->total() }} customers</small>
+                              <div>
+                                   {{ $customers->links() }}
+                              </div>
+                         </div>
                     </div>
                </div>
           </div>

@@ -126,6 +126,9 @@
         'date_label' => $quotation->authorizationDate()?->format('d M Y') ?? now()->format('d M Y'),
         'prompt' => 'Please complete your profile to display authorization details',
     ];
+    $approvalUrl = $approvalUrl ?? ($quotation->approval_token ? route('quote.customer.approve', ['token' => $quotation->approval_token]) : '');
+    $pdfUrl = $pdfUrl ?? ($quotation->pdf_token ? route('quote.pdf.download', ['id' => $quotation->id, 'token' => $quotation->pdf_token]) : '');
+    $whatsappUrl = $whatsappUrl ?? null;
     $quote = $quotation->quoteRequest;
     $company = app(\App\Support\CompanyProfile::class)->data();
     $quotationEmail = app(\App\Support\QuotationEmail::class);
@@ -140,6 +143,8 @@
     $canSendQuotation = $isDraftQuotation || $isSentQuotation;
     $canDeleteQuotation = $isDraftQuotation || $isRejectedQuotation;
     $invoice = $quotation->invoice;
+    $invoiceRoute = $invoice ? route('invoice.details', ['invoice' => $invoice->id]) : route('invoice.create', ['quote' => $quote->id]);
+    $invoiceActionLabel = $invoice ? 'View Invoice' : 'Create Invoice';
     $companyName = trim((string) ($quotation->company_name ?: ($company['name'] ?? '')));
     $companyEmail = trim((string) ($quotation->company_email ?: ($company['email'] ?? '')));
     $companyPhone = trim((string) ($quotation->company_phone ?: ($company['phone'] ?? '')));
@@ -165,8 +170,32 @@
                         <i data-lucide="mail" class="icon-sm"></i>
                         <span data-quotation-send-label>{{ $isSentQuotation ? 'Resend' : 'Send to Client' }}</span>
                     </button>
+                    @if($whatsappUrl)
+                        <a class="btn btn-outline-success" href="{{ $whatsappUrl }}" target="_blank" rel="noopener" onclick="markQuotationAsSent('whatsapp')">
+                            <x-icons.whatsapp class="icon-sm" />
+                            Send via WhatsApp
+                        </a>
+                    @endif
+                    @if($approvalUrl !== '')
+                        <button class="btn btn-outline-primary" type="button" onclick="copyApprovalLink()">
+                            <i data-lucide="copy" class="icon-sm"></i>
+                            Copy Approval Link
+                        </button>
+                    @endif
                 @endif
-                <a class="btn btn-primary" href="{{ route('quotes.download', $quote) }}">
+                @if($isSentQuotation || $isApprovedQuotation || $invoice)
+                    <a class="btn btn-outline-info" href="{{ $invoiceRoute }}">
+                        <i data-lucide="receipt-text" class="icon-sm"></i>
+                        {{ $invoiceActionLabel }}
+                    </a>
+                @endif
+                @if($approvalUrl !== '')
+                    <a class="btn btn-outline-primary" href="{{ $approvalUrl }}" target="_blank" rel="noopener">
+                        <i data-lucide="eye" class="icon-sm"></i>
+                        View as Client
+                    </a>
+                @endif
+                <a class="btn btn-primary" href="{{ route('quotations.pdf', $quotation) }}">
                     <i data-lucide="download" class="icon-sm"></i>
                     Download PDF
                 </a>
@@ -202,20 +231,18 @@
                         @endif
                         @if($isSentQuotation || $isApprovedQuotation)
                             <div class="dropdown-divider"></div>
-                            <a class="dropdown-item text-info" href="{{ $invoice ? route('invoice.details', ['invoice' => $invoice->id]) : route('invoice.create', ['quote' => $quote->id]) }}">
-                                <i data-lucide="receipt-text" class="icon-sm"></i>{{ $invoice ? 'View Invoice' : 'Create Invoice' }}
+                            <a class="dropdown-item text-info" href="{{ $invoiceRoute }}">
+                                <i data-lucide="receipt-text" class="icon-sm"></i>{{ $invoiceActionLabel }}
                             </a>
                         @endif
-                        @if($canDeleteQuotation)
-                            <div class="dropdown-divider"></div>
-                            <form action="{{ route('quotations.destroy', $quotation) }}" data-delete-confirm data-delete-message="Do you want to delete this quotation?" data-delete-title="Delete quotation?" method="POST">
-                                @csrf
-                                @method('DELETE')
-                                <button class="dropdown-item text-danger" type="submit">
-                                    <i data-lucide="trash-2" class="icon-sm"></i>Delete
-                                </button>
-                            </form>
-                        @endif
+                        <div class="dropdown-divider"></div>
+                        <form action="{{ route('quotations.destroy', $quotation) }}" data-delete-confirm data-delete-message="Do you want to delete this quotation and all linked data?" data-delete-title="Delete quotation?" method="POST">
+                            @csrf
+                            @method('DELETE')
+                            <button class="dropdown-item text-danger" type="submit">
+                                <i data-lucide="trash-2" class="icon-sm"></i>Delete
+                            </button>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -225,9 +252,36 @@
                 Sent ✓ {{ $sentAtLabel }}
             @endif
         </div>
-        @include('partials.email-history', ['logs' => $quotation->emailLogs, 'retryTarget' => '#sendQuotationModal'])
+        </div>
     </div>
-</div>
+
+    @if(!$quotation->deposit_paid && $quotation->status === \App\Models\Quotation::STATUS_APPROVED)
+        <div class="card border-warning border-opacity-50 d-print-none">
+            <div class="card-body">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <div>
+                        <h5 class="mb-1">Deposit Pending</h5>
+                        <p class="mb-0 text-muted">KES {{ number_format($quotation->depositAmount(), 2) }} awaiting payment</p>
+                    </div>
+                    <button class="btn btn-warning" type="button" data-bs-toggle="modal" data-bs-target="#depositModal">Mark Deposit Received</button>
+                </div>
+            </div>
+        </div>
+    @elseif($quotation->deposit_paid)
+        <div class="card border-success border-opacity-50 d-print-none">
+            <div class="card-body">
+                <h5 class="mb-1">Deposit Received</h5>
+                <p class="mb-1">KES {{ number_format($quotation->depositAmount(), 2) }}</p>
+                <p class="mb-1">Ref: {{ $quotation->deposit_reference }}</p>
+                <p class="mb-0 text-muted">{{ $quotation->deposit_paid_at?->format('d M Y \a\t H:i') }}</p>
+                @if($quotation->deposit_whatsapp_url)
+                    <a class="btn btn-sm btn-outline-success mt-3" href="{{ $quotation->deposit_whatsapp_url }}" target="_blank" rel="noopener">
+                        <x-icons.whatsapp class="icon-sm me-1" />Send WhatsApp Confirmation
+                    </a>
+                @endif
+            </div>
+        </div>
+    @endif
 
 <div class="row">
     <div class="col-12">
@@ -420,6 +474,51 @@
     </div>
 </div>
 
+@if($quotation->stages->isNotEmpty())
+    <div class="card d-print-none">
+        <div class="card-body">
+            @include('partials.booking-timeline', ['stageable' => $quotation])
+        </div>
+    </div>
+@endif
+
+<div class="modal fade" id="depositModal" tabindex="-1" aria-labelledby="depositModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form action="{{ route('quotations.deposit', $quotation) }}" method="POST" data-deposit-form>
+                @csrf
+                <div class="modal-header">
+                    <h5 class="modal-title" id="depositModalLabel">Mark Deposit Received</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger d-none" data-deposit-error></div>
+                    <div class="mb-3">
+                        <label class="form-label" for="depositAmount">Amount</label>
+                        <input class="form-control" id="depositAmount" name="amount" type="number" step="0.01" min="0" value="{{ $quotation->depositAmount() }}" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="depositReference">Payment reference</label>
+                        <input class="form-control" id="depositReference" name="reference" type="text" placeholder="Payment reference e.g QWE123456" required>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label" for="depositMethod">Method</label>
+                        <select class="form-select" id="depositMethod" name="method" required>
+                            <option value="mpesa">M-Pesa</option>
+                            <option value="bank">Bank Transfer</option>
+                            <option value="cash">Cash</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success" data-deposit-submit>Confirm Deposit Received</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="sendQuotationModal" tabindex="-1" aria-labelledby="sendQuotationModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg send-document-modal">
         <div class="modal-content">
@@ -476,13 +575,11 @@
         const sendState = document.querySelector('[data-quotation-send-state]');
         const statusBadge = document.getElementById('quotation-status-badge');
         const shouldPrint = @json(request()->boolean('print'));
+        const markSentUrl = @json(route('quotes.mark-sent', $quotation));
+        const approvalLink = @json($approvalUrl);
 
         if (shouldPrint) {
             window.setTimeout(() => window.print(), 250);
-        }
-
-        if (!form || !submitButton) {
-            return;
         }
 
         const showToast = (message, className = 'bg-success') => {
@@ -499,6 +596,72 @@
                 className,
             }).showToast();
         };
+
+        window.markQuotationAsSent = function (channel) {
+            fetch(markSentUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || @json(csrf_token()),
+                },
+                body: JSON.stringify({ channel })
+            }).then(response => response.json()).then(data => {
+                if (data.success) {
+                    showToast('Quotation marked as sent via WhatsApp');
+                }
+            }).catch(() => {});
+        };
+
+        window.copyApprovalLink = function () {
+            if (!approvalLink || !navigator.clipboard) {
+                return;
+            }
+
+            navigator.clipboard.writeText(approvalLink).then(() => {
+                showToast('Approval link copied to clipboard');
+            });
+        };
+
+        const depositForm = document.querySelector('[data-deposit-form]');
+        const depositSubmit = document.querySelector('[data-deposit-submit]');
+        const depositError = document.querySelector('[data-deposit-error]');
+
+        depositForm?.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            const original = depositSubmit.innerHTML;
+            depositSubmit.disabled = true;
+            depositSubmit.innerHTML = 'Saving...';
+            depositError?.classList.add('d-none');
+
+            try {
+                const response = await fetch(depositForm.action, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: new FormData(depositForm),
+                });
+
+                const data = await response.json().catch(() => ({}));
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Deposit could not be recorded.');
+                }
+
+                showToast('Deposit received. Booking confirmed.');
+                window.location.reload();
+            } catch (error) {
+                if (depositError) {
+                    depositError.textContent = error.message;
+                    depositError.classList.remove('d-none');
+                }
+            } finally {
+                depositSubmit.disabled = false;
+                depositSubmit.innerHTML = original;
+            }
+        });
 
         const setError = (message) => {
             if (!errorBox) {
@@ -521,6 +684,10 @@
             tooltip?.dispose();
             new bootstrap.Tooltip(element);
         };
+
+        if (!form || !submitButton) {
+            return;
+        }
 
         form.addEventListener('submit', async function (event) {
             event.preventDefault();

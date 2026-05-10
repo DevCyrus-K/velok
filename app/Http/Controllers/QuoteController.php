@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\QuoteRequestFormRequest;
 use App\Models\QuoteRequest;
+use App\Models\Quotation;
+use App\Support\BookingFlow;
 use App\Support\CompanyProfile;
 use App\Support\NotificationLogger;
 use App\Support\QuotationEmail;
@@ -20,23 +22,29 @@ class QuoteController extends Controller
 {
     public function index(): View
     {
-        $quotes = QuoteRequest::query()
+        $quotesPaginated = QuoteRequest::query()
+            ->with(['quote', 'quotation', 'invoice'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->paginate(15);
+
+        $allQuotes = QuoteRequest::query()
             ->with(['quote', 'quotation', 'invoice'])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get();
 
         return view('quotes.index', [
-            'quotes' => $quotes,
-            'serviceFilters' => $quotes->map(fn (QuoteRequest $quote) => $quote->serviceTypeLabel())
+            'quotes' => $quotesPaginated,
+            'serviceFilters' => $allQuotes->map(fn (QuoteRequest $quote) => $quote->serviceTypeLabel())
                 ->unique()
                 ->sort()
                 ->values(),
             'summary' => [
-                'total' => $quotes->count(),
-                'pending' => $quotes->filter(fn (QuoteRequest $quote) => $quote->statusGroup() === 'pending')->count(),
-                'approved' => $quotes->filter(fn (QuoteRequest $quote) => $quote->statusGroup() === 'approved')->count(),
-                'declined' => $quotes->filter(fn (QuoteRequest $quote) => $quote->statusGroup() === 'declined')->count(),
+                'total' => $allQuotes->count(),
+                'pending' => $allQuotes->filter(fn (QuoteRequest $quote) => $quote->statusGroup() === 'pending')->count(),
+                'approved' => $allQuotes->filter(fn (QuoteRequest $quote) => $quote->statusGroup() === 'approved')->count(),
+                'declined' => $allQuotes->filter(fn (QuoteRequest $quote) => $quote->statusGroup() === 'declined')->count(),
             ],
         ]);
     }
@@ -54,6 +62,14 @@ class QuoteController extends Controller
     public function store(QuoteRequestFormRequest $request): RedirectResponse
     {
         $quote = QuoteRequest::query()->create($request->quoteData());
+        $quote->logStage(
+            'REQUEST_SUBMITTED',
+            'Quote request created by admin',
+            'admin',
+            $request->user()?->name,
+            $request->ip(),
+            'system'
+        );
 
         return redirect()
             ->route('quotes.show', $quote)
@@ -62,7 +78,7 @@ class QuoteController extends Controller
 
     public function show(QuoteRequest $quote): View
     {
-        $quote->load(['quote', 'quotation', 'invoice']);
+        $quote->load(['quote.stages', 'quotation.stages', 'invoice.stages', 'stages']);
         app(NotificationLogger::class)->markReadFor($quote);
 
         return view('quotes.show', [
@@ -81,6 +97,8 @@ class QuoteController extends Controller
         $signatureExists = app(UserSignature::class)->exists($signaturePath);
 
         abort_unless($quotation, 404);
+        app(BookingFlow::class)->ensureQuotationTokens($quotation);
+        $quotation->refresh();
 
         $authorization = [
             'name' => $user?->name ?: ($quotation->authorized_by ?: 'Pending'),
@@ -99,9 +117,58 @@ class QuoteController extends Controller
             'authorization' => $authorization,
             'signatureDataUri' => app(UserSignature::class)->dataUri($signaturePath),
             'user' => $user,
+            'paymentMethods' => app(BookingFlow::class)->paymentMethodDisplays(),
+            'thankYouMessage' => app(CompanyProfile::class)->thankYouMessage(),
+            'approvalUrl' => route('quote.customer.approve', ['token' => $quotation->approval_token]),
+            'pdfUrl' => route('quote.pdf.download', ['id' => $quotation->id, 'token' => $quotation->pdf_token]),
         ])->setPaper('a4');
 
         return $pdf->download($this->quotePdfFilename($quote));
+    }
+
+    public function publicPdfDownload(int $id, string $token)
+    {
+        $quotation = Quotation::query()
+            ->with('quoteRequest')
+            ->whereKey($id)
+            ->where('pdf_token', $token)
+            ->firstOrFail();
+
+        abort_if(
+            $quotation->approval_token_expires_at && now()->isAfter($quotation->approval_token_expires_at),
+            403,
+            'This PDF download link has expired.'
+        );
+
+        $pdf = Pdf::loadView('quotes.pdf', [
+            'quote' => $quotation->quoteRequest,
+            'quotation' => $quotation,
+            'company' => app(CompanyProfile::class)->data(),
+            'logoDataUri' => app(CompanyProfile::class)->logoDataUri(),
+            'paymentMethods' => app(BookingFlow::class)->paymentMethodDisplays(),
+            'thankYouMessage' => app(CompanyProfile::class)->thankYouMessage(),
+            'authorization' => [
+                'name' => $quotation->authorized_by ?: 'Authorized Signatory',
+                'job_title' => $quotation->authorized_role ?: 'Authorized Signatory',
+                'signature_path' => $quotation->signature,
+                'is_complete' => filled($quotation->signature),
+                'date_label' => $quotation->authorizationDate()?->format('d M Y') ?? now()->format('d M Y'),
+                'prompt' => 'Signature not available',
+            ],
+            'signatureDataUri' => app(UserSignature::class)->dataUri($quotation->signature),
+            'user' => null,
+        ])->setPaper('a4');
+
+        $quotation->logStage(
+            'PDF_DOWNLOADED',
+            'Customer downloaded quotation PDF',
+            'customer',
+            $quotation->customer_name,
+            request()->ip(),
+            'online'
+        );
+
+        return $pdf->download($this->quotePdfFilename($quotation->quoteRequest));
     }
 
     public function send(HttpRequest $request, QuoteRequest $quote, QuotationEmail $quotationEmail): RedirectResponse|JsonResponse
@@ -143,17 +210,17 @@ class QuoteController extends Controller
         ])->validate();
 
         try {
-            $result = $quotationEmail->queue($quote->quotation, $validated, $request->user());
+            $result = $quotationEmail->send($quote->quotation, $validated, $request->user());
         } catch (Throwable $exception) {
             report($exception);
 
             if ($request->expectsJson()) {
                 return response()->json([
-                    'message' => 'Quotation email could not be queued. Please try again.',
+                    'message' => 'Quotation email could not be sent. Please try again.',
                 ], 500);
             }
 
-            return back()->with('toast-error', 'Quotation email could not be queued. Please try again.');
+            return back()->with('toast-error', 'Quotation email could not be sent. Please try again.');
         }
 
         if ($result['status'] !== 'sent') {
@@ -271,10 +338,18 @@ class QuoteController extends Controller
 
     public function decline(QuoteRequest $quote): RedirectResponse
     {
-        if ($quote->statusGroup() !== 'pending') {
+        $quote->loadMissing('quotation');
+
+        if ($quote->quotation) {
             return redirect()
                 ->route('quotes.show', $quote)
-                ->with('toast-error', 'Only pending quote requests can be rejected.');
+                ->with('toast-error', 'Reject or delete the quotation before rejecting this quote request.');
+        }
+
+        if ($quote->statusGroup() === 'declined') {
+            return redirect()
+                ->route('quotes.show', $quote)
+                ->with('toast-error', 'This quote request is already rejected.');
         }
 
         $quote->update(['status' => QuoteRequest::STATUS_CLOSED]);

@@ -24,7 +24,7 @@ class TopbarData
     {
         return [
             'user' => $user ? $this->user($user) : null,
-            'notifications' => $this->notifications(),
+            'notifications' => $this->notifications($user),
         ];
     }
 
@@ -44,11 +44,11 @@ class TopbarData
         });
     }
 
-    public function notifications(): array
+    public function notifications(?Authenticatable $user = null): array
     {
-        return Cache::remember(self::NOTIFICATIONS_CACHE_KEY, now()->addSeconds(30), function (): array {
+        return Cache::remember($this->notificationsCacheKey($user), now()->addSeconds(30), function () use ($user): array {
             if ($this->hasActivityNotifications()) {
-                return $this->activityNotifications();
+                return $this->activityNotifications($user);
             }
 
             $count = Message::query()
@@ -81,24 +81,32 @@ class TopbarData
         });
     }
 
-    private function activityNotifications(): array
+    private function activityNotifications(?Authenticatable $user = null): array
     {
-        $count = ActivityNotification::query()->whereNull('read_at')->count();
+        $query = ActivityNotification::query()
+            ->whereNull('read_at');
 
-        $items = ActivityNotification::query()
+        $this->scopeNotificationsToUser($query, $user);
+
+        $count = (clone $query)->count();
+
+        $items = $query
             ->latest('occurred_at')
             ->latest('id')
-            ->take(5)
+            ->take(8)
             ->get()
             ->map(fn (ActivityNotification $notification): array => [
                 'id' => $notification->id,
                 'name' => $notification->title,
                 'subject' => $notification->body ?: $notification->title,
                 'created_at' => $notification->occurred_at?->toIso8601String(),
+                'created_at_local' => $notification->occurred_at?->timezone(config('app.timezone'))->format('d M Y, h:i A'),
                 'created_at_human' => $notification->occurred_at?->diffForHumans() ?? '',
                 'url' => $notification->url ?: '#',
+                'mark_read_url' => route('topbar.notifications.read', $notification),
                 'icon' => $notification->icon,
                 'severity' => $notification->severity,
+                'is_read' => (bool) $notification->read_at,
             ])
             ->all();
 
@@ -107,7 +115,25 @@ class TopbarData
             'display_count' => $this->displayCount($count),
             'has_unread' => $count > 0,
             'items' => $items,
+            'mark_all_url' => route('topbar.notifications.read-all'),
+            'timezone' => config('app.timezone'),
         ];
+    }
+
+    private function scopeNotificationsToUser($query, ?Authenticatable $user): void
+    {
+        $userId = $user?->getAuthIdentifier();
+
+        if ($userId === null) {
+            $query->whereNull('user_id');
+
+            return;
+        }
+
+        $query->where(function ($query) use ($userId): void {
+            $query->whereNull('user_id')
+                ->orWhere('user_id', $userId);
+        });
     }
 
     private function hasActivityNotifications(): bool
@@ -187,7 +213,12 @@ class TopbarData
 
     public function forgetNotifications(): void
     {
+        foreach (Cache::get(self::NOTIFICATIONS_CACHE_KEY.'.keys', []) as $cacheKey) {
+            Cache::forget($cacheKey);
+        }
+
         Cache::forget(self::NOTIFICATIONS_CACHE_KEY);
+        Cache::forget(self::NOTIFICATIONS_CACHE_KEY.'.keys');
     }
 
     public function forgetUser(User $user): void
@@ -202,5 +233,18 @@ class TopbarData
         }
 
         return (string) max($count, 0);
+    }
+
+    private function notificationsCacheKey(?Authenticatable $user = null): string
+    {
+        $cacheKey = self::NOTIFICATIONS_CACHE_KEY.'.'.($user?->getAuthIdentifier() ?: 'guest');
+        $keys = Cache::get(self::NOTIFICATIONS_CACHE_KEY.'.keys', []);
+
+        if (! in_array($cacheKey, $keys, true)) {
+            $keys[] = $cacheKey;
+            Cache::put(self::NOTIFICATIONS_CACHE_KEY.'.keys', $keys, now()->addDay());
+        }
+
+        return $cacheKey;
     }
 }
