@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Support\CompanyProfile;
 use App\Support\BookingFlow;
 use App\Support\MailSender;
+use App\Support\PdfDocumentName;
 use App\Support\UserSignature;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Bus\Queueable;
@@ -15,7 +16,6 @@ use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Str;
 
 class QuotationMail extends Mailable
 {
@@ -117,10 +117,7 @@ class QuotationMail extends Mailable
 
     private function attachmentName(): string
     {
-        $reference = Str::slug($this->quotation->quoteRequest->reference());
-        $customerName = Str::slug((string) $this->quotation->quoteRequest->full_name);
-
-        return 'Quotation-'.($reference !== '' ? $reference : $this->quotation->getKey()).'-'.($customerName !== '' ? $customerName : 'customer').'.pdf';
+        return app(PdfDocumentName::class)->quotationFilename($this->quotation);
     }
 
     private function trackingToken(): ?string

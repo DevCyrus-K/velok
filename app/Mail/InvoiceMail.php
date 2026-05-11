@@ -8,6 +8,7 @@ use App\Support\CompanyProfile;
 use App\Support\InvoiceAuthorization;
 use App\Support\MailSender;
 use App\Support\PaymentSettings;
+use App\Support\PdfDocumentName;
 use App\Support\UserSignature;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Bus\Queueable;
@@ -16,7 +17,6 @@ use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Str;
 
 class InvoiceMail extends Mailable
 {
@@ -99,10 +99,7 @@ class InvoiceMail extends Mailable
 
     private function attachmentName(): string
     {
-        $invoiceNumber = Str::slug((string) $this->invoice->invoice_number);
-        $customerName = Str::slug((string) $this->invoice->customer_name);
-
-        return 'Invoice-' . ($invoiceNumber !== '' ? $invoiceNumber : $this->invoice->getKey()) . '-' . ($customerName !== '' ? $customerName : 'customer') . '.pdf';
+        return app(PdfDocumentName::class)->invoiceFilename($this->invoice);
     }
 
     private function trackingToken(): ?string

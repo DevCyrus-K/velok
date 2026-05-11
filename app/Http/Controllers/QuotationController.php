@@ -8,6 +8,7 @@ use App\Models\QuoteRequest;
 use App\Models\User;
 use App\Support\BookingFlow;
 use App\Support\CompanyProfile;
+use App\Support\PdfDocumentName;
 use App\Support\QuotationEmail;
 use App\Support\UserSignature;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -221,7 +222,7 @@ class QuotationController extends Controller
             'download'
         );
 
-        return $pdf->download('Quote-' . Str::slug($quotation->quoteRequest->reference()) . '-' . Str::slug($quotation->quoteRequest->full_name) . '.pdf');
+        return $pdf->download(app(PdfDocumentName::class)->quotationFilename($quotation));
     }
 
     public function send(Request $request, Quotation $quotation, QuotationEmail $quotationEmail): RedirectResponse|JsonResponse

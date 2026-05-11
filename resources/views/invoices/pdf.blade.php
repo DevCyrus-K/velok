@@ -27,6 +27,7 @@
   $authorizedName = $user?->name ?? ($authorization['name'] ?? 'Authorized Signatory');
   $authorizedJobTitle = $user?->job_title ?? ($authorization['job_title'] ?? 'Authorized Signatory');
   $authorizationDate = $authorization['date_label'] ?? now()->format('d M Y');
+  $documentTitle = app(\App\Support\PdfDocumentName::class)->invoiceTitle($invoice);
   $paymentMethods = collect($paymentMethods ?? [])
     ->flatMap(function ($method): array {
       if (is_object($method)) {
@@ -77,7 +78,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="author" content="Laralink">
   <!-- Site Title -->
-  <title>General Purpose Invoice-6</title>
+  <title>{{ $documentTitle }}</title>
   <style>
     *,
     ::after,
@@ -97,7 +98,7 @@
 
     body,
     html {
-      color: #666;
+      color: #04223E;
       font-family: "Inter", sans-serif;
       font-size: 14px;
       font-weight: 400;
@@ -142,7 +143,8 @@
     }
 
     td {
-      border-top: 1px solid #dbdfea;
+      border-top: 1px solid #e6edf5;
+      color: #04223E;
       padding: 10px 15px;
       line-height: 1.55em;
     }
@@ -213,33 +215,33 @@
     }
 
     .tm_border_top {
-      border-top: 1px solid #dbdfea;
+      border-top: 1px solid #e6edf5;
     }
 
     .tm_border_bottom {
-      border-bottom: 1px solid #dbdfea;
+      border-bottom: 1px solid #e6edf5;
     }
 
     .tm_round_border {
-      border: 1px solid #dbdfea;
+      border: 1px solid #e6edf5;
       overflow: hidden;
       border-radius: 6px;
     }
 
     .tm_primary_color {
-      color: #111;
+      color: #04223E;
     }
 
     .tm_secondary_color {
-      color: #666;
+      color: #04223E;
     }
 
     .tm_ternary_color {
-      color: #b5b5b5;
+      color: #04223E;
     }
 
     .tm_gray_bg {
-      background: #ffffff;
+      background: #fff5f5;
     }
 
     .tm_invoice_in {
@@ -287,7 +289,8 @@
 
     .tm_invoice {
       background: #ffffff;
-      border-radius: 10px;
+      border: 1px solid #e6edf5;
+      border-radius: 8px;
       padding: 50px;
     }
 
@@ -350,7 +353,8 @@
     }
 
     .tm_invoice.tm_style1 .tm_invoice_seperator {
-      min-height: 18px;
+      min-height: 8px;
+      background: #DF1119;
       border-radius: 1.6em;
       -webkit-box-flex: 1;
           -ms-flex: 1;
@@ -384,46 +388,70 @@
       padding: 15px 20px;
     }
 
-    .tm_dark_invoice_body {
+    .tm_invoice_body {
       background-color: #ffffff;
     }
 
-    .tm_dark_invoice {
+    .tm_brand_invoice {
       background: #ffffff;
-      color: rgba(255, 255, 255, 0.65);
+      color: #04223E;
     }
 
-    .tm_dark_invoice .tm_primary_color {
-      color: rgba(255, 255, 255, 0.9);
+    .tm_brand_invoice .tm_primary_color {
+      color: #04223E;
     }
 
-    .tm_dark_invoice .tm_secondary_color {
-      color: rgba(255, 255, 255, 0.65);
+    .tm_brand_invoice .tm_secondary_color {
+      color: #04223E;
     }
 
-    .tm_dark_invoice .tm_ternary_color {
-      color: rgba(255, 255, 255, 0.4);
+    .tm_brand_invoice .tm_ternary_color {
+      color: #04223E;
     }
 
-    .tm_dark_invoice .tm_gray_bg {
-      background: #ffffff;
+    .tm_brand_invoice .tm_gray_bg {
+      background: #fff5f5;
     }
 
-    .tm_dark_invoice .tm_border_color,
-    .tm_dark_invoice .tm_round_border,
-    .tm_dark_invoice td,
-    .tm_dark_invoice th,
-    .tm_dark_invoice .tm_border_top,
-    .tm_dark_invoice .tm_border_bottom {
-      border-color: rgba(255, 255, 255, 0.1);
+    .tm_brand_invoice .tm_border_color,
+    .tm_brand_invoice .tm_round_border,
+    .tm_brand_invoice td,
+    .tm_brand_invoice th,
+    .tm_brand_invoice .tm_border_top,
+    .tm_brand_invoice .tm_border_bottom {
+      border-color: #e6edf5;
+    }
+
+    .tm_document_title {
+      color: #04223E;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .tm_accent_rule {
+      width: 82px;
+      height: 4px;
+      margin-top: 8px;
+      margin-left: auto;
+      border-radius: 6px;
+      background: #DF1119;
+    }
+
+    .tm_brand_invoice th {
+      border-top: 2px solid #DF1119;
+      color: #04223E;
+    }
+
+    .tm_total_row td {
+      border-top: 2px solid #DF1119;
     }
   </style>
 </head>
 
-<body class="tm_dark_invoice_body">
+<body class="tm_invoice_body">
   <div class="tm_container">
     <div class="tm_invoice_wrap">
-      <div class="tm_invoice tm_style1 tm_dark_invoice" id="tm_download_section">
+      <div class="tm_invoice tm_style1 tm_brand_invoice" id="tm_download_section">
         <div class="tm_invoice_in">
           <div class="tm_invoice_head tm_align_center tm_mb20">
             <div class="tm_invoice_left">
@@ -434,7 +462,8 @@
               </div>
             </div>
             <div class="tm_invoice_right tm_text_right">
-              <div class="tm_primary_color tm_f50 tm_text_uppercase">INVOICE</div>
+              <div class="tm_document_title tm_f50 tm_text_uppercase">INVOICE</div>
+              <div class="tm_accent_rule"></div>
             </div>
           </div>
           <div class="tm_invoice_info tm_mb20">
@@ -534,7 +563,7 @@
                       <td class="tm_width_3 tm_primary_color tm_text_right tm_border_none tm_pt0">KES {{ number_format((float) $invoice->tax, 2) }}</td>
                     </tr>
                     @endif
-                    <tr class="tm_border_top tm_border_bottom">
+                    <tr class="tm_border_top tm_border_bottom tm_total_row">
                       <td class="tm_width_3 tm_border_top_0 tm_bold tm_f16 tm_primary_color">Grand Total</td>
                       <td class="tm_width_3 tm_border_top_0 tm_bold tm_f16 tm_primary_color tm_text_right">KES {{ number_format((float) $invoice->total, 2) }}</td>
                     </tr>
@@ -543,7 +572,7 @@
                       <td class="tm_width_3 tm_primary_color tm_border_none tm_pt0">Deposit Paid</td>
                       <td class="tm_width_3 tm_primary_color tm_text_right tm_border_none tm_pt0">-KES {{ number_format((float) $invoice->deposit_amount, 2) }}</td>
                     </tr>
-                    <tr class="tm_border_top tm_border_bottom">
+                    <tr class="tm_border_top tm_border_bottom tm_total_row">
                       <td class="tm_width_3 tm_border_top_0 tm_bold tm_f16 tm_primary_color">Balance Due</td>
                       <td class="tm_width_3 tm_border_top_0 tm_bold tm_f16 tm_primary_color tm_text_right">KES {{ number_format((float) $invoice->balance, 2) }}</td>
                     </tr>
@@ -597,12 +626,12 @@
                           <div style="
                             height: 50px;
                             width: 180px;
-                            border-bottom: 1px solid #cccccc;
+                            border-bottom: 1px solid #DF1119;
                             margin-bottom: 4px;">
                           </div>
                           <p style="
                             font-size: 10px;
-                            color: #9ca3af;
+                            color: #04223E;
                             font-style: italic;
                             margin: 0 0 4px 0;">
                             Signature not uploaded
@@ -612,24 +641,24 @@
                         <p style="
                           font-family: &quot;Inter&quot;, sans-serif;
                           font-size: 14px;
-                          color: rgba(255, 255, 255, 0.9);
+                          color: #04223E;
                           font-weight: 700;
                           margin: 2px 0 0 0;">
-                          {{ $user->name ?? 'Authorized Signatory' }}
+                          {{ $authorizedName }}
                         </p>
                         <p style="
                           font-family: &quot;Inter&quot;, sans-serif;
                           font-size: 14px;
-                          color: rgba(255, 255, 255, 0.65);
+                          color: #04223E;
                           margin: 2px 0 0 0;">
-                          {{ $user->job_title ?? 'Authorized Signatory' }}
+                          {{ $authorizedJobTitle }}
                         </p>
                         <p style="
                           font-family: &quot;Inter&quot;, sans-serif;
                           font-size: 14px;
-                          color: rgba(255, 255, 255, 0.65);
+                          color: #04223E;
                           margin: 2px 0 0 0;">
-                          {{ now()->format('d M Y') }}
+                          {{ $authorizationDate }}
                         </p>
                       </div>
                     </td>

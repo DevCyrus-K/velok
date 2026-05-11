@@ -10,6 +10,7 @@ use App\Services\PaymentMethodService;
 use App\Support\BookingFlow;
 use App\Support\CompanyProfile;
 use App\Support\NotificationLogger;
+use App\Support\PdfDocumentName;
 use App\Support\QuotationEmail;
 use App\Support\UserSignature;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -17,7 +18,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request as HttpRequest;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Throwable;
 
@@ -404,10 +404,7 @@ class QuoteController extends Controller
 
     private function quotePdfFilename(QuoteRequest $quote): string
     {
-        $quoteNumber = Str::slug($quote->reference()) ?: (string) $quote->getKey();
-        $customerName = Str::slug((string) $quote->full_name) ?: 'customer';
-
-        return "Quote-{$quoteNumber}-{$customerName}.pdf";
+        return app(PdfDocumentName::class)->quoteRequestFilename($quote);
     }
 
     private function buildPdfData(?User $user, ?Quotation $quotation = null, ?string $signaturePath = null): array

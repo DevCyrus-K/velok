@@ -594,7 +594,10 @@
             canvasImageHeight
             );
         }
-        pdf.save('download.pdf');
+        var pdfFileName = (document.title || 'invoice')
+            .replace(/[^a-z0-9]+/gi, '-')
+            .replace(/^-+|-+$/g, '') || 'invoice';
+        pdf.save(pdfFileName + '.pdf');
         });
     });
     </script>

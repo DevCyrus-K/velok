@@ -11,6 +11,7 @@ use App\Services\PaymentMethodService;
 use App\Support\BookingFlow;
 use App\Support\CompanyProfile;
 use App\Support\InvoiceAuthorization;
+use App\Support\PdfDocumentName;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -680,10 +681,7 @@ class InvoiceController extends Controller
 
     private function invoicePdfFilename(Invoice $invoice): string
     {
-        $invoiceNumber = Str::slug((string) $invoice->invoice_number) ?: (string) $invoice->getKey();
-        $customerName = Str::slug((string) $invoice->customer_name) ?: 'customer';
-
-        return "Invoice-{$invoiceNumber}-{$customerName}.pdf";
+        return app(PdfDocumentName::class)->invoiceFilename($invoice);
     }
 
     private function defaultInvoiceSubject(Invoice $invoice): string

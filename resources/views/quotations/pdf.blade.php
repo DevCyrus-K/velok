@@ -2,6 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
+    <title>{{ app(\App\Support\PdfDocumentName::class)->quotationTitle($quotation) }}</title>
     <style>
         * {
             margin: 0;
@@ -10,8 +11,8 @@
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            color: #333;
-            background: #fff;
+            color: #04223E;
+            background: #ffffff;
             padding: 20px;
         }
         .container {
@@ -37,12 +38,13 @@
         .brand-mark {
             display: inline-block;
             padding: 10px 14px;
-            background: #df1119;
-            color: #fff;
+            background: #ffffff;
+            color: #04223E;
+            border-left: 4px solid #DF1119;
             font-size: 14px;
             line-height: 18px;
             font-weight: 700;
-            letter-spacing: 0.5px;
+            letter-spacing: 0;
             border-radius: 4px;
         }
         .header-title {
@@ -52,11 +54,11 @@
         .header-title h5 {
             font-size: 24px;
             margin-bottom: 5px;
-            color: #333;
+            color: #04223E;
         }
         .header-title p {
             font-size: 13px;
-            color: #666;
+            color: #04223E;
             margin: 3px 0;
         }
         .badge {
@@ -67,20 +69,20 @@
             font-weight: 500;
         }
         .badge-info {
-            background: #e7f1f8;
-            color: #0c5394;
+            background: #fff5f5;
+            color: #04223E;
         }
         .badge-success {
-            background: #e8f5e9;
-            color: #2e7d32;
+            background: #fff5f5;
+            color: #04223E;
         }
         .badge-warning {
-            background: #fff3e0;
-            color: #e65100;
+            background: #fff5f5;
+            color: #04223E;
         }
         .badge-danger {
-            background: #ffebee;
-            color: #c62828;
+            background: #fff5f5;
+            color: #04223E;
         }
         
         .section-row {
@@ -92,24 +94,24 @@
             flex: 1;
         }
         .section-col h6 {
-            color: #999;
+            color: #04223E;
             font-size: 12px;
             font-weight: 500;
             margin-bottom: 8px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0;
         }
         .section-col .title {
             font-size: 16px;
             font-weight: 600;
-            color: #333;
+            color: #04223E;
             margin-bottom: 8px;
         }
         .section-col address {
             font-style: normal;
             line-height: 1.6;
             font-size: 13px;
-            color: #666;
+            color: #04223E;
         }
         .section-col abbr {
             border: none;
@@ -125,19 +127,19 @@
             font-size: 13px;
         }
         table thead {
-            background: #f5f5f5;
+            background: #fff5f5;
         }
         table thead tr th {
             padding: 12px;
             text-align: left;
             font-weight: 600;
-            color: #333;
-            border: none;
+            color: #04223E;
+            border-top: 2px solid #DF1119;
         }
         table tbody tr td {
             padding: 12px;
-            border-bottom: 1px solid #eee;
-            color: #666;
+            border-bottom: 1px solid #e6edf5;
+            color: #04223E;
         }
         table tbody tr:last-child td {
             border-bottom: none;
@@ -155,14 +157,14 @@
             flex: 1;
         }
         .notes-col h6 {
-            color: #999;
+            color: #04223E;
             font-size: 12px;
             font-weight: 500;
             margin-bottom: 8px;
             text-transform: uppercase;
         }
         .notes-col small {
-            color: #666;
+            color: #04223E;
             font-size: 13px;
             line-height: 1.6;
         }
@@ -179,31 +181,31 @@
         }
         .summary-col .label {
             font-weight: 600;
-            color: #333;
+            color: #04223E;
         }
         .summary-col .value {
-            color: #666;
+            color: #04223E;
         }
         .summary-col h3 {
             font-size: 18px;
             margin-top: 15px;
-            color: #333;
+            color: #04223E;
         }
         
         .print-actions {
             margin-top: 40px;
             text-align: right;
-            border-top: 1px solid #eee;
+            border-top: 1px solid #e6edf5;
             padding-top: 20px;
         }
         
         .footer {
             margin-top: 50px;
             padding-top: 20px;
-            border-top: 1px solid #eee;
+            border-top: 1px solid #e6edf5;
             text-align: center;
             font-size: 12px;
-            color: #999;
+            color: #04223E;
         }
         
         @media print {
@@ -268,7 +270,7 @@
                 <div class="title">{{ $quotation->quoteRequest->full_name }}</div>
                 <address>
                     {{ $quotation->quoteRequest->email }} • {{ $quotation->quoteRequest->phone }}<br />
-                    <span style="color: #999;">{{ $quotation->quoteRequest->serviceTypeLabel() }}</span>
+                    <span style="color: #04223E;">{{ $quotation->quoteRequest->serviceTypeLabel() }}</span>
                 </address>
             </div>
             <div class="section-col">
@@ -317,7 +319,7 @@
 
         <!-- Services Included -->
         @if ($quotation->services_included && count($quotation->services_included) > 0)
-            <h6 style="color: #999; font-size: 12px; font-weight: 500; margin-top: 30px; margin-bottom: 15px; text-transform: uppercase;">Services Included</h6>
+            <h6 style="color: #04223E; font-size: 12px; font-weight: 500; margin-top: 30px; margin-bottom: 15px; text-transform: uppercase;">Services Included</h6>
             <table>
                 <thead>
                     <tr>
@@ -327,9 +329,13 @@
                 </thead>
                 <tbody>
                     @foreach ($quotation->services_included as $service)
+                        @php
+                            $serviceName = is_array($service) ? ($service['name'] ?? 'Service') : (trim((string) $service) ?: 'Service');
+                            $serviceDescription = is_array($service) ? ($service['description'] ?? 'N/A') : 'Included';
+                        @endphp
                         <tr>
-                            <td><strong>{{ $service['name'] }}</strong></td>
-                            <td>{{ $service['description'] ?? 'N/A' }}</td>
+                            <td><strong>{{ $serviceName }}</strong></td>
+                            <td>{{ $serviceDescription }}</td>
                         </tr>
                     @endforeach
                 </tbody>
@@ -384,9 +390,9 @@
                         </div>
                     @endif
                 @else
-                    <div style="margin-top: 10px; color: #e65100; font-size: 12px;">{{ $authorization['prompt'] }}</div>
+                    <div style="margin-top: 10px; color: #04223E; font-size: 12px; border-left: 3px solid #DF1119; padding-left: 8px;">{{ $authorization['prompt'] }}</div>
                 @endif
-                <h3 style="color: #007bff;">KES {{ number_format($quotation->quote_amount ?? 0, 2) }}</h3>
+                <h3 style="color: #04223E; border-top: 2px solid #DF1119; padding-top: 10px;">KES {{ number_format($quotation->quote_amount ?? 0, 2) }}</h3>
             </div>
         </div>
 
