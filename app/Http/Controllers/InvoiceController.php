@@ -7,10 +7,10 @@ use App\Models\EmailLog;
 use App\Models\Invoice;
 use App\Models\QuoteRequest;
 use App\Models\User;
+use App\Services\PaymentMethodService;
 use App\Support\BookingFlow;
 use App\Support\CompanyProfile;
 use App\Support\InvoiceAuthorization;
-use App\Support\PaymentSettings;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -282,14 +283,14 @@ class InvoiceController extends Controller
 
         $user = auth()->user();
 
-        $pdf = Pdf::loadView('invoices.pdf', $this->invoiceDocumentData($invoice, $user))
+        $pdf = Pdf::loadView('invoices.pdf', array_merge(['invoice' => $invoice], $this->buildPdfData($user, $invoice)))
             ->setPaper('a4', 'portrait')
             ->setOptions([
                 'dpi' => 150,
                 'enable_html5_parser' => true,
                 'isHtml5ParserEnabled' => true,
                 'isRemoteEnabled' => true,
-                'defaultFont' => 'Inter',
+                'defaultFont' => 'sans-serif',
             ]);
 
         $invoice->logStage(
@@ -537,16 +538,144 @@ class InvoiceController extends Controller
         $company = app(CompanyProfile::class)->data();
         $authorization = app(InvoiceAuthorization::class)->data($invoice, $company, $user);
 
-        return [
+        return array_merge([
             'invoice' => $invoice,
             'company' => $company,
             'logoDataUri' => app(CompanyProfile::class)->logoDataUri(),
-            'paymentMethods' => app(PaymentSettings::class)->methodsForInvoice($invoice),
             'thankYouMessage' => app(CompanyProfile::class)->thankYouMessage(),
             'authorization' => $authorization,
             'signatureDataUri' => app(InvoiceAuthorization::class)->signatureDataUri($invoice, $company, $user),
             'user' => $user,
+        ], $this->buildPdfData($user, $invoice));
+    }
+
+    private function buildPdfData(?User $user, ?Invoice $invoice = null): array
+    {
+        $company = app(CompanyProfile::class)->data();
+        [$logoBase64, $logoMime] = $this->publicImagePayload($company['logo_path'] ?? 'images/logo-dark.png');
+
+        $signaturePath = $user?->signaturePath() ?: $invoice?->quoteRequest?->quotation?->signature;
+
+        // Signature base64 encoding
+        $sigBase64 = null;
+        $sigMime = 'image/png';
+
+        try {
+            if ($signaturePath) {
+                // Try storage disk first (R2 or local)
+                if (Storage::exists($signaturePath)) {
+                    $sigContent = Storage::get($signaturePath);
+                    $sigMime = Storage::mimeType($signaturePath)
+                        ?? 'image/png';
+                    $sigBase64 = base64_encode($sigContent);
+                }
+
+                // If not on disk try as full file path
+                elseif (file_exists($signaturePath)) {
+                    $sigContent = file_get_contents($signaturePath);
+                    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                    $sigMime = finfo_buffer($finfo, $sigContent)
+                        ?? 'image/png';
+                    finfo_close($finfo);
+                    $sigBase64 = base64_encode($sigContent);
+                }
+
+                // Try storage_path as fallback
+                elseif (file_exists(storage_path('app/'.$signaturePath))) {
+                    $fullPath = storage_path('app/'.$signaturePath);
+                    $sigContent = file_get_contents($fullPath);
+                    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                    $sigMime = finfo_buffer($finfo, $sigContent)
+                        ?? 'image/png';
+                    finfo_close($finfo);
+                    $sigBase64 = base64_encode($sigContent);
+                }
+
+                // Try public storage path as fallback
+                elseif (file_exists(storage_path('app/public/'.$signaturePath))) {
+                    $fullPath = storage_path('app/public/'.$signaturePath);
+                    $sigContent = file_get_contents($fullPath);
+                    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                    $sigMime = finfo_buffer($finfo, $sigContent)
+                        ?? 'image/png';
+                    finfo_close($finfo);
+                    $sigBase64 = base64_encode($sigContent);
+                }
+
+                // Log if still not found
+                if (! $sigBase64) {
+                    \Log::warning('Signature file not found', [
+                        'user_id' => $user?->id,
+                        'signature' => $signaturePath,
+                    ]);
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error('Signature base64 error: '.$e->getMessage(), [
+                'user_id' => $user?->id,
+                'signature' => $signaturePath ?? 'null',
+            ]);
+            $sigBase64 = null;
+        }
+
+        $companyAddress = collect([$company['address_line_1'] ?? null, $company['address_line_2'] ?? null])
+            ->map(fn ($line) => trim((string) $line))
+            ->filter()
+            ->implode(', ');
+
+        return [
+            'user' => $user,
+            'logoBase64' => $logoBase64,
+            'logoMime' => $logoMime,
+            'sigBase64' => $sigBase64,
+            'sigMime' => $sigMime,
+            'paymentMethods' => app(PaymentMethodService::class)->getEnabled($invoice),
+            'thankYou' => app(CompanyProfile::class)->thankYouMessage(),
+            'companyName' => trim((string) ($company['name'] ?? '')) ?: config('app.name'),
+            'companyAddress' => $companyAddress,
+            'companyPhone' => trim((string) ($company['phone'] ?? '')),
+            'companyEmail' => trim((string) ($company['email'] ?? '')),
+            'paymentTerms' => trim((string) ($invoice?->notes ?? '')),
+            'cancellation' => trim((string) ($invoice?->quoteRequest?->quotation?->cancellation_policy ?? '')),
+            'liability' => '',
         ];
+    }
+
+    /**
+     * @return array{0: string|null, 1: string}
+     */
+    private function publicImagePayload(?string $path): array
+    {
+        $fullPath = public_path(ltrim((string) $path, '/'));
+
+        if (! is_file($fullPath)) {
+            return [null, 'image/png'];
+        }
+
+        $mime = mime_content_type($fullPath) ?: 'image/png';
+
+        if (! $this->canEmbedImageMime($mime)) {
+            $fallbackPath = base_path('Invoma-template/assets/img/logo.svg');
+
+            if (is_file($fallbackPath)) {
+                return [
+                    base64_encode((string) file_get_contents($fallbackPath)),
+                    'image/svg+xml',
+                ];
+            }
+
+            return [null, 'image/png'];
+        }
+
+        return [
+            base64_encode((string) file_get_contents($fullPath)),
+            $mime,
+        ];
+    }
+
+    private function canEmbedImageMime(string $mime): bool
+    {
+        return str_contains($mime, 'svg') || extension_loaded('gd');
     }
 
     private function invoicePdfFilename(Invoice $invoice): string

@@ -28,4 +28,9 @@ class InvoiceItem extends Model
     {
         return $this->belongsTo(Invoice::class, 'invoice_id');
     }
+
+    public function getAmountAttribute(): float
+    {
+        return (float) ($this->total ?? 0);
+    }
 }

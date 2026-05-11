@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Requests\QuoteRequestFormRequest;
 use App\Models\QuoteRequest;
 use App\Models\Quotation;
+use App\Models\User;
+use App\Services\PaymentMethodService;
 use App\Support\BookingFlow;
 use App\Support\CompanyProfile;
 use App\Support\NotificationLogger;
@@ -14,6 +16,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request as HttpRequest;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Throwable;
@@ -109,25 +112,21 @@ class QuoteController extends Controller
             'prompt' => 'Signature not available',
         ];
 
-        $pdf = Pdf::loadView('quotes.pdf', [
+        $pdf = Pdf::loadView('quotes.pdf', array_merge([
             'quote' => $quote,
             'quotation' => $quotation,
             'company' => app(CompanyProfile::class)->data(),
-            'logoDataUri' => app(CompanyProfile::class)->logoDataUri(),
             'authorization' => $authorization,
-            'signatureDataUri' => app(UserSignature::class)->dataUri($signaturePath),
             'user' => $user,
-            'paymentMethods' => app(BookingFlow::class)->paymentMethodDisplays(),
-            'thankYouMessage' => app(CompanyProfile::class)->thankYouMessage(),
             'approvalUrl' => route('quote.customer.approve', ['token' => $quotation->approval_token]),
             'pdfUrl' => route('quote.pdf.download', ['id' => $quotation->id, 'token' => $quotation->pdf_token]),
-        ])->setPaper('a4', 'portrait')
+        ], $this->buildPdfData($user, $quotation, $signaturePath)))->setPaper('a4', 'portrait')
             ->setOptions([
                 'dpi' => 150,
                 'enable_html5_parser' => true,
                 'isHtml5ParserEnabled' => true,
                 'isRemoteEnabled' => true,
-                'defaultFont' => 'Inter',
+                'defaultFont' => 'sans-serif',
             ]);
 
         $quotation->logStage(
@@ -156,13 +155,10 @@ class QuoteController extends Controller
             'This PDF download link has expired.'
         );
 
-        $pdf = Pdf::loadView('quotes.pdf', [
+        $pdf = Pdf::loadView('quotes.pdf', array_merge([
             'quote' => $quotation->quoteRequest,
             'quotation' => $quotation,
             'company' => app(CompanyProfile::class)->data(),
-            'logoDataUri' => app(CompanyProfile::class)->logoDataUri(),
-            'paymentMethods' => app(BookingFlow::class)->paymentMethodDisplays(),
-            'thankYouMessage' => app(CompanyProfile::class)->thankYouMessage(),
             'authorization' => [
                 'name' => $quotation->authorized_by ?: 'Authorized Signatory',
                 'job_title' => $quotation->authorized_role ?: 'Authorized Signatory',
@@ -171,17 +167,16 @@ class QuoteController extends Controller
                 'date_label' => $quotation->authorizationDate()?->format('d M Y') ?? now()->format('d M Y'),
                 'prompt' => 'Signature not available',
             ],
-            'signatureDataUri' => app(UserSignature::class)->dataUri($quotation->signature),
             'user' => null,
             'approvalUrl' => route('quote.customer.approve', ['token' => $quotation->approval_token]),
             'pdfUrl' => route('quote.pdf.download', ['id' => $quotation->id, 'token' => $quotation->pdf_token]),
-        ])->setPaper('a4', 'portrait')
+        ], $this->buildPdfData(null, $quotation, $quotation->signature)))->setPaper('a4', 'portrait')
             ->setOptions([
                 'dpi' => 150,
                 'enable_html5_parser' => true,
                 'isHtml5ParserEnabled' => true,
                 'isRemoteEnabled' => true,
-                'defaultFont' => 'Inter',
+                'defaultFont' => 'sans-serif',
             ]);
 
         $quotation->logStage(
@@ -414,4 +409,134 @@ class QuoteController extends Controller
 
         return "Quote-{$quoteNumber}-{$customerName}.pdf";
     }
+
+    private function buildPdfData(?User $user, ?Quotation $quotation = null, ?string $signaturePath = null): array
+    {
+        $company = app(CompanyProfile::class)->data();
+        [$logoBase64, $logoMime] = $this->publicImagePayload($company['logo_path'] ?? 'images/logo-dark.png');
+
+        $signaturePath = $signaturePath ?: $user?->signaturePath() ?: $quotation?->signature;
+
+        // Signature base64 encoding
+        $sigBase64 = null;
+        $sigMime = 'image/png';
+
+        try {
+            if ($signaturePath) {
+                // Try storage disk first (R2 or local)
+                if (Storage::exists($signaturePath)) {
+                    $sigContent = Storage::get($signaturePath);
+                    $sigMime = Storage::mimeType($signaturePath)
+                        ?? 'image/png';
+                    $sigBase64 = base64_encode($sigContent);
+                }
+
+                // If not on disk try as full file path
+                elseif (file_exists($signaturePath)) {
+                    $sigContent = file_get_contents($signaturePath);
+                    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                    $sigMime = finfo_buffer($finfo, $sigContent)
+                        ?? 'image/png';
+                    finfo_close($finfo);
+                    $sigBase64 = base64_encode($sigContent);
+                }
+
+                // Try storage_path as fallback
+                elseif (file_exists(storage_path('app/'.$signaturePath))) {
+                    $fullPath = storage_path('app/'.$signaturePath);
+                    $sigContent = file_get_contents($fullPath);
+                    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                    $sigMime = finfo_buffer($finfo, $sigContent)
+                        ?? 'image/png';
+                    finfo_close($finfo);
+                    $sigBase64 = base64_encode($sigContent);
+                }
+
+                // Try public storage path as fallback
+                elseif (file_exists(storage_path('app/public/'.$signaturePath))) {
+                    $fullPath = storage_path('app/public/'.$signaturePath);
+                    $sigContent = file_get_contents($fullPath);
+                    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                    $sigMime = finfo_buffer($finfo, $sigContent)
+                        ?? 'image/png';
+                    finfo_close($finfo);
+                    $sigBase64 = base64_encode($sigContent);
+                }
+
+                // Log if still not found
+                if (! $sigBase64) {
+                    \Log::warning('Signature file not found', [
+                        'user_id' => $user?->id,
+                        'signature' => $signaturePath,
+                    ]);
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error('Signature base64 error: '.$e->getMessage(), [
+                'user_id' => $user?->id,
+                'signature' => $signaturePath ?? 'null',
+            ]);
+            $sigBase64 = null;
+        }
+
+        $companyAddress = collect([$company['address_line_1'] ?? null, $company['address_line_2'] ?? null])
+            ->map(fn ($line) => trim((string) $line))
+            ->filter()
+            ->implode(', ');
+
+        return [
+            'user' => $user,
+            'logoBase64' => $logoBase64,
+            'logoMime' => $logoMime,
+            'sigBase64' => $sigBase64,
+            'sigMime' => $sigMime,
+            'paymentMethods' => app(PaymentMethodService::class)->getEnabled(),
+            'thankYou' => app(CompanyProfile::class)->thankYouMessage(),
+            'companyName' => trim((string) ($quotation?->company_name ?? $company['name'] ?? '')) ?: config('app.name'),
+            'companyAddress' => $companyAddress,
+            'companyPhone' => trim((string) ($quotation?->company_phone ?? $company['phone'] ?? '')),
+            'companyEmail' => trim((string) ($quotation?->company_email ?? $company['email'] ?? '')),
+            'paymentTerms' => trim((string) ($quotation?->payment_terms ?? '')),
+            'cancellation' => trim((string) ($quotation?->cancellationPolicyText() ?? '')),
+            'liability' => '',
+        ];
+    }
+
+    /**
+     * @return array{0: string|null, 1: string}
+     */
+    private function publicImagePayload(?string $path): array
+    {
+        $fullPath = public_path(ltrim((string) $path, '/'));
+
+        if (! is_file($fullPath)) {
+            return [null, 'image/png'];
+        }
+
+        $mime = mime_content_type($fullPath) ?: 'image/png';
+
+        if (! $this->canEmbedImageMime($mime)) {
+            $fallbackPath = base_path('Invoma-template/assets/img/logo.svg');
+
+            if (is_file($fallbackPath)) {
+                return [
+                    base64_encode((string) file_get_contents($fallbackPath)),
+                    'image/svg+xml',
+                ];
+            }
+
+            return [null, 'image/png'];
+        }
+
+        return [
+            base64_encode((string) file_get_contents($fullPath)),
+            $mime,
+        ];
+    }
+
+    private function canEmbedImageMime(string $mime): bool
+    {
+        return str_contains($mime, 'svg') || extension_loaded('gd');
+    }
+
 }

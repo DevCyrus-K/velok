@@ -161,4 +161,47 @@ class Invoice extends Model
 
 		return Str::upper($initials !== '' ? $initials : 'IN');
 	}
+
+	public function getReferenceAttribute(): string
+	{
+		return (string) $this->invoice_number;
+	}
+
+	public function getPickupLocationAttribute(): ?string
+	{
+		return $this->move_origin;
+	}
+
+	public function getDropoffLocationAttribute(): ?string
+	{
+		return $this->move_destination;
+	}
+
+	public function getCustomerAddressAttribute(): string
+	{
+		return collect([$this->move_origin, $this->move_destination])
+			->map(fn ($value) => trim((string) $value))
+			->filter()
+			->implode(' to ');
+	}
+
+	public function getDiscountAttribute(): float
+	{
+		return 0.0;
+	}
+
+	public function getDepositAmountAttribute(): float
+	{
+		return (float) ($this->quoteRequest?->quotation?->deposit_amount ?? 0);
+	}
+
+	public function getTotalAttribute(): float
+	{
+		return (float) ($this->total_amount ?? 0);
+	}
+
+	public function getBalanceAttribute(): float
+	{
+		return max(0, $this->total - $this->deposit_amount);
+	}
 }

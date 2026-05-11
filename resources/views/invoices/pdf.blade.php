@@ -1,95 +1,71 @@
 @php
-  $stylesheet = (string) file_get_contents(base_path('Invoma-template/assets/css/style.css'));
-  $stylesheet = (string) preg_replace('/@import\s+url\([^)]+\);\s*/', '', $stylesheet);
-  $fontFace = '';
-  $regularFont = '/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf';
-  $boldFont = '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf';
-
-  if (is_file($regularFont)) {
-      $fontFace .= '@font-face{font-family:"Inter";src:url("file://'.$regularFont.'") format("truetype");font-weight:300;font-style:normal;}';
-      $fontFace .= '@font-face{font-family:"Inter";src:url("file://'.$regularFont.'") format("truetype");font-weight:400;font-style:normal;}';
-      $fontFace .= '@font-face{font-family:"Inter";src:url("file://'.$regularFont.'") format("truetype");font-weight:500;font-style:normal;}';
+  if (! isset($logoBase64) && isset($logoDataUri) && is_string($logoDataUri) && str_starts_with($logoDataUri, 'data:')) {
+    [$logoMeta, $logoPayload] = array_pad(explode(',', $logoDataUri, 2), 2, null);
+    $logoBase64 = $logoPayload;
+    $logoMime = str_replace(['data:', ';base64'], '', (string) $logoMeta) ?: 'image/png';
   }
 
-  if (is_file($boldFont)) {
-      $fontFace .= '@font-face{font-family:"Inter";src:url("file://'.$boldFont.'") format("truetype");font-weight:600;font-style:normal;}';
-      $fontFace .= '@font-face{font-family:"Inter";src:url("file://'.$boldFont.'") format("truetype");font-weight:700;font-style:normal;}';
+  if (! isset($sigBase64) && isset($signatureDataUri) && is_string($signatureDataUri) && str_starts_with($signatureDataUri, 'data:')) {
+    [$sigMeta, $sigPayload] = array_pad(explode(',', $signatureDataUri, 2), 2, null);
+    $sigBase64 = $sigPayload;
+    $sigMime = str_replace(['data:', ';base64'], '', (string) $sigMeta) ?: 'image/png';
   }
 
-  $company = $company ?? app(\App\Support\CompanyProfile::class)->data();
-  $user = $user ?? auth()->user();
-  $companyName = $companyName ?? (trim((string) ($company['name'] ?? '')) ?: 'Kwikshift Movers');
-  $companyAddress = $companyAddress ?? collect([$company['address_line_1'] ?? null, $company['address_line_2'] ?? null])->map(fn ($line) => trim((string) $line))->filter()->implode(' ');
+  $company = $company ?? [];
+  $companyName = $companyName ?? (trim((string) ($company['name'] ?? '')) ?: config('app.name'));
+  $companyAddress = $companyAddress ?? collect([$company['address_line_1'] ?? null, $company['address_line_2'] ?? null])->map(fn ($line) => trim((string) $line))->filter()->implode(', ');
   $companyPhone = $companyPhone ?? trim((string) ($company['phone'] ?? ''));
   $companyEmail = $companyEmail ?? trim((string) ($company['email'] ?? ''));
-  $companyAddressLine = trim(collect([$companyAddress, $companyPhone])->filter()->implode('<br>'));
-  $logoDataUri = $logoDataUri ?? null;
-  $signatureDataUri = $signatureDataUri ?? ($authorization['signature_url'] ?? null);
-  $canRenderRaster = extension_loaded('gd');
-  $imageCanRender = function (?string $dataUri) use ($canRenderRaster): bool {
-      if (! is_string($dataUri) || trim($dataUri) === '') {
-          return false;
-      }
-
-      return str_starts_with($dataUri, 'data:image/svg+xml') || $canRenderRaster;
-  };
   $logoBase64 = $logoBase64 ?? null;
   $logoMime = $logoMime ?? 'image/png';
   $sigBase64 = $sigBase64 ?? null;
   $sigMime = $sigMime ?? 'image/png';
+  $thankYou = $thankYou ?? $thankYouMessage ?? '';
+  $paymentTerms = $paymentTerms ?? trim((string) ($invoice->notes ?? ''));
+  $cancellation = $cancellation ?? trim((string) ($invoice->quoteRequest?->quotation?->cancellation_policy ?? ''));
+  $liability = $liability ?? '';
+  $authorizedName = $user?->name ?? ($authorization['name'] ?? 'Authorized Signatory');
+  $authorizedJobTitle = $user?->job_title ?? ($authorization['job_title'] ?? 'Authorized Signatory');
+  $authorizationDate = $authorization['date_label'] ?? now()->format('d M Y');
+  $paymentMethods = collect($paymentMethods ?? [])
+    ->flatMap(function ($method): array {
+      if (is_object($method)) {
+        $line = trim((string) ($method->display_line ?? $method->display ?? ''));
 
-  if (! $logoBase64 && $imageCanRender($logoDataUri)) {
-      [$logoMeta, $logoBody] = array_pad(explode(',', $logoDataUri, 2), 2, null);
-      $logoBase64 = $logoBody;
-      $logoMime = str($logoMeta)->between('data:', ';')->toString() ?: $logoMime;
-  }
-
-  if (! $sigBase64 && $imageCanRender($signatureDataUri)) {
-      [$sigMeta, $sigBody] = array_pad(explode(',', $signatureDataUri, 2), 2, null);
-      $sigBase64 = $sigBody;
-      $sigMime = str($sigMeta)->between('data:', ';')->toString() ?: $sigMime;
-  }
-
-  $reference = $invoice->reference ?? $invoice->invoice_number;
-  $invoiceDate = $invoice->created_at?->format('d M Y') ?? $invoice->invoice_date?->format('d M Y') ?? now()->format('d M Y');
-  $customerAddress = $invoice->customer_address ?? trim(collect([$invoice->move_origin ?? null, $invoice->move_destination ?? null])->filter()->implode(' to '));
-  $paymentMethods = collect($paymentMethods ?? [])->map(function ($method) {
-      if (is_object($method) && isset($method->display_line)) {
-          return $method;
+        return $line !== '' ? [(object) ['display_line' => $line]] : [];
       }
 
-      if (is_object($method) && isset($method->display)) {
-          return (object) ['display_line' => $method->display];
+      if (is_string($method)) {
+        $line = trim($method);
+
+        return $line !== '' ? [(object) ['display_line' => $line]] : [];
       }
 
       if (is_array($method)) {
-          $rows = collect($method['rows'] ?? [])->map(function (array $row) use ($method) {
-              $title = trim((string) ($method['title'] ?? 'Payment'));
-              $label = trim((string) ($row['label'] ?? ''));
-              $value = trim((string) ($row['value'] ?? ''));
+        $directLine = trim((string) ($method['display_line'] ?? $method['display'] ?? ''));
 
-              return trim($title.($label !== '' ? ' - '.$label : '').($value !== '' ? ': '.$value : ''));
-          })->filter();
+        if ($directLine !== '') {
+          return [(object) ['display_line' => $directLine]];
+        }
 
-          return $rows->map(fn ($display) => (object) ['display_line' => $display]);
+        $title = trim((string) ($method['title'] ?? 'Payment'));
+
+        return collect($method['rows'] ?? [])
+          ->map(function (array $row) use ($title): object {
+            $label = trim((string) ($row['label'] ?? ''));
+            $value = trim((string) ($row['value'] ?? ''));
+            $displayLine = trim($title.($label !== '' ? ' - '.$label : '').($value !== '' ? ': '.$value : ''));
+
+            return (object) ['display_line' => $displayLine];
+          })
+          ->filter(fn (object $row): bool => $row->display_line !== '')
+          ->values()
+          ->all();
       }
 
-      return null;
-  })->flatten()->filter()->values();
-  $paymentSummary = $paymentMethods->isNotEmpty()
-      ? $paymentMethods->pluck('display_line')->implode(', ')
-      : $invoice->paymentMethodLabel();
-  $paymentTerms = trim((string) ($paymentTerms ?? $invoice->notes ?? ''));
-  $paymentTerms = $paymentTerms !== '' ? $paymentTerms : 'All claims relating to quantity or shipping errors shall be waived unless made in writing within thirty (30) days after delivery of goods to the address stated.';
-  $cancellation = trim((string) ($cancellation ?? ''));
-  $liability = trim((string) ($liability ?? ''));
-  $thankYou = trim((string) ($thankYou ?? $thankYouMessage ?? ''));
-  $subtotal = (float) ($invoice->subtotal ?? 0);
-  $discount = (float) ($invoice->discount ?? 0);
-  $tax = (float) ($invoice->tax ?? 0);
-  $total = (float) ($invoice->total ?? $invoice->total_amount ?? ($subtotal - $discount + $tax));
-  $deposit = (float) ($invoice->deposit_amount ?? 0);
-  $balance = (float) ($invoice->balance ?? max(0, $total - $deposit));
+      return [];
+    })
+    ->values();
 @endphp
 <!DOCTYPE html>
 <html class="no-js" lang="en">
@@ -101,149 +77,568 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="author" content="Laralink">
   <!-- Site Title -->
-  <title>Invoice {{ $reference }}</title>
-  <style>{!! $fontFace !!}{!! $stylesheet !!}</style>
+  <title>General Purpose Invoice-6</title>
+  <style>
+    *,
+    ::after,
+    ::before {
+      -webkit-box-sizing: border-box;
+              box-sizing: border-box;
+    }
+
+    html {
+      line-height: 1.15;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+      margin: 0;
+    }
+
+    body,
+    html {
+      color: #666;
+      font-family: "Inter", sans-serif;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 1.6em;
+      overflow-x: hidden;
+      background-color: #ffffff;
+    }
+
+    p,
+    div {
+      margin-top: 0;
+      line-height: 1.5em;
+    }
+
+    p {
+      margin-bottom: 15px;
+    }
+
+    ul {
+      margin: 0 0 25px 0;
+      padding-left: 15px;
+      list-style: disc;
+    }
+
+    img {
+      border: 0;
+      max-width: 100%;
+      height: auto;
+      vertical-align: middle;
+    }
+
+    table {
+      width: 100%;
+      caption-side: bottom;
+      border-collapse: collapse;
+    }
+
+    th {
+      text-align: left;
+      padding: 10px 15px;
+      line-height: 1.55em;
+    }
+
+    td {
+      border-top: 1px solid #dbdfea;
+      padding: 10px 15px;
+      line-height: 1.55em;
+    }
+
+    b,
+    strong {
+      font-weight: bold;
+    }
+
+    .tm_f16 {
+      font-size: 16px;
+    }
+
+    .tm_f50 {
+      font-size: 50px;
+    }
+
+    .tm_semi_bold {
+      font-weight: 600;
+    }
+
+    .tm_bold {
+      font-weight: 700;
+    }
+
+    .tm_m0 {
+      margin: 0px;
+    }
+
+    .tm_mb2 {
+      margin-bottom: 2px;
+    }
+
+    .tm_mb5 {
+      margin-bottom: 5px;
+    }
+
+    .tm_mb10 {
+      margin-bottom: 10px;
+    }
+
+    .tm_mb20 {
+      margin-bottom: 20px;
+    }
+
+    .tm_mb30 {
+      margin-bottom: 30px;
+    }
+
+    .tm_pt0 {
+      padding-top: 0;
+    }
+
+    .tm_width_1 {
+      width: 8.33333333%;
+    }
+
+    .tm_width_2 {
+      width: 16.66666667%;
+    }
+
+    .tm_width_3 {
+      width: 25%;
+    }
+
+    .tm_width_4 {
+      width: 33.33333333%;
+    }
+
+    .tm_border_top {
+      border-top: 1px solid #dbdfea;
+    }
+
+    .tm_border_bottom {
+      border-bottom: 1px solid #dbdfea;
+    }
+
+    .tm_round_border {
+      border: 1px solid #dbdfea;
+      overflow: hidden;
+      border-radius: 6px;
+    }
+
+    .tm_primary_color {
+      color: #111;
+    }
+
+    .tm_secondary_color {
+      color: #666;
+    }
+
+    .tm_ternary_color {
+      color: #b5b5b5;
+    }
+
+    .tm_gray_bg {
+      background: #ffffff;
+    }
+
+    .tm_invoice_in {
+      position: relative;
+      z-index: 100;
+    }
+
+    .tm_container {
+      max-width: 880px;
+      padding: 30px 15px;
+      margin-left: auto;
+      margin-right: auto;
+      position: relative;
+    }
+
+    .tm_text_uppercase {
+      text-transform: uppercase;
+    }
+
+    .tm_text_right {
+      text-align: right;
+    }
+
+    .tm_align_center {
+      -webkit-box-align: center;
+          -ms-flex-align: center;
+              align-items: center;
+    }
+
+    .tm_border_top_0 {
+      border-top: 0;
+    }
+
+    .tm_border_none {
+      border: none !important;
+    }
+
+    .tm_table_responsive {
+      overflow-x: auto;
+    }
+
+    .tm_table_responsive > table {
+      min-width: 600px;
+    }
+
+    .tm_invoice {
+      background: #ffffff;
+      border-radius: 10px;
+      padding: 50px;
+    }
+
+    .tm_invoice_footer {
+      display: -webkit-box;
+      display: -ms-flexbox;
+      display: flex;
+    }
+
+    .tm_invoice_footer table {
+      margin-top: -1px;
+    }
+
+    .tm_invoice_footer .tm_left_footer {
+      width: 58%;
+      padding: 10px 15px;
+      -webkit-box-flex: 0;
+          -ms-flex: none;
+              flex: none;
+    }
+
+    .tm_invoice_footer .tm_right_footer {
+      width: 42%;
+    }
+
+    .tm_sign img {
+      max-height: 45px;
+    }
+
+    .tm_invoice.tm_style1 .tm_invoice_right {
+      -webkit-box-flex: 0;
+          -ms-flex: none;
+              flex: none;
+      width: 60%;
+    }
+
+    .tm_invoice.tm_style1 .tm_invoice_head {
+      display: -webkit-box;
+      display: -ms-flexbox;
+      display: flex;
+      -webkit-box-pack: justify;
+          -ms-flex-pack: justify;
+              justify-content: space-between;
+    }
+
+    .tm_invoice.tm_style1 .tm_invoice_head .tm_invoice_right div {
+      line-height: 1em;
+    }
+
+    .tm_invoice.tm_style1 .tm_invoice_info {
+      display: -webkit-box;
+      display: -ms-flexbox;
+      display: flex;
+      -webkit-box-align: center;
+          -ms-flex-align: center;
+              align-items: center;
+      -webkit-box-pack: justify;
+          -ms-flex-pack: justify;
+              justify-content: space-between;
+    }
+
+    .tm_invoice.tm_style1 .tm_invoice_seperator {
+      min-height: 18px;
+      border-radius: 1.6em;
+      -webkit-box-flex: 1;
+          -ms-flex: 1;
+              flex: 1;
+      margin-right: 20px;
+    }
+
+    .tm_invoice.tm_style1 .tm_invoice_info_list {
+      display: -webkit-box;
+      display: -ms-flexbox;
+      display: flex;
+    }
+
+    .tm_invoice.tm_style1 .tm_invoice_info_list > *:not(:last-child) {
+      margin-right: 20px;
+    }
+
+    .tm_invoice.tm_style1 .tm_logo img {
+      max-height: 50px;
+    }
+
+    .tm_invoice_wrap {
+      position: relative;
+    }
+
+    .tm_note_list li:not(:last-child) {
+      margin-bottom: 5px;
+    }
+
+    .tm_padd_15_20 {
+      padding: 15px 20px;
+    }
+
+    .tm_dark_invoice_body {
+      background-color: #ffffff;
+    }
+
+    .tm_dark_invoice {
+      background: #ffffff;
+      color: rgba(255, 255, 255, 0.65);
+    }
+
+    .tm_dark_invoice .tm_primary_color {
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .tm_dark_invoice .tm_secondary_color {
+      color: rgba(255, 255, 255, 0.65);
+    }
+
+    .tm_dark_invoice .tm_ternary_color {
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    .tm_dark_invoice .tm_gray_bg {
+      background: #ffffff;
+    }
+
+    .tm_dark_invoice .tm_border_color,
+    .tm_dark_invoice .tm_round_border,
+    .tm_dark_invoice td,
+    .tm_dark_invoice th,
+    .tm_dark_invoice .tm_border_top,
+    .tm_dark_invoice .tm_border_bottom {
+      border-color: rgba(255, 255, 255, 0.1);
+    }
+  </style>
 </head>
 
-<body>
+<body class="tm_dark_invoice_body">
   <div class="tm_container">
     <div class="tm_invoice_wrap">
-      <div class="tm_invoice tm_style1 tm_type1" id="tm_download_section">
+      <div class="tm_invoice tm_style1 tm_dark_invoice" id="tm_download_section">
         <div class="tm_invoice_in">
-          <div class="tm_invoice_head tm_top_head tm_mb15 tm_align_center">
+          <div class="tm_invoice_head tm_align_center tm_mb20">
             <div class="tm_invoice_left">
-              <div class="tm_logo">@if($logoBase64)<img src="data:{{ $logoMime }};base64,{{ $logoBase64 }}" alt="Logo">@endif</div>
+              <div class="tm_logo">
+                @if($logoBase64)
+                  <img src="data:{{ $logoMime }};base64,{{ $logoBase64 }}" alt="Logo" style="max-height: 50px;">
+                @endif
+              </div>
             </div>
-            <div class="tm_invoice_right tm_text_right tm_mobile_hide">
-              <div class="tm_f50 tm_text_uppercase tm_white_color">Invoice</div>
+            <div class="tm_invoice_right tm_text_right">
+              <div class="tm_primary_color tm_f50 tm_text_uppercase">INVOICE</div>
             </div>
-            <div class="tm_shape_bg tm_accent_bg tm_mobile_hide"></div>
           </div>
-          <div class="tm_invoice_info tm_mb25">
-            <div class="tm_card_note tm_mobile_hide"><b class="tm_primary_color">Payment Method: </b>{{ $paymentSummary }}</div>
-            <div class="tm_invoice_info_list tm_white_color">
-              <p class="tm_invoice_number tm_m0">Invoice No: <b>#{{ ltrim((string) $reference, '#') }}</b></p>
-              <p class="tm_invoice_date tm_m0">Date: <b>{{ $invoiceDate }}</b></p>
+          <div class="tm_invoice_info tm_mb20">
+            <div class="tm_invoice_seperator tm_gray_bg"></div>
+            <div class="tm_invoice_info_list">
+              <p class="tm_invoice_number tm_m0">Invoice No: <b class="tm_primary_color">{{ $invoice->reference }}</b></p>
+              <p class="tm_invoice_date tm_m0">Date: <b class="tm_primary_color">{{ $invoice->created_at->format('d M Y') }}</b></p>
+              <p class="tm_invoice_date tm_m0">Due Date: <b class="tm_primary_color">{{ $invoice->due_date?->format('d M Y') ?? 'N/A' }}</b></p>
+              <p class="tm_invoice_date tm_m0">Status: <b class="tm_primary_color">{{ ucfirst($invoice->status) }}</b></p>
             </div>
-            <div class="tm_invoice_seperator tm_accent_bg"></div>
           </div>
           <div class="tm_invoice_head tm_mb10">
             <div class="tm_invoice_left">
               <p class="tm_mb2"><b class="tm_primary_color">Invoice To:</b></p>
               <p>
                 {{ $invoice->customer_name }} <br>
-                @if($customerAddress !== ''){{ $customerAddress }} <br>@endif
-                @if($invoice->customer_phone){{ $invoice->customer_phone }} <br>@endif
-                {{ $invoice->customer_email }}
+                {{ $invoice->customer_address ?? '' }} <br>
+                {{ $invoice->customer_email }} <br>
+                {{ $invoice->customer_phone }}
+              </p>
+              <p class="tm_mb2"><b class="tm_primary_color">Move Details:</b></p>
+              <p>
+                From: {{ $invoice->pickup_location ?? '' }} <br>
+                To: {{ $invoice->dropoff_location ?? '' }} <br>
+                Move Date: {{ $invoice->move_date?->format('d M Y') ?? '' }} <br>
+                Service Type: {{ $invoice->service_type ?? $invoice->move_size ?? '' }}
               </p>
             </div>
             <div class="tm_invoice_right tm_text_right">
               <p class="tm_mb2"><b class="tm_primary_color">Pay To:</b></p>
               <p>
                 {{ $companyName }} <br>
-                @if($companyAddressLine !== ''){!! $companyAddressLine !!}<br>@endif
+                {{ $companyAddress }}<br>
+                {{ $companyPhone }} <br>
                 {{ $companyEmail }}
               </p>
             </div>
           </div>
-          <div class="tm_table tm_style1">
-            <div class="">
+          <div class="tm_table tm_style1 tm_mb30">
+            <div class="tm_round_border">
               <div class="tm_table_responsive">
                 <table>
                   <thead>
-                    <tr class="tm_accent_bg">
-                      <th class="tm_width_3 tm_semi_bold tm_white_color">Item</th>
-                      <th class="tm_width_4 tm_semi_bold tm_white_color">Description</th>
-                      <th class="tm_width_2 tm_semi_bold tm_white_color">Price</th>
-                      <th class="tm_width_1 tm_semi_bold tm_white_color">Qty</th>
-                      <th class="tm_width_2 tm_semi_bold tm_white_color tm_text_right">Total</th>
+                    <tr>
+                      <th class="tm_width_3 tm_semi_bold tm_primary_color tm_gray_bg">Item</th>
+                      <th class="tm_width_4 tm_semi_bold tm_primary_color tm_gray_bg">Description</th>
+                      <th class="tm_width_2 tm_semi_bold tm_primary_color tm_gray_bg">Price</th>
+                      <th class="tm_width_1 tm_semi_bold tm_primary_color tm_gray_bg">Qty</th>
+                      <th class="tm_width_2 tm_semi_bold tm_primary_color tm_gray_bg tm_text_right">Total</th>
                     </tr>
                   </thead>
                   <tbody>
                     @forelse($invoice->items as $index => $item)
                     <tr>
-                      <td class="tm_width_3">{{ $index + 1 }}.</td>
+                      <td class="tm_width_3">{{ $index + 1 }}</td>
                       <td class="tm_width_4">{{ $item->description }}</td>
                       <td class="tm_width_2">KES {{ number_format((float) $item->unit_price, 2) }}</td>
                       <td class="tm_width_1">{{ $item->quantity }}</td>
-                      <td class="tm_width_2 tm_text_right">KES {{ number_format((float) ($item->amount ?? $item->total ?? 0), 2) }}</td>
+                      <td class="tm_width_2 tm_text_right">KES {{ number_format((float) $item->amount, 2) }}</td>
                     </tr>
                     @empty
                     <tr>
-                      <td colspan="5" style="text-align:center;padding:16px">No items</td>
+                      <td colspan="5" style="text-align:center; padding:16px">No items found</td>
                     </tr>
                     @endforelse
                   </tbody>
                 </table>
               </div>
             </div>
-            <div class="tm_invoice_footer tm_border_top tm_mb15 tm_m0_md">
+            <div class="tm_invoice_footer">
               <div class="tm_left_footer">
                 <p class="tm_mb2"><b class="tm_primary_color">Payment info:</b></p>
-                @forelse($paymentMethods as $method)
-                <p class="tm_m0">{{ $method->display_line }}</p>
-                @empty
-                <p class="tm_m0">No payment methods configured.</p>
-                @endforelse
-                <p class="tm_m0">Due Date: {{ $invoice->due_date?->format('d M Y') ?? 'N/A' }}</p>
-                <p class="tm_m0">Status: {{ ucfirst((string) $invoice->status) }}</p>
+                <p class="tm_m0">
+                  @forelse($paymentMethods as $method)
+                    {{ $method->display_line }}@if(! $loop->last)<br>@endif
+                  @empty
+                    No payment methods configured.
+                  @endforelse
+                </p>
               </div>
               <div class="tm_right_footer">
-                <table class="tm_mb15">
+                <table>
                   <tbody>
-                    <tr class="tm_gray_bg ">
-                      <td class="tm_width_3 tm_primary_color tm_bold">Subtoal</td>
-                      <td class="tm_width_3 tm_primary_color tm_bold tm_text_right">KES {{ number_format($subtotal, 2) }}</td>
+                    <tr>
+                      <td class="tm_width_3 tm_primary_color tm_border_none tm_bold">Subtotal</td>
+                      <td class="tm_width_3 tm_primary_color tm_text_right tm_border_none tm_bold">KES {{ number_format((float) $invoice->subtotal, 2) }}</td>
                     </tr>
-                    @if($discount > 0)
-                    <tr class="tm_gray_bg">
-                      <td class="tm_width_3 tm_primary_color">Discount</td>
-                      <td class="tm_width_3 tm_primary_color tm_text_right">-KES {{ number_format($discount, 2) }}</td>
-                    </tr>
-                    @endif
-                    @if($tax > 0)
-                    <tr class="tm_gray_bg">
-                      <td class="tm_width_3 tm_primary_color">Tax</td>
-                      <td class="tm_width_3 tm_primary_color tm_text_right">KES {{ number_format($tax, 2) }}</td>
+                    @if(isset($invoice->discount) && $invoice->discount > 0)
+                    <tr>
+                      <td class="tm_width_3 tm_primary_color tm_border_none tm_pt0">Discount</td>
+                      <td class="tm_width_3 tm_primary_color tm_text_right tm_border_none tm_pt0">-KES {{ number_format((float) $invoice->discount, 2) }}</td>
                     </tr>
                     @endif
-                    @if($deposit > 0)
-                    <tr class="tm_gray_bg">
-                      <td class="tm_width_3 tm_primary_color">Deposit Paid</td>
-                      <td class="tm_width_3 tm_primary_color tm_text_right">-KES {{ number_format($deposit, 2) }}</td>
-                    </tr>
-                    <tr class="tm_gray_bg">
-                      <td class="tm_width_3 tm_primary_color">Balance Due</td>
-                      <td class="tm_width_3 tm_primary_color tm_text_right">KES {{ number_format($balance, 2) }}</td>
+                    @if(isset($invoice->tax) && $invoice->tax > 0)
+                    <tr>
+                      <td class="tm_width_3 tm_primary_color tm_border_none tm_pt0">Tax</td>
+                      <td class="tm_width_3 tm_primary_color tm_text_right tm_border_none tm_pt0">KES {{ number_format((float) $invoice->tax, 2) }}</td>
                     </tr>
                     @endif
-                    <tr class="tm_accent_bg">
-                      <td class="tm_width_3 tm_border_top_0 tm_bold tm_f16 tm_white_color">Grand Total	</td>
-                      <td class="tm_width_3 tm_border_top_0 tm_bold tm_f16 tm_white_color tm_text_right">KES {{ number_format($total, 2) }}</td>
+                    <tr class="tm_border_top tm_border_bottom">
+                      <td class="tm_width_3 tm_border_top_0 tm_bold tm_f16 tm_primary_color">Grand Total</td>
+                      <td class="tm_width_3 tm_border_top_0 tm_bold tm_f16 tm_primary_color tm_text_right">KES {{ number_format((float) $invoice->total, 2) }}</td>
                     </tr>
+                    @if($invoice->deposit_amount > 0)
+                    <tr>
+                      <td class="tm_width_3 tm_primary_color tm_border_none tm_pt0">Deposit Paid</td>
+                      <td class="tm_width_3 tm_primary_color tm_text_right tm_border_none tm_pt0">-KES {{ number_format((float) $invoice->deposit_amount, 2) }}</td>
+                    </tr>
+                    <tr class="tm_border_top tm_border_bottom">
+                      <td class="tm_width_3 tm_border_top_0 tm_bold tm_f16 tm_primary_color">Balance Due</td>
+                      <td class="tm_width_3 tm_border_top_0 tm_bold tm_f16 tm_primary_color tm_text_right">KES {{ number_format((float) $invoice->balance, 2) }}</td>
+                    </tr>
+                    @endif
                   </tbody>
                 </table>
               </div>
             </div>
-            <div class="tm_invoice_footer tm_type1">
-              <div class="tm_left_footer"></div>
-              <div class="tm_right_footer">
-                <div class="tm_sign tm_text_center">
-                  @if($sigBase64)
-                  <img src="data:{{ $sigMime }};base64,{{ $sigBase64 }}" alt="Sign" style="border:none !important;outline:none !important;box-shadow:none !important;background:transparent !important;padding:0 !important;">
-                  @else
-                  <p class="tm_m0 tm_ternary_color" style="font-style:italic">Signature not available</p>
-                  @endif
-                  <p class="tm_m0 tm_ternary_color">{{ $user?->name ?? $authorization['name'] ?? $companyName }}</p>
-                  <p class="tm_m0 tm_f16 tm_primary_color">{{ $user?->job_title ?? $authorization['job_title'] ?? 'Authorized Signatory' }}</p>
-                </div>
-              </div>
-            </div>
           </div>
-          <div class="tm_note tm_text_center tm_font_style_normal">
-            <hr class="tm_mb15">
-            <p class="tm_mb2"><b class="tm_primary_color">Terms & Conditions:</b></p>
-            <p class="tm_m0">{{ $paymentTerms }}@if($cancellation !== '')<br>{{ $cancellation }}@endif @if($liability !== '')<br>{{ $liability }}@endif @if($thankYou !== '')<br>{{ $thankYou }}@endif</p>
+          <div class="tm_padd_15_20 tm_round_border">
+            <p class="tm_mb5"><b class="tm_primary_color">Terms & Conditions:</b></p>
+            <ul class="tm_m0 tm_note_list">
+              @if($paymentTerms)
+                <li>{{ $paymentTerms }}</li>
+              @endif
+              @if($cancellation)
+                <li>{{ $cancellation }}</li>
+              @endif
+              @if($liability)
+                <li>{{ $liability }}</li>
+              @endif
+              <li>{{ $thankYou }}</li>
+            </ul>
+            <div class="tm_border_top" style="margin-top: 15px; padding-top: 15px;">
+              <p class="tm_mb5"><b class="tm_primary_color">Authorization:</b></p>
+              <table>
+                <tbody>
+                  <tr>
+                    <td class="tm_border_none" style="padding: 0; width: 45%; vertical-align: top;">
+                      <p class="tm_mb2"><b class="tm_primary_color">Signature:</b></p>
+                      <div class="tm_sign">
+                        @if(isset($sigBase64) && $sigBase64)
+                          {{-- Signature image rendered as base64 --}}
+                          <img
+                            src="data:{{ $sigMime ?? 'image/png' }};base64,{{ $sigBase64 }}"
+                            style="
+                              max-height: 60px;
+                              max-width: 200px;
+                              height: auto;
+                              width: auto;
+                              display: block;
+                              border: none !important;
+                              outline: none !important;
+                              box-shadow: none !important;
+                              background: transparent !important;
+                              background-color: transparent !important;
+                              padding: 0 !important;
+                              margin: 0 0 4px 0;">
+                        @else
+                          {{-- Fallback when no signature --}}
+                          <div style="
+                            height: 50px;
+                            width: 180px;
+                            border-bottom: 1px solid #cccccc;
+                            margin-bottom: 4px;">
+                          </div>
+                          <p style="
+                            font-size: 10px;
+                            color: #9ca3af;
+                            font-style: italic;
+                            margin: 0 0 4px 0;">
+                            Signature not uploaded
+                          </p>
+                        @endif
+                        {{-- Always show name and title below --}}
+                        <p style="
+                          font-family: &quot;Inter&quot;, sans-serif;
+                          font-size: 14px;
+                          color: rgba(255, 255, 255, 0.9);
+                          font-weight: 700;
+                          margin: 2px 0 0 0;">
+                          {{ $user->name ?? 'Authorized Signatory' }}
+                        </p>
+                        <p style="
+                          font-family: &quot;Inter&quot;, sans-serif;
+                          font-size: 14px;
+                          color: rgba(255, 255, 255, 0.65);
+                          margin: 2px 0 0 0;">
+                          {{ $user->job_title ?? 'Authorized Signatory' }}
+                        </p>
+                        <p style="
+                          font-family: &quot;Inter&quot;, sans-serif;
+                          font-size: 14px;
+                          color: rgba(255, 255, 255, 0.65);
+                          margin: 2px 0 0 0;">
+                          {{ now()->format('d M Y') }}
+                        </p>
+                      </div>
+                    </td>
+                    <td class="tm_border_none tm_text_right" style="padding: 0; width: 55%; vertical-align: top;">
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div><!-- .tm_note -->
         </div>
       </div>
