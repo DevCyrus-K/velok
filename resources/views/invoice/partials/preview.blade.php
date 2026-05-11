@@ -39,7 +39,7 @@
     <div class="row g-3 mb-4">
         <div class="col-md-6">
             <div class="border rounded p-3 h-100">
-                <p class="text-muted mb-1">Bill To</p>
+                <p class="text-muted mb-1">Invoice To</p>
                 <div class="fw-semibold">{{ $invoice->customer_name }}</div>
                 <div class="small text-muted">{{ $invoice->customer_email }}</div>
                 <div class="small text-muted">{{ $invoice->customer_phone ?: 'Phone not provided' }}</div>
@@ -79,33 +79,30 @@
                 </tr>
                 @endforelse
             </tbody>
+            <tfoot>
+                <tr>
+                    <td class="text-end fw-semibold" colspan="3">Subtotal</td>
+                    <td class="text-end fw-semibold">KES {{ number_format((float) $invoice->subtotal, 2) }}</td>
+                </tr>
+                <tr>
+                    <td class="text-end text-muted" colspan="3">Tax</td>
+                    <td class="text-end">KES {{ number_format((float) $invoice->tax, 2) }}</td>
+                </tr>
+                <tr>
+                    <td class="text-end fw-semibold border-top" colspan="3">Total</td>
+                    <td class="text-end fw-semibold border-top">KES {{ number_format((float) $invoice->total_amount, 2) }}</td>
+                </tr>
+            </tfoot>
         </table>
     </div>
 
     <div class="row g-3 align-items-start">
-        <div class="col-md-7">
+        <div class="col-12">
             <div class="border rounded p-3 h-100">
                 <p class="text-muted mb-1">Payment Details</p>
                 <div class="small text-muted">Invoice date: {{ $invoice->invoice_date?->format('d M Y') ?? 'N/A' }}</div>
                 <div class="small text-muted">Due date: {{ $invoice->due_date?->format('d M Y') ?? 'N/A' }}</div>
                 <div class="small text-muted">Payment method: {{ $invoice->paymentMethodLabel() }}</div>
-                <div class="small text-muted">Status: {{ $invoice->statusLabel() }}</div>
-            </div>
-        </div>
-        <div class="col-md-5">
-            <div class="border rounded p-3 h-100">
-                <div class="d-flex justify-content-between mb-2">
-                    <span class="text-muted">Subtotal</span>
-                    <span>KES {{ number_format((float) $invoice->subtotal, 2) }}</span>
-                </div>
-                <div class="d-flex justify-content-between mb-2">
-                    <span class="text-muted">Tax</span>
-                    <span>KES {{ number_format((float) $invoice->tax, 2) }}</span>
-                </div>
-                <div class="d-flex justify-content-between pt-2 border-top fw-semibold">
-                    <span>Total</span>
-                    <span>KES {{ number_format((float) $invoice->total_amount, 2) }}</span>
-                </div>
             </div>
         </div>
     </div>
@@ -150,8 +147,7 @@
         @endforeach
     </div>
 
-    <div class="border rounded p-3 mt-3">
-        <p class="text-muted mb-1">Thank You</p>
-        <div class="small">{{ $thankYouMessage }}</div>
+    <div class="border-top mt-4 pt-3 text-center">
+        <div class="small text-muted">{{ $thankYouMessage }}</div>
     </div>
 </div>

@@ -288,7 +288,7 @@
 
     .tm_container {
       max-width: 880px;
-      padding: 30px 15px;
+      padding: 10px 6px;
       margin-left: auto;
       margin-right: auto;
       position: relative;
@@ -328,13 +328,16 @@
       background: #ffffff;
       border: 1px solid #e6edf5;
       border-radius: 8px;
-      padding: 50px;
+      padding: 22px 18px 42px 42px;
     }
 
     .tm_invoice_footer {
       display: -webkit-box;
       display: -ms-flexbox;
       display: flex;
+      -webkit-box-align: start;
+          -ms-flex-align: start;
+              align-items: flex-start;
     }
 
     .tm_invoice_footer table {
@@ -342,15 +345,16 @@
     }
 
     .tm_invoice_footer .tm_left_footer {
-      width: 58%;
-      padding: 10px 15px;
+      width: 55%;
+      padding: 10px 15px 0 0;
       -webkit-box-flex: 0;
           -ms-flex: none;
               flex: none;
     }
 
     .tm_invoice_footer .tm_right_footer {
-      width: 42%;
+      width: 45%;
+      margin-left: auto;
     }
 
     .tm_sign img {
@@ -371,6 +375,50 @@
       -webkit-box-pack: justify;
           -ms-flex-pack: justify;
               justify-content: space-between;
+    }
+
+    .tm_invoice.tm_style1 .tm_invoice_head.tm_align_center.tm_mb20 {
+      display: table;
+      table-layout: fixed;
+      width: 100%;
+    }
+
+    .tm_invoice.tm_style1 .tm_invoice_head.tm_align_center.tm_mb20 > .tm_invoice_left,
+    .tm_invoice.tm_style1 .tm_invoice_head.tm_align_center.tm_mb20 > .tm_invoice_right {
+      display: table-cell;
+      vertical-align: top;
+    }
+
+    .tm_invoice.tm_style1 .tm_invoice_head.tm_align_center.tm_mb20 > .tm_invoice_left {
+      width: 30%;
+    }
+
+    .tm_invoice.tm_style1 .tm_invoice_head.tm_align_center.tm_mb20 > .tm_invoice_right {
+      width: 70%;
+      padding-right: 0;
+      text-align: right;
+    }
+
+    .tm_invoice.tm_style1 .tm_invoice_head.tm_mb10 {
+      display: table;
+      table-layout: fixed;
+      width: 100%;
+    }
+
+    .tm_invoice.tm_style1 .tm_invoice_head.tm_mb10 > .tm_invoice_left,
+    .tm_invoice.tm_style1 .tm_invoice_head.tm_mb10 > .tm_invoice_right {
+      display: table-cell;
+      vertical-align: top;
+    }
+
+    .tm_invoice.tm_style1 .tm_invoice_head.tm_mb10 > .tm_invoice_left {
+      width: 43%;
+    }
+
+    .tm_invoice.tm_style1 .tm_invoice_head.tm_mb10 > .tm_invoice_right {
+      width: 57%;
+      padding-right: 0;
+      text-align: right;
     }
 
     .tm_invoice.tm_style1 .tm_invoice_head .tm_invoice_right div {
@@ -483,6 +531,10 @@
       border-top: 2px solid #DF1119;
     }
 
+    .tm_table tfoot td {
+      background: #ffffff;
+    }
+
     .tm_accent_panel {
       border: 1px solid #e6edf5;
       border-left: 3px solid #DF1119;
@@ -490,6 +542,48 @@
       padding: 14px 16px;
       margin: 16px 0;
       background: #ffffff;
+    }
+
+    .tm_summary_footer {
+      display: table;
+      margin-top: 0;
+      table-layout: fixed;
+      width: 100%;
+    }
+
+    .tm_summary_footer .tm_left_footer,
+    .tm_summary_footer .tm_right_footer {
+      display: table-cell;
+      float: none;
+      vertical-align: top;
+    }
+
+    .tm_summary_footer .tm_left_footer {
+      padding-top: 0;
+    }
+
+    .tm_summary_footer .tm_right_footer {
+      margin-left: 0;
+      padding: 0;
+    }
+
+    .tm_summary_footer .tm_right_footer table {
+      margin-top: 0;
+      width: 100%;
+    }
+
+    .tm_summary_footer .tm_right_footer tr:first-child td {
+      padding-top: 0;
+    }
+
+    .tm_document_footer {
+      border-top: 1px solid #e6edf5;
+      color: #04223E;
+      font-size: 12px;
+      line-height: 1.6em;
+      margin-top: 20px;
+      padding-top: 14px;
+      text-align: center;
     }
   </style>
 </head>
@@ -518,12 +612,11 @@
               <p class="tm_invoice_number tm_m0">Quotation No: <b class="tm_primary_color">{{ $quoteReference }}</b></p>
               <p class="tm_invoice_date tm_m0">Date: <b class="tm_primary_color">{{ $quote->created_at->format('d M Y') }}</b></p>
               <p class="tm_invoice_date tm_m0">Valid Until: <b class="tm_primary_color">{{ $quote->valid_until?->format('d M Y') ?? ($quote->created_at?->copy()->addDays(7)->format('d M Y') ?? now()->addDays(7)->format('d M Y')) }}</b></p>
-              <p class="tm_invoice_date tm_m0">Status: <b class="tm_primary_color">{{ ucfirst($quote->status) }}</b></p>
             </div>
           </div>
           <div class="tm_invoice_head tm_mb10">
             <div class="tm_invoice_left">
-              <p class="tm_mb2"><b class="tm_primary_color">Invoice To:</b></p>
+              <p class="tm_mb2"><b class="tm_primary_color">Quote To:</b></p>
               <p>
                 {{ $quote->customer_name ?? $quoteRequest?->full_name }} <br>
                 {{ $quote->customer_address ?? $quoteRequest?->routeSummary() ?? '' }} <br>
@@ -539,7 +632,7 @@
               </p>
             </div>
             <div class="tm_invoice_right tm_text_right">
-              <p class="tm_mb2"><b class="tm_primary_color">Pay To:</b></p>
+              <p class="tm_mb2"><b class="tm_primary_color">Quote From:</b></p>
               <p>
                 {{ $companyName }} <br>
                 {{ $companyAddress }}<br>
@@ -579,7 +672,7 @@
                 </table>
               </div>
             </div>
-            <div class="tm_invoice_footer">
+            <div class="tm_invoice_footer tm_summary_footer">
               <div class="tm_left_footer">
                 <p class="tm_mb2"><b class="tm_primary_color">Payment info:</b></p>
                 <p class="tm_m0">
@@ -628,16 +721,6 @@
               </div>
             </div>
           </div>
-          @if($quoteDepositAmount > 0)
-          <div class="tm_accent_panel">
-            <p style="font-family: &quot;Inter&quot;, sans-serif; font-size: 11px; font-weight: 700; color: #04223E; margin: 0 0 6px 0; text-transform: uppercase; letter-spacing: 0;">DEPOSIT REQUIRED TO CONFIRM BOOKING</p>
-            <p style="font-size: 20px; font-weight: 700; color: #04223E; margin: 0 0 10px 0;">KES {{ number_format($quoteDepositAmount, 2) }}</p>
-            @foreach($paymentMethods as $method)
-              <p style="font-size: 10px; font-family: &quot;Inter&quot;, sans-serif; color: #04223E; margin: 3px 0;">{{ $method->display_line }}</p>
-            @endforeach
-            <p style="font-size: 9px; color: #04223E; margin: 8px 0 0 0; font-style: italic;">Your booking is not confirmed until the deposit has been received and verified.</p>
-          </div>
-          @endif
           @if(isset($approvalUrl) && $approvalUrl)
           <div class="tm_accent_panel">
             <p style="font-size: 11px; font-weight: 700; color: #04223E; margin: 0 0 6px 0; text-transform: uppercase; letter-spacing: 0;">APPROVE THIS QUOTATION</p>
@@ -670,7 +753,6 @@
               @if($liability)
                 <li>{{ $liability }}</li>
               @endif
-              <li>{{ $thankYou }}</li>
             </ul>
             <div class="tm_border_top" style="margin-top: 15px; padding-top: 15px;">
               <p class="tm_mb5"><b class="tm_primary_color">Authorization:</b></p>
@@ -745,6 +827,11 @@
               </table>
             </div>
           </div><!-- .tm_note -->
+          @if($thankYou)
+          <div class="tm_document_footer">
+            {{ $thankYou }}
+          </div>
+          @endif
         </div>
       </div>
     </div>

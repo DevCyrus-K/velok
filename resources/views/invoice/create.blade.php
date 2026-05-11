@@ -638,7 +638,7 @@
                         <div class="row g-3 mb-4">
                             <div class="col-md-6">
                                 <div class="border rounded p-3 h-100">
-                                    <p class="text-muted mb-1">Bill To</p>
+                                    <p class="text-muted mb-1">Invoice To</p>
                                     <div class="fw-semibold">${escapeHtml(fieldValue('#customerName'))}</div>
                                     <div class="small text-muted">${escapeHtml(fieldValue('#customerEmail'))}</div>
                                     <div class="small text-muted">${escapeHtml(fieldValue('#customerPhone'))}</div>
@@ -674,33 +674,30 @@
                                         </tr>
                                     `).join('') || '<tr><td class="text-center text-muted py-4" colspan="4">No line items added.</td></tr>'}
                                 </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td class="text-end fw-semibold" colspan="3">Subtotal</td>
+                                        <td class="text-end fw-semibold">${formatCurrency(subtotal)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-end text-muted" colspan="3">Tax</td>
+                                        <td class="text-end">${formatCurrency(tax)}</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="text-end fw-semibold border-top" colspan="3">Total</td>
+                                        <td class="text-end fw-semibold border-top">${formatCurrency(subtotal + tax)}</td>
+                                    </tr>
+                                </tfoot>
                             </table>
                         </div>
 
                         <div class="row g-3 align-items-start">
-                            <div class="col-md-7">
+                            <div class="col-12">
                                 <div class="border rounded p-3 h-100">
                                     <p class="text-muted mb-1">Payment Details</p>
                                     <div class="small text-muted">Invoice date: ${escapeHtml(fieldValue('[name="invoice_date"]'))}</div>
                                     <div class="small text-muted">Due date: ${escapeHtml(fieldValue('[name="due_date"]'))}</div>
-                                    <div class="small text-muted">Status: ${escapeHtml(selectedText('[name="status"]'))}</div>
                                     <div class="small text-muted">Notes: ${escapeHtml(fieldValue('[name="notes"]', 'No notes recorded'))}</div>
-                                </div>
-                            </div>
-                            <div class="col-md-5">
-                                <div class="border rounded p-3 h-100">
-                                    <div class="d-flex justify-content-between mb-2">
-                                        <span class="text-muted">Subtotal</span>
-                                        <span>${formatCurrency(subtotal)}</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between mb-2">
-                                        <span class="text-muted">Tax</span>
-                                        <span>${formatCurrency(tax)}</span>
-                                    </div>
-                                    <div class="d-flex justify-content-between pt-2 border-top fw-semibold">
-                                        <span>Total</span>
-                                        <span>${formatCurrency(subtotal + tax)}</span>
-                                    </div>
                                 </div>
                             </div>
                         </div>
