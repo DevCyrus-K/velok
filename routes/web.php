@@ -39,9 +39,7 @@ Route::get('/email/track/{token}', [EmailTrackingController::class, 'open'])
     ->middleware('throttle:30,1')
     ->name('email.track.open');
 
-Route::get('/review-us', function () {
-    return view('review-us');
-})->name('review-us')->domain('kwikshiftmovers.co.ke');
+Route::redirect('/review-us', 'https://kwikshiftmovers.co.ke/review-us', 301);
 
 Route::get('/quote/approve/{token}', [QuoteApprovalController::class, 'show'])
     ->middleware('throttle:10,1')
