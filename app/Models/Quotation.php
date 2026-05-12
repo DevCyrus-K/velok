@@ -57,6 +57,13 @@ class Quotation extends Model
         'approval_date',
         'signature',
         'signature_type',
+        'service_agreement_path',
+        'service_agreement_filename',
+        'service_agreement_generated_at',
+        'service_agreement_email_status',
+        'service_agreement_emailed_at',
+        'service_agreement_email_failed_reason',
+        'service_agreement_email_attempts',
     ];
 
     protected $casts = [
@@ -68,6 +75,9 @@ class Quotation extends Model
         'deposit_paid_at' => 'datetime',
         'move_date' => 'date',
         'approval_date' => 'date',
+        'service_agreement_generated_at' => 'datetime',
+        'service_agreement_emailed_at' => 'datetime',
+        'service_agreement_email_attempts' => 'integer',
         'services_included' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',

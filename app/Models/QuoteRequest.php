@@ -17,6 +17,7 @@ class QuoteRequest extends Model
     public const STATUS_PROCESSING = 'processing';
     public const STATUS_QUOTED = 'quoted';
     public const STATUS_CREATED = 'created';
+    public const STATUS_COMPLETED = 'completed';
     public const STATUS_CLOSED = 'closed';
     public const STATUS_SPAM = 'spam';
 
@@ -70,6 +71,7 @@ class QuoteRequest extends Model
             self::STATUS_PROCESSING => 'Processing',
             self::STATUS_QUOTED => 'Approved',
             self::STATUS_CREATED => 'Created',
+            self::STATUS_COMPLETED => 'Completed',
             self::STATUS_CLOSED => 'Rejected',
             self::STATUS_SPAM => 'Spam',
         ];
@@ -148,7 +150,7 @@ class QuoteRequest extends Model
     public function statusBadgeClass(): string
     {
         return match ($this->status) {
-            self::STATUS_QUOTED, self::STATUS_CREATED => 'success',
+            self::STATUS_QUOTED, self::STATUS_CREATED, self::STATUS_COMPLETED => 'success',
             self::STATUS_PROCESSING, self::STATUS_EMAILED => 'info',
             self::STATUS_EMAIL_FAILED, self::STATUS_SPAM => 'danger',
             self::STATUS_CLOSED => 'secondary',
@@ -159,7 +161,7 @@ class QuoteRequest extends Model
     public function statusGroup(): string
     {
         return match ($this->status) {
-            self::STATUS_QUOTED, self::STATUS_CREATED, self::STATUS_EMAILED => 'approved',
+            self::STATUS_QUOTED, self::STATUS_CREATED, self::STATUS_COMPLETED, self::STATUS_EMAILED => 'approved',
             self::STATUS_CLOSED, self::STATUS_SPAM => 'declined',
             default => 'pending',
         };

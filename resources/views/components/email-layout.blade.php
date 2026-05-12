@@ -1,10 +1,13 @@
 @php
     $company = $company ?? app(\App\Support\CompanyProfile::class)->data();
-    $companyName = trim((string) ($company['name'] ?? '')) ?: config('app.name');
-    $companyEmail = trim((string) ($company['email'] ?? ''));
+    $companyName = trim((string) ($company['name'] ?? config('app.name'))) ?: config('app.name');
     $companyPhone = trim((string) ($company['phone'] ?? ''));
-    $companyLogoPath = trim((string) ($company['logo_path'] ?? 'images/logo-dark.png'));
-    $currentYear = date('Y');
+    $companyEmail = trim((string) ($company['email'] ?? ''));
+    $companyLogoPath = trim((string) ($company['logo_path'] ?? ''));
+    $companyAddress = collect([
+        $company['address_line_1'] ?? null,
+        $company['address_line_2'] ?? null,
+    ])->map(fn ($line) => trim((string) $line))->filter()->implode(', ');
 @endphp
 <!doctype html>
 <html lang="en">
@@ -15,7 +18,7 @@
     <meta name="color-scheme" content="light dark">
     <meta name="supported-color-schemes" content="light dark">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
-    <title>{{ $emailTitle ?? $companyName }}</title>
+    <title>{{ $emailTitle ?? 'Message' }}</title>
     <style>
         :root {
             color-scheme: light dark;
@@ -39,7 +42,6 @@
         img {
             border: 0;
             outline: none;
-            text-decoration: none;
             -ms-interpolation-mode: bicubic;
             display: block;
         }
@@ -105,15 +107,17 @@
             border-left: 4px solid #df1119 !important;
         }
 
-        .button {
+        .btn {
             display: inline-block;
-            background-color: #16a34a !important;
-            color: #ffffff !important;
             padding: 12px 24px;
-            border-radius: 0;
+            background-color: #16a34a;
+            color: #ffffff;
             text-decoration: none;
+            border: 0;
+            border-radius: 0;
             font-weight: 700;
             font-size: 16px;
+            line-height: 1;
         }
 
         @media (prefers-color-scheme: dark) {
@@ -235,21 +239,20 @@
 </head>
 <body class="email-bg" style="margin:0; padding:0; background-color:#f5f7fb;">
     <div style="display:none; max-height:0; overflow:hidden; opacity:0; mso-hide:all;">
-        {{ $previewText ?? 'Message from ' . $companyName }}
+        {{ $emailPreview ?? 'Message from ' . $companyName }}
     </div>
 
     <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="email-bg" bgcolor="#f5f7fb">
         <tr>
             <td align="center" style="padding:24px 12px;">
                 <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="container" style="max-width:640px;">
-                    <!-- Hero Section -->
                     <tr>
                         <td class="hero-bg mobile-pad" bgcolor="#df1119" style="padding:32px 32px 40px 32px;">
                             <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:0 0 16px 0;">
                                 <tr>
                                     <td valign="middle" style="padding-right:12px;">
-                                        @if(!empty($logoDataUri))
-                                            <img src="{{ $logoDataUri }}" alt="{{ $companyName }} logo" width="44" height="40" style="width:44px; height:40px;">
+                                        @if($companyLogoPath !== '')
+                                            <img src="{{ asset(ltrim($companyLogoPath, '/')) }}" alt="{{ $companyName }} logo" width="44" height="40" style="width:44px; height:40px; border-radius: 0;">
                                         @endif
                                     </td>
                                     <td valign="middle" class="text-light" style="font-family:Arial, Helvetica, sans-serif; font-size:20px; line-height:24px; font-weight:700; color:#ffffff;">
@@ -260,83 +263,52 @@
                             <h1 class="text-light" style="margin:0 0 12px 0; font-family:Arial, Helvetica, sans-serif; font-size:34px; line-height:42px; font-weight:700; color:#ffffff;">
                                 {{ $emailHeading }}
                             </h1>
-                            <p class="text-light-soft" style="margin:0; font-family:Arial, Helvetica, sans-serif; font-size:16px; line-height:26px; color:#f0fff3;">
+                            <p class="text-light-soft" style="margin:0; font-family:Arial, Helvetica, sans-serif; font-size:16px; line-height:26px; color:#fff0f1;">
                                 {{ $emailSubheading ?? '' }}
                             </p>
                         </td>
                     </tr>
-
-                    <!-- Content Section -->
                     <tr>
                         <td class="surface-bg mobile-pad" bgcolor="#f5f7fb" style="padding:36px 32px 32px 32px;">
-                            
-                            @yield('content')
-
-                            @if(isset($safeNote))
-                            <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="safe-note" bgcolor="#f0fff3" style="margin:0 0 22px 0;">
-                                <tr>
-                                    <td style="padding:16px 18px; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:24px; color:#2d5a35;">
-                                        {{ $safeNote }}
-                                    </td>
-                                </tr>
-                            </table>
-                            @endif
-
-                            <p class="text-body" style="margin:0; font-family:Arial, Helvetica, sans-serif; font-size:16px; line-height:28px; color:#666666;">
-                                Best regards,<br>
-                                <span class="text-heading" style="font-weight:700; color:#1a3f4e;">{{ $closingName ?? $companyName . ' Team' }}</span>
-                            </p>
+                            {{ $slot }}
                         </td>
                     </tr>
-
-                    <!-- Footer Top Section -->
                     <tr>
                         <td class="surface-bg footer-top mobile-pad" bgcolor="#f5f7fb" style="padding:34px 32px 20px 32px; border-top:1px solid #e6edf5;">
                             <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
                                 <tr>
-                                    <td class="mobile-block mobile-center" valign="middle" style="padding-bottom:16px;">
-                                        <table role="presentation" border="0" cellpadding="0" cellspacing="0">
-                                            <tr>
-                                                <td valign="middle" style="padding-right:12px;">
-                                                    @if(!empty($logoDataUri))
-                                                        <img src="{{ $logoDataUri }}" alt="{{ $companyName }} logo" width="44" height="40" style="width:44px; height:40px;">
-                                                    @endif
-                                                </td>
-                                                <td valign="middle" class="text-dark" style="font-family:Arial, Helvetica, sans-serif; font-size:20px; line-height:24px; font-weight:700; color:#000000;">
-                                                    {{ $companyName }}
-                                                </td>
-                                            </tr>
-                                        </table>
+                                    <td class="mobile-center text-dark" style="padding-bottom:10px; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:24px; color:#04223e;">
+                                        &copy; {{ now()->year }} {{ $companyName }}. All rights reserved.
                                     </td>
                                 </tr>
+                                @if($companyAddress !== '')
+                                    <tr>
+                                        <td class="mobile-center text-dark" style="padding-bottom:10px; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:24px; color:#04223e;">
+                                            {{ $companyAddress }}
+                                        </td>
+                                    </tr>
+                                @endif
                                 <tr>
-                                    <td class="mobile-center text-dark" style="padding-bottom:10px; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:24px; color:#000000;">
-                                        &copy; {{ $currentYear }} {{ $companyName }}. All rights reserved.
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td class="mobile-center text-body" style="padding-bottom:16px; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:24px; color:#666666;">
-                                        @if($companyPhone || $companyEmail)
-                                            <a href="mailto:{{ $companyEmail }}" style="color:#22b956; text-decoration:none;">{{ $companyPhone ?: $companyEmail }}</a>
-                                            @if($companyPhone && $companyEmail)
-                                                <span style="color:#999999;"> | </span>
-                                                <a href="mailto:{{ $companyEmail }}" style="color:#22b956; text-decoration:none;">{{ $companyEmail }}</a>
-                                            @endif
+                                    <td class="mobile-center text-body" style="padding-bottom:16px; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:24px; color:#5c6b7a;">
+                                        @if($companyPhone !== '')
+                                            <a href="tel:{{ preg_replace('/[^0-9+]/', '', $companyPhone) }}" style="color:#df1119; text-decoration:none;">{{ $companyPhone }}</a>
+                                        @endif
+                                        @if($companyPhone !== '' && $companyEmail !== '')
+                                            <span style="color:#999999;"> | </span>
+                                        @endif
+                                        @if($companyEmail !== '')
+                                            <a href="mailto:{{ $companyEmail }}" style="color:#df1119; text-decoration:none;">{{ $companyEmail }}</a>
                                         @endif
                                     </td>
                                 </tr>
                             </table>
                         </td>
                     </tr>
-
-                    <!-- Divider -->
                     <tr>
                         <td class="surface-bg" bgcolor="#f5f7fb" style="padding:0;">
                             <div class="divider" style="width:100%; height:1px; line-height:1px; font-size:1px; background-color:#e6edf5;">&nbsp;</div>
                         </td>
                     </tr>
-
-                    <!-- Footer -->
                     <tr>
                         <td class="footer-bg mobile-pad" bgcolor="#04223e" style="padding:20px 32px;">
                             <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">

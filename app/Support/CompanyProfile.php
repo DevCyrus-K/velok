@@ -17,6 +17,11 @@ class CompanyProfile
             'address_line_1' => '',
             'address_line_2' => '',
             'logo_path' => 'images/logo-dark.png',
+            'website' => (string) config('company.website', ''),
+            'business_registration_number' => (string) config('company.business_registration_number', ''),
+            'authorized_representative_name' => (string) config('company.authorized_representative_name', ''),
+            'authorized_representative_title' => (string) config('company.authorized_representative_title', ''),
+            'liability_cap_amount' => (string) config('company.liability_cap_amount', ''),
         ]);
     }
 

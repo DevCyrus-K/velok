@@ -6,6 +6,7 @@ use App\Http\Requests\QuotationFormRequest;
 use App\Models\Quotation;
 use App\Models\QuoteRequest;
 use App\Models\User;
+use App\Services\ServiceAgreementService;
 use App\Support\BookingFlow;
 use App\Support\CompanyProfile;
 use App\Support\PdfDocumentName;
@@ -330,7 +331,7 @@ class QuotationController extends Controller
         return response()->json(['success' => true]);
     }
 
-    public function approve(Quotation $quotation): RedirectResponse
+    public function approve(Quotation $quotation, ServiceAgreementService $serviceAgreements): RedirectResponse
     {
         $quotation->loadMissing('quoteRequest');
 
@@ -360,9 +361,24 @@ class QuotationController extends Controller
             );
         });
 
-        return redirect()
-            ->route('quotations.show', $quotation)
-            ->with('toast-success', 'Quotation approved successfully.');
+        $quotation->refresh()->loadMissing('quoteRequest');
+
+        try {
+            $agreementResult = $serviceAgreements->generateAndSendForApprovedQuotation($quotation, auth()->user());
+            $message = $agreementResult['emailed']
+                ? 'Quotation approved successfully. Service Agreement generated and emailed to the client.'
+                : 'Quotation approved successfully. Service Agreement generated, but email delivery failed and the admin alert was logged.';
+
+            return redirect()
+                ->route('quotations.show', $quotation)
+                ->with($agreementResult['emailed'] ? 'toast-success' : 'toast-error', $message);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return redirect()
+                ->route('quotations.show', $quotation)
+                ->with('toast-error', 'Quotation approved, but the Service Agreement could not be generated: '.$exception->getMessage());
+        }
     }
 
     public function reject(Quotation $quotation): RedirectResponse

@@ -37,6 +37,7 @@ class CustomerSyncService
                 $approvedQuotesCount = $group->whereIn('status', [
                     QuoteRequest::STATUS_QUOTED,
                     QuoteRequest::STATUS_CREATED,
+                    QuoteRequest::STATUS_COMPLETED,
                     QuoteRequest::STATUS_EMAILED,
                 ])->count();
                 $declinedQuotesCount = $group->filter(fn (QuoteRequest $quote) => in_array($quote->status, [

@@ -10,7 +10,6 @@ use App\Support\MailSender;
 use App\Support\PdfDocumentName;
 use App\Support\UserSignature;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
@@ -19,7 +18,6 @@ use Illuminate\Queue\SerializesModels;
 
 class QuotationMail extends Mailable
 {
-    use Queueable;
     use SerializesModels;
 
     private readonly ?string $subjectOverride;

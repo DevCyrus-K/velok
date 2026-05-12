@@ -1,8 +1,13 @@
+@php
+    $company = $company ?? app(\App\Support\CompanyProfile::class)->data();
+    $companyName = trim((string) ($company['name'] ?? config('app.name'))) ?: config('app.name');
+@endphp
 @extends('emails.layouts.customer-base', [
     'emailHeading' => 'Invoice ' . $invoice->invoice_number,
     'emailSubheading' => 'Payment Due: KES ' . number_format($invoice->total_amount, 2),
     'customerName' => $invoice->customer_name,
-    'closingName' => trim((string) ($company['name'] ?? '')) ?: 'Kwikshift Movers Team',
+    'closingName' => $companyName,
+    'company' => $company,
 ])
 
 @section('content')

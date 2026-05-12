@@ -1,13 +1,14 @@
-@extends('emails.layouts.customer-base', [
-    'emailHeading' => 'Your quotation is ready',
-    'emailSubheading' => 'Quotation ' . ($quote->reference() ?? '#' . ($quotation->id ?? 'N/A')) . ' from ' . (trim((string) ($company['name'] ?? '')) ?: 'Kwikshift Movers'),
-    'customerName' => $quote->full_name ?? $quotation->customer_name ?? 'Valued Customer',
-    'closingName' => trim((string) ($company['name'] ?? '')) ?: 'Kwikshift Movers Team',
-])
-
-@section('content')
 @php
     $company = $company ?? app(\App\Support\CompanyProfile::class)->data();
+    $companyName = trim((string) ($company['name'] ?? config('app.name'))) ?: config('app.name');
+@endphp
+@extends('emails.layouts.customer-base', [
+    'emailHeading' => 'Your quotation is ready',
+    'emailSubheading' => 'Quotation ' . ($quote->reference() ?? '#' . ($quotation->id ?? 'N/A')) . ' from ' . $companyName,
+    'customerName' => $quote->full_name ?? $quotation->customer_name ?? 'Valued Customer',
+    'closingName' => $companyName,
+    'company' => $company,
+])
     $depositAmount = $quotation->depositAmount();
     $balanceDue = $quotation->balanceDue();
     $quoteDate = $quotation->quote_date?->format('d M Y') ?? now()->format('d M Y');

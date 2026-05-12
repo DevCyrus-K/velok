@@ -34,8 +34,8 @@
             default => [
                 'icon' => '🕐',
                 'class' => 'text-warning',
-                'label' => 'Queued',
-                'detail' => 'Waiting to be sent...',
+                'label' => 'Sending',
+                'detail' => 'Send attempt in progress...',
             ],
         };
     };
@@ -56,7 +56,7 @@
 
         @if($logs->count() > 1)
             <details class="mt-2">
-                <summary class="text-muted small fw-semibold">Email History ({{ $logs->count() }})</summary>
+                <summary class="text-muted small fw-semibold">Email Logs ({{ $logs->count() }})</summary>
                 <div class="list-group list-group-flush mt-2">
                     @foreach($logs as $log)
                         @php($entry = $formatEmailLog($log))

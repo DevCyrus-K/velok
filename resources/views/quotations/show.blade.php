@@ -199,6 +199,12 @@
                     <i data-lucide="download" class="icon-sm"></i>
                     Download PDF
                 </a>
+                @if($isApprovedQuotation || filled($quotation->service_agreement_path))
+                    <a class="btn btn-outline-primary" href="{{ route('admin.agreements.download', $quote) }}">
+                        <i data-lucide="file-check-2" class="icon-sm"></i>
+                        Download Agreement
+                    </a>
+                @endif
                 <div class="dropdown">
                     <button class="btn btn-outline-secondary btn-icon-only" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="More quote actions">
                         <i data-lucide="ellipsis-vertical" class="icon-sm"></i>

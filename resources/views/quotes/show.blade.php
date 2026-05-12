@@ -188,6 +188,11 @@
                                         <a class="btn btn-outline-info" href="{{ route('quotes.download', $quote) }}">
                                             <i data-lucide="download" class="align-middle me-1"></i>Download Quotation
                                         </a>
+                                        @if($quotation->status === \App\Models\Quotation::STATUS_APPROVED || filled($quotation->service_agreement_path))
+                                            <a class="btn btn-outline-primary" href="{{ route('admin.agreements.download', $quote) }}">
+                                                <i data-lucide="file-check-2" class="align-middle me-1"></i>Download Agreement
+                                            </a>
+                                        @endif
                                         @if(in_array($quotation->status, [\App\Models\Quotation::STATUS_DRAFT, \App\Models\Quotation::STATUS_SENT], true))
                                             <form action="{{ route('quotations.send', $quotation) }}" method="POST">
                                                 @csrf

@@ -2,12 +2,10 @@
 
 namespace App\Mail;
 
-use App\Mail\Concerns\CreatesEmailLog;
 use App\Models\Quotation;
 use App\Support\BookingFlow;
 use App\Support\CompanyProfile;
 use App\Support\MailSender;
-use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -15,11 +13,9 @@ use Illuminate\Queue\SerializesModels;
 
 class QuoteApprovedCustomerMail extends Mailable
 {
-    use CreatesEmailLog;
-    use Queueable;
     use SerializesModels;
 
-    public function __construct(public Quotation $quotation) {}
+    public function __construct(public Quotation $quotation, private readonly ?string $trackingToken = null) {}
 
     public function envelope(): Envelope
     {
@@ -31,15 +27,13 @@ class QuoteApprovedCustomerMail extends Mailable
 
     public function content(): Content
     {
-        $subject = 'Your quotation is approved '.$this->quotation->reference;
-
         return new Content(
             view: 'emails.quote-approved-customer',
             with: [
                 'quotation' => $this->quotation,
                 'company' => app(CompanyProfile::class)->data(),
                 'paymentMethods' => app(BookingFlow::class)->paymentMethodDisplays(),
-                'trackingToken' => $this->trackingToken($this->quotation, $this->quotation->customer_email, $subject),
+                'trackingToken' => $this->trackingToken,
             ],
         );
     }

@@ -259,6 +259,11 @@ class SettingsController extends Controller
             'phone' => ['nullable', 'string', 'max:60'],
             'address_line_1' => ['nullable', 'string', 'max:255'],
             'address_line_2' => ['nullable', 'string', 'max:255'],
+            'website' => ['nullable', 'url', 'max:255'],
+            'business_registration_number' => ['nullable', 'string', 'max:120'],
+            'authorized_representative_name' => ['nullable', 'string', 'max:160'],
+            'authorized_representative_title' => ['nullable', 'string', 'max:120'],
+            'liability_cap_amount' => ['nullable', 'string', 'max:120'],
             'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,svg', 'max:4096'],
         ]);
 
@@ -282,6 +287,11 @@ class SettingsController extends Controller
             'phone' => $this->cleanText($validated['phone'] ?? ''),
             'address_line_1' => $this->cleanText($validated['address_line_1'] ?? ''),
             'address_line_2' => $this->cleanText($validated['address_line_2'] ?? ''),
+            'website' => $this->cleanText($validated['website'] ?? ''),
+            'business_registration_number' => $this->cleanText($validated['business_registration_number'] ?? ''),
+            'authorized_representative_name' => $this->cleanText($validated['authorized_representative_name'] ?? ''),
+            'authorized_representative_title' => $this->cleanText($validated['authorized_representative_title'] ?? ''),
+            'liability_cap_amount' => $this->cleanText($validated['liability_cap_amount'] ?? ''),
             'logo_path' => $logoPath ?: (app(CompanyProfile::class)->data()['logo_path'] ?? 'images/logo-dark.png'),
         ]);
     }

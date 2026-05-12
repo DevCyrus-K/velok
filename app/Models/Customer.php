@@ -94,7 +94,7 @@ class Customer extends Model
         }
 
         return match ($quoteStatus) {
-            'closed' => self::STATUS_COMPLETED,
+            'completed', 'closed' => self::STATUS_COMPLETED,
             'processing', 'emailed', 'quoted', 'created' => self::STATUS_ACTIVE_CLIENT,
             default => self::STATUS_LEAD,
         };

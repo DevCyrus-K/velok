@@ -9,7 +9,6 @@
 @component('mail::message')
 # Invoice {{ $invoice->invoice_number }}
 
-Hello {{ $invoice->customer_name }},
 
 @if(filled($messageBody ?? null))
 {!! nl2br(e($messageBody)) !!}

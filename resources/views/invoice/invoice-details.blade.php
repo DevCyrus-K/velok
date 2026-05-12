@@ -186,6 +186,13 @@
         $canMarkVoid = $isSentInvoice || $isOverdueInvoice || $invoiceStatus === \App\Models\Invoice::STATUS_UNPAID;
         $invoiceSentAtLabel = $invoice->sent_at?->format('d M Y, h:i A');
         $paidAtLabel = $invoice->paid_at?->format('d M Y \a\t H:i') ?? $invoice->updated_at?->format('d M Y \a\t H:i');
+        $reviewLink = trim((string) \App\Models\AppSetting::value('company', 'review_link', '')) ?: url('/review-us');
+        $paymentReceivedMessage = "Hello {$invoice->customer_name},\n\n"
+            . 'Payment received for invoice ' . $invoice->invoice_number . ' (KES ' . number_format((float) $invoice->total_amount, 2) . '). Your move is now marked complete.' . "\n\n"
+            . 'Thank you for choosing ' . $companyName . ".\n\n"
+            . 'Review us here: ' . $reviewLink;
+        $paymentWhatsAppUrl = app(\App\Support\BookingFlow::class)->whatsappUrl($invoice->customer_phone, $paymentReceivedMessage);
+        $showPaymentCompletedModal = (int) session('payment_completed_invoice_id') === (int) $invoice->id;
     @endphp
 
     <div class="card d-print-none">
@@ -544,6 +551,45 @@
             </div>
         </div>
     </div>
+
+    <div class="modal fade" id="paymentCompletedModal" tabindex="-1" aria-labelledby="paymentCompletedModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="paymentCompletedModalLabel">Payment Complete</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3">Invoice {{ $invoice->invoice_number }} is fully paid. Any linked move has been marked completed.</p>
+                    <div class="d-grid gap-2">
+                        @if($paymentWhatsAppUrl)
+                            <a class="btn btn-success" href="{{ $paymentWhatsAppUrl }}" target="_blank" rel="noopener">
+                                <x-icons.whatsapp class="icon-sm" />
+                                WhatsApp Client
+                            </a>
+                        @else
+                            <button class="btn btn-outline-secondary" type="button" disabled>
+                                <x-icons.whatsapp class="icon-sm" />
+                                WhatsApp unavailable
+                            </button>
+                        @endif
+                        <form action="{{ route('invoice.payment-notification.email', $invoice) }}" method="POST">
+                            @csrf
+                            <input type="hidden" name="recipient_email" value="{{ $invoice->customer_email }}">
+                            <button class="btn btn-primary w-100" type="submit">
+                                <i data-lucide="mail" class="icon-sm"></i>
+                                Email Client
+                            </button>
+                        </form>
+                        <button class="btn btn-outline-secondary" type="button" data-copy-review-link data-review-link="{{ $reviewLink }}">
+                            <i data-lucide="copy" class="icon-sm"></i>
+                            Copy Review Link
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 @endif
 @endsection
 
@@ -551,8 +597,11 @@
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const shouldOpenSendModal = @json($errors->has('recipient_email') || $errors->has('subject') || $errors->has('message') || $errors->has('attach_pdf'));
+        const shouldOpenPaymentModal = @json($showPaymentCompletedModal ?? false);
         const modalElement = document.getElementById('sendInvoiceModal');
         const modal = modalElement && window.bootstrap ? bootstrap.Modal.getOrCreateInstance(modalElement) : null;
+        const paymentModalElement = document.getElementById('paymentCompletedModal');
+        const paymentModal = paymentModalElement && window.bootstrap ? bootstrap.Modal.getOrCreateInstance(paymentModalElement) : null;
         const form = document.querySelector('[data-invoice-send-form]');
         const errorBox = document.querySelector('[data-invoice-send-error]');
         const submitButton = document.querySelector('[data-invoice-send-submit]');
@@ -560,6 +609,7 @@
         const sendLabel = document.querySelector('[data-invoice-send-label]');
         const sendState = document.querySelector('[data-invoice-send-state]');
         const statusBadge = document.getElementById('invoice-status-badge');
+        const copyReviewButton = document.querySelector('[data-copy-review-link]');
         const shouldPrint = @json(request()->boolean('print'));
 
         if (shouldOpenSendModal && modal) {
@@ -570,8 +620,8 @@
             window.setTimeout(() => window.print(), 250);
         }
 
-        if (!form || !submitButton) {
-            return;
+        if (shouldOpenPaymentModal && paymentModal) {
+            paymentModal.show();
         }
 
         const showToast = (message, className = 'bg-success') => {
@@ -588,6 +638,40 @@
                 className,
             }).showToast();
         };
+
+        if (copyReviewButton) {
+            copyReviewButton.addEventListener('click', async function () {
+                const link = this.dataset.reviewLink || '';
+                const originalText = this.textContent.trim();
+
+                try {
+                    if (navigator.clipboard?.writeText) {
+                        await navigator.clipboard.writeText(link);
+                    } else {
+                        const input = document.createElement('input');
+                        input.value = link;
+                        document.body.appendChild(input);
+                        input.select();
+                        document.execCommand('copy');
+                        input.remove();
+                    }
+
+                    this.innerHTML = '<i data-lucide="check" class="icon-sm"></i>Copied';
+                    window.lucide?.createIcons();
+                    showToast('Review link copied.');
+                    window.setTimeout(() => {
+                        this.innerHTML = '<i data-lucide="copy" class="icon-sm"></i> ' + originalText;
+                        window.lucide?.createIcons();
+                    }, 1800);
+                } catch (error) {
+                    showToast('Review link could not be copied.', 'bg-danger');
+                }
+            });
+        }
+
+        if (!form || !submitButton) {
+            return;
+        }
 
         const setError = (message) => {
             if (!errorBox) {

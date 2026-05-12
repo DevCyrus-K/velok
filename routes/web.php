@@ -16,6 +16,7 @@ use App\Http\Controllers\QuoteApprovalController;
 use App\Http\Controllers\QuoteController;
 use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\RoutingController;
+use App\Http\Controllers\ServiceAgreementController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\TodoController;
 use App\Http\Controllers\TopbarController;
@@ -37,6 +38,10 @@ require __DIR__.'/auth.php';
 Route::get('/email/track/{token}', [EmailTrackingController::class, 'open'])
     ->middleware('throttle:30,1')
     ->name('email.track.open');
+
+Route::get('/review-us', function () {
+    return view('review-us');
+})->name('review-us')->domain('kwikshiftmovers.co.ke');
 
 Route::get('/quote/approve/{token}', [QuoteApprovalController::class, 'show'])
     ->middleware('throttle:10,1')
@@ -128,6 +133,7 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
     Route::get('invoices/{invoice}/download', [InvoiceController::class, 'download'])->name('invoices.download');
     Route::post('invoices/{invoice}/send', [InvoiceController::class, 'send'])->middleware('throttle:5,1')->name('invoices.send');
     Route::get('invoice/{invoice}/send-whatsapp', [InvoiceController::class, 'sendWhatsApp'])->name('invoice.send-whatsapp');
+    Route::post('invoice/{invoice}/payment-notification/email', [InvoiceController::class, 'sendPaymentNotificationEmail'])->middleware('throttle:5,1')->name('invoice.payment-notification.email');
     Route::get('invoice/{invoice}/edit', [InvoiceController::class, 'edit'])->name('invoice.edit');
     Route::put('invoice/{invoice}', [InvoiceController::class, 'update'])->name('invoice.update');
     Route::patch('invoice/{invoice}/mark-paid', [InvoiceController::class, 'markPaid'])->name('invoice.mark-paid');
@@ -137,6 +143,9 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
     Route::delete('invoice/{invoice}', [InvoiceController::class, 'destroy'])->name('invoice.destroy');
     Route::get('invoice/invoices', [RoutingController::class, 'invoicesPage'])->name('invoice.index');
     Route::get('invoice/invoice-details/{invoice?}', [RoutingController::class, 'invoiceDetailsPage'])->name('invoice.details');
+
+    Route::get('admin/agreements/{quote}/download', [ServiceAgreementController::class, 'download'])
+        ->name('admin.agreements.download');
 
     Route::prefix('customers')->name('customers.')->group(function () {
         Route::get('create', [CustomerController::class, 'create'])->name('create');

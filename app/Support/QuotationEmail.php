@@ -87,14 +87,12 @@ class QuotationEmail
                 emailLogId: $emailLog?->getKey(),
             ));
 
-            $messageId = $this->validatedSentMessageId($sentMessage);
+            $this->validatedSentMessageId($sentMessage);
             $this->markSent($quotation, $user);
             $this->markEmailLogSent($emailLog);
-            $this->recordDelivery($quotation, 'sent', $recipient, $subject, 'Quotation email accepted by the mail transport. Message ID: '.$messageId);
         } catch (Throwable $exception) {
             $this->markFailed($quotation);
             $this->updateEmailLogFailure($emailLog, $exception);
-            $this->recordDelivery($quotation, 'failed', $recipient, $subject, 'Email failed: '.$exception->getMessage());
 
             throw $exception;
         }
@@ -163,37 +161,6 @@ class QuotationEmail
                 'email'
             );
         });
-    }
-
-    private function recordDelivery(Quotation $quotation, string $status, string $recipient, string $subject, string $message): void
-    {
-        if (! Schema::hasTable('email_delivery_logs')) {
-            return;
-        }
-
-        $mailer = (string) config('mail.default', '');
-        $transport = (string) (config("mail.mailers.{$mailer}.transport") ?: $mailer ?: 'unknown');
-        $now = now();
-        $data = [
-            'form_type' => 'quotation',
-            'recipient_email' => Str::limit($recipient, 190, ''),
-            'status' => $status,
-            'direction' => 'client',
-            'subject' => Str::limit($subject, 190, ''),
-            'transport' => Str::limit($transport, 50, ''),
-            'response_message' => Str::limit($message, 1000, ''),
-            'created_at' => $now,
-        ];
-
-        if (Schema::hasColumn('email_delivery_logs', 'updated_at')) {
-            $data['updated_at'] = $now;
-        }
-
-        try {
-            DB::table('email_delivery_logs')->insert($data);
-        } catch (Throwable $logException) {
-            report($logException);
-        }
     }
 
     private function markEmailLogSent(?EmailLog $emailLog): void

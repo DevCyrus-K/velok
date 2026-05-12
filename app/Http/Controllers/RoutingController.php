@@ -84,7 +84,11 @@ class RoutingController extends BaseController
             return $this->customersPage();
         }
 
-        return view($first);
+        try {
+            return view($first);
+        } catch (\InvalidArgumentException $e) {
+            return response()->view('errors.404', ['exception' => $e], 404);
+        }
     }
 
     /**
@@ -147,7 +151,11 @@ class RoutingController extends BaseController
             return $this->invoiceDetailsPage();
         }
 
-        return view($first.'.'.$second);
+        try {
+            return view($first.'.'.$second);
+        } catch (\InvalidArgumentException $e) {
+            return response()->view('errors.404', ['exception' => $e], 404);
+        }
     }
 
     /**
@@ -159,7 +167,11 @@ class RoutingController extends BaseController
             return $this->invoiceDetailsPage($third);
         }
 
-        return view($first.'.'.$second.'.'.$third);
+        try {
+            return view($first.'.'.$second.'.'.$third);
+        } catch (\InvalidArgumentException $e) {
+            return response()->view('errors.404', ['exception' => $e], 404);
+        }
     }
 
     public function galleryAsset(Request $request)

@@ -4,14 +4,19 @@ namespace App\Http\Controllers;
 
 use App\Mail\QuoteApprovedAdminMail;
 use App\Mail\QuoteApprovedCustomerMail;
+use App\Models\EmailLog;
 use App\Models\Quotation;
 use App\Models\QuoteRequest;
+use App\Services\ServiceAgreementService;
 use App\Support\BookingFlow;
 use App\Support\CompanyProfile;
+use App\Support\NotificationLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Throwable;
 
@@ -54,7 +59,7 @@ class QuoteApprovalController extends Controller
         ]);
     }
 
-    public function approve(Request $request, string $token): RedirectResponse
+    public function approve(Request $request, string $token, ServiceAgreementService $serviceAgreements): RedirectResponse
     {
         $quotation = Quotation::query()
             ->with('quoteRequest')
@@ -86,7 +91,7 @@ class QuoteApprovalController extends Controller
                 'approval_token' => null,
             ]);
 
-            $quotation->quoteRequest?->update([
+            $quotation->quoteRequest?->updateQuietly([
                 'status' => QuoteRequest::STATUS_CREATED,
                 'approval_date' => $quotation->quoteRequest?->approval_date ?: now()->toDateString(),
             ]);
@@ -108,18 +113,34 @@ class QuoteApprovalController extends Controller
             );
         });
 
-        $adminEmail = $this->adminEmail();
+        $quotation->refresh()->loadMissing('quoteRequest');
+        app(NotificationLogger::class)->quoteApprovedByClient($quotation);
 
         try {
-            if ($adminEmail) {
-                Mail::to($adminEmail)->send(new QuoteApprovedAdminMail($quotation));
-            }
-
-            if ($quotation->contact_preference !== 'whatsapp') {
-                Mail::to($quotation->customer_email)->send(new QuoteApprovedCustomerMail($quotation));
-            }
+            $serviceAgreements->generateAndSendForApprovedQuotation($quotation);
         } catch (Throwable $exception) {
             report($exception);
+        }
+
+        $adminEmail = $this->adminEmail();
+        $clientName = trim((string) ($quotation->approved_by_name ?: $quotation->customer_name)) ?: 'Client';
+
+        if ($adminEmail) {
+            $this->sendLoggedQuoteApprovalEmail(
+                $quotation,
+                $adminEmail,
+                'Quote approved by '.$clientName,
+                fn (?string $trackingToken) => new QuoteApprovedAdminMail($quotation, $trackingToken)
+            );
+        }
+
+        if ($quotation->contact_preference !== 'whatsapp') {
+            $this->sendLoggedQuoteApprovalEmail(
+                $quotation,
+                $quotation->customer_email,
+                'Your quotation is approved '.$quotation->reference,
+                fn (?string $trackingToken) => new QuoteApprovedCustomerMail($quotation, $trackingToken)
+            );
         }
 
         return redirect()->route('quote.approval.thankyou', $quotation);
@@ -142,5 +163,71 @@ class QuoteApprovalController extends Controller
         $email = trim((string) ($company['email'] ?? config('mail.from.address')));
 
         return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : null;
+    }
+
+    private function sendLoggedQuoteApprovalEmail(Quotation $quotation, ?string $recipient, string $subject, callable $mailFactory): void
+    {
+        $recipient = Str::lower(trim((string) $recipient));
+
+        if (! filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+            return;
+        }
+
+        $emailLog = $this->createEmailLog($quotation, $recipient, $subject);
+
+        try {
+            Mail::to($recipient)->send($mailFactory($emailLog?->tracking_token));
+            $this->markEmailLogSent($emailLog);
+        } catch (Throwable $exception) {
+            $this->markEmailLogFailed($emailLog, $exception);
+            report($exception);
+        }
+    }
+
+    private function createEmailLog(Quotation $quotation, string $recipient, string $subject): ?EmailLog
+    {
+        if (! Schema::hasTable('email_logs')) {
+            return null;
+        }
+
+        try {
+            return $quotation->emailLogs()->create([
+                'recipient_email' => Str::limit($recipient, 190, ''),
+                'subject' => Str::limit($subject, 190, ''),
+                'status' => EmailLog::STATUS_SENDING,
+                'tracking_token' => (string) Str::uuid(),
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return null;
+        }
+    }
+
+    private function markEmailLogSent(?EmailLog $emailLog): void
+    {
+        if (! $emailLog) {
+            return;
+        }
+
+        $emailLog->increment('attempts');
+        $emailLog->update([
+            'status' => EmailLog::STATUS_SENT,
+            'sent_at' => now(),
+            'failed_reason' => null,
+        ]);
+    }
+
+    private function markEmailLogFailed(?EmailLog $emailLog, Throwable $exception): void
+    {
+        if (! $emailLog) {
+            return;
+        }
+
+        $emailLog->update([
+            'status' => EmailLog::STATUS_FAILED,
+            'failed_reason' => Str::limit($exception->getMessage(), 1000, ''),
+            'attempts' => $emailLog->attempts + 1,
+        ]);
     }
 }

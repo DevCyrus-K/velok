@@ -251,6 +251,31 @@
                         @error('address_line_2')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                     <div class="col-md-6">
+                        <label class="form-label" for="companyWebsite">Company Website</label>
+                        <input id="companyWebsite" name="website" type="url" class="form-control @error('website') is-invalid @enderror" value="{{ old('website', $settings['company']['website'] ?? '') }}">
+                        @error('website')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="companyRegistration">Business Registration Number</label>
+                        <input id="companyRegistration" name="business_registration_number" type="text" class="form-control @error('business_registration_number') is-invalid @enderror" value="{{ old('business_registration_number', $settings['company']['business_registration_number'] ?? '') }}">
+                        @error('business_registration_number')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="companyRepresentative">Authorized Representative</label>
+                        <input id="companyRepresentative" name="authorized_representative_name" type="text" class="form-control @error('authorized_representative_name') is-invalid @enderror" value="{{ old('authorized_representative_name', $settings['company']['authorized_representative_name'] ?? '') }}">
+                        @error('authorized_representative_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="companyRepresentativeTitle">Representative Title</label>
+                        <input id="companyRepresentativeTitle" name="authorized_representative_title" type="text" class="form-control @error('authorized_representative_title') is-invalid @enderror" value="{{ old('authorized_representative_title', $settings['company']['authorized_representative_title'] ?? '') }}">
+                        @error('authorized_representative_title')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="companyLiabilityCap">Liability Cap Amount</label>
+                        <input id="companyLiabilityCap" name="liability_cap_amount" type="text" class="form-control @error('liability_cap_amount') is-invalid @enderror" value="{{ old('liability_cap_amount', $settings['company']['liability_cap_amount'] ?? '') }}">
+                        @error('liability_cap_amount')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+                    <div class="col-md-6">
                         <label class="form-label" for="companyLogo">Company Logo</label>
                         <input id="companyLogo" name="logo" type="file" accept=".jpg,.jpeg,.png,.webp,.svg" class="form-control @error('logo') is-invalid @enderror">
                         @error('logo')<div class="invalid-feedback">{{ $message }}</div>@enderror

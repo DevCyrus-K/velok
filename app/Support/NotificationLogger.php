@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\ActivityNotification;
 use App\Models\JobApplication;
 use App\Models\Message;
+use App\Models\Quotation;
 use App\Models\QuoteRequest;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
@@ -39,7 +40,10 @@ class NotificationLogger
                 $payload['related_id'] = $related->getKey();
             }
 
-            return ActivityNotification::query()->create($payload);
+            $notification = ActivityNotification::query()->create($payload);
+            app(TopbarData::class)->forgetNotifications();
+
+            return $notification;
         } catch (Throwable $exception) {
             report($exception);
 
@@ -129,6 +133,39 @@ class NotificationLogger
             'icon' => 'message-square-quote',
             'severity' => 'info',
         ], $quote);
+    }
+
+    public function quoteApprovedByClient(Quotation $quotation): void
+    {
+        $quotation->loadMissing('quoteRequest');
+
+        $clientName = trim((string) ($quotation->approved_by_name ?: $quotation->customer_name));
+        $clientName = $clientName !== '' ? $clientName : 'Client';
+        $quote = $quotation->quoteRequest;
+
+        $this->log([
+            'type' => 'quote_approved',
+            'title' => 'Quote approved by '.$clientName,
+            'body' => $quotation->reference,
+            'url' => $quote ? route('quotes.show', $quote) : route('quotations.show', $quotation),
+            'icon' => 'badge-check',
+            'severity' => 'success',
+        ], $quote ?: $quotation);
+    }
+
+    public function serviceAgreementEmailFailed(Quotation $quotation, string $recipient, string $reason): void
+    {
+        $quotation->loadMissing('quoteRequest');
+        $quote = $quotation->quoteRequest;
+
+        $this->log([
+            'type' => 'service_agreement_email_failed',
+            'title' => 'Service agreement email failed',
+            'body' => Str::limit($quotation->reference.' to '.$recipient.': '.$reason, 1000, ''),
+            'url' => $quote ? route('quotes.show', $quote) : route('quotations.show', $quotation),
+            'icon' => 'triangle-alert',
+            'severity' => 'danger',
+        ], $quote ?: $quotation);
     }
 
     public function loginSucceeded(User $user, Request $request): void

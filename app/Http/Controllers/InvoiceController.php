@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Mail\InvoiceMail;
+use App\Mail\PaymentReceivedMail;
+use App\Models\AppSetting;
+use App\Models\Customer;
 use App\Models\EmailLog;
 use App\Models\Invoice;
 use App\Models\QuoteRequest;
@@ -11,6 +14,7 @@ use App\Services\PaymentMethodService;
 use App\Support\BookingFlow;
 use App\Support\CompanyProfile;
 use App\Support\InvoiceAuthorization;
+use App\Support\LeadCategory;
 use App\Support\PdfDocumentName;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
@@ -402,26 +406,27 @@ class InvoiceController extends Controller
             return back()->with('toast-error', $message);
         }
 
-        $invoice->update([
-            'status' => Invoice::STATUS_PAID,
-            'paid_at' => $invoice->paid_at ?: now(),
-        ]);
+        $moveCompleted = false;
 
-        $invoice->logStage(
-            'PAYMENT_RECEIVED',
-            'Invoice marked as paid',
-            'admin',
-            auth()->user()?->name,
-            null,
-            'system'
-        );
+        DB::transaction(function () use ($invoice, &$moveCompleted): void {
+            $invoice->update([
+                'status' => Invoice::STATUS_PAID,
+                'paid_at' => $invoice->paid_at ?: now(),
+            ]);
 
-        try {
-            \Illuminate\Support\Facades\Mail::to($invoice->customer_email)
-                ->send(new \App\Mail\PaymentReceivedMail($invoice));
-        } catch (Throwable $exception) {
-            report($exception);
-        }
+            $invoice->logStage(
+                'PAYMENT_RECEIVED',
+                'Invoice marked as paid',
+                'admin',
+                auth()->user()?->name,
+                null,
+                'system'
+            );
+
+            $moveCompleted = $this->completeAssociatedMove($invoice);
+        });
+
+        $invoice->refresh()->loadMissing(['items', 'quoteRequest.quotation']);
 
         if (request()->expectsJson()) {
             return response()->json([
@@ -429,10 +434,80 @@ class InvoiceController extends Controller
                 'status' => $invoice->status,
                 'status_label' => $invoice->statusLabel(),
                 'status_badge_class' => $invoice->statusBadgeClass(),
+                'move_completed' => $moveCompleted,
+                'payment_notification' => $this->paymentNotificationData($invoice),
             ]);
         }
 
-        return back()->with('toast-success', 'Invoice marked as paid.');
+        return back()
+            ->with('toast-success', 'Invoice marked as paid.')
+            ->with('payment_completed_invoice_id', $invoice->id);
+    }
+
+    public function sendPaymentNotificationEmail(Request $request, Invoice $invoice): RedirectResponse|JsonResponse
+    {
+        $this->authorizeInvoiceAccess($invoice);
+        $invoice->loadMissing(['items', 'quoteRequest.quotation']);
+
+        if ($invoice->status !== Invoice::STATUS_PAID) {
+            $message = 'Only paid invoices can send payment completion notifications.';
+
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $message], 422);
+            }
+
+            return back()->with('toast-error', $message);
+        }
+
+        $payload = [
+            'recipient_email' => $request->input('recipient_email', $invoice->customer_email),
+        ];
+
+        $validated = validator($payload, [
+            'recipient_email' => ['required', 'email', 'max:190'],
+        ])->validate();
+
+        $recipient = Str::lower(trim($validated['recipient_email']));
+        $subject = 'Payment received for invoice '.$invoice->invoice_number;
+        $emailLog = $this->createInvoiceEmailLog($invoice, $recipient, $subject);
+
+        try {
+            $this->ensureDeliverableMailTransport('Payment notification');
+
+            $sentMessage = Mail::to($recipient)->send(new PaymentReceivedMail($invoice, $emailLog?->tracking_token));
+            $messageId = $this->validatedSentMessageId($sentMessage, 'Payment notification');
+
+            $this->markEmailLogSent($emailLog);
+            $invoice->logStage(
+                'PAYMENT_NOTIFICATION_SENT',
+                'Payment completion email sent',
+                'admin',
+                $request->user()?->name,
+                null,
+                'email',
+                ['recipient' => $recipient, 'message_id' => $messageId]
+            );
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Payment notification email sent successfully.',
+                    'recipient_email' => $recipient,
+                ]);
+            }
+
+            return back()->with('toast-success', 'Payment notification email sent successfully.');
+        } catch (Throwable $exception) {
+            $this->markEmailLogFailed($emailLog, $exception);
+            report($exception);
+
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Payment notification email could not be sent. Please try again.',
+                ], 500);
+            }
+
+            return back()->with('toast-error', 'Payment notification email could not be sent. Please try again.');
+        }
     }
 
     public function markUnpaid(Invoice $invoice): RedirectResponse|JsonResponse
@@ -531,6 +606,125 @@ class InvoiceController extends Controller
         return redirect()
             ->route('invoice.details', ['invoice' => $copy->id])
             ->with('toast-success', 'Invoice duplicated as a draft.');
+    }
+
+    private function completeAssociatedMove(Invoice $invoice): bool
+    {
+        $invoice->loadMissing('quoteRequest.quotation');
+
+        $completed = false;
+        $quote = $invoice->quoteRequest;
+
+        if ($quote && $quote->status !== QuoteRequest::STATUS_COMPLETED) {
+            $quote->updateQuietly(['status' => QuoteRequest::STATUS_COMPLETED]);
+            $completed = true;
+        }
+
+        if ($this->markCustomerMoveCompleted($invoice, $quote)) {
+            $completed = true;
+        }
+
+        if ($completed) {
+            $invoice->logStage(
+                'MOVE_COMPLETED',
+                'Associated move marked as completed after full invoice payment',
+                'system',
+                null,
+                null,
+                'system'
+            );
+        }
+
+        return $completed;
+    }
+
+    private function markCustomerMoveCompleted(Invoice $invoice, ?QuoteRequest $quote): bool
+    {
+        if (! Schema::hasTable('customers')) {
+            return false;
+        }
+
+        $email = Str::lower(trim((string) ($quote?->email ?: $invoice->customer_email)));
+        $phone = trim((string) ($quote?->phone ?: $invoice->customer_phone));
+
+        if ($email === '' && $phone === '') {
+            return false;
+        }
+
+        $contactKey = Customer::makeContactKey($email, $phone);
+        $customer = null;
+
+        if ($quote) {
+            $customer = Customer::query()
+                ->where('source_quote_request_id', $quote->id)
+                ->first();
+        }
+
+        if (! $customer) {
+            $customer = Customer::query()
+                ->where('contact_key', $contactKey)
+                ->first();
+        }
+
+        $data = [
+            'source_quote_request_id' => $quote?->id,
+            'full_name' => $quote?->full_name ?: $invoice->customer_name,
+            'email' => $email,
+            'phone' => $phone,
+            'moving_from' => $quote?->moving_from ?: $invoice->move_origin,
+            'moving_to' => $quote?->moving_to ?: $invoice->move_destination,
+            'latest_service_type' => LeadCategory::normalizeServiceType($quote?->service_type),
+            'status' => Customer::STATUS_COMPLETED,
+            'last_quote_at' => now(),
+        ];
+
+        if ($customer) {
+            $customer->update($data);
+
+            return true;
+        }
+
+        Customer::query()->create(array_merge($data, [
+            'contact_key' => $contactKey,
+            'quotes_count' => $quote ? 1 : 0,
+            'approved_quotes_count' => $quote ? 1 : 0,
+            'declined_quotes_count' => 0,
+            'first_seen_at' => $quote?->created_at ?: $invoice->created_at ?: now(),
+        ]));
+
+        return true;
+    }
+
+    private function paymentNotificationData(Invoice $invoice): array
+    {
+        return [
+            'whatsapp_url' => $this->buildPaymentReceivedWhatsAppMessageUrl($invoice),
+            'review_link' => $this->reviewLink(),
+        ];
+    }
+
+    private function reviewLink(): string
+    {
+        $link = trim((string) AppSetting::value('company', 'review_link', ''));
+
+        return $link !== '' ? $link : url('/review-us');
+    }
+
+    private function buildPaymentReceivedWhatsAppMessageUrl(Invoice $invoice): ?string
+    {
+        return app(BookingFlow::class)->whatsappUrl($invoice->customer_phone, $this->paymentReceivedMessage($invoice));
+    }
+
+    private function paymentReceivedMessage(Invoice $invoice): string
+    {
+        $companyName = trim((string) (app(CompanyProfile::class)->data()['name'] ?? '')) ?: config('app.name');
+        $reviewLink = $this->reviewLink();
+
+        return "Hello {$invoice->customer_name},\n\n"
+            ."Payment received for invoice {$invoice->invoice_number} (KES ".number_format((float) $invoice->total_amount, 2)."). "
+            ."Your move is now marked complete.\n\n"
+            ."Thank you for choosing {$companyName}.\n\n"
+            ."Review us here: {$reviewLink}";
     }
 
     private function invoiceDocumentData(Invoice $invoice, ?User $user = null): array
@@ -694,18 +888,7 @@ class InvoiceController extends Controller
 
     private function defaultInvoiceMessage(Invoice $invoice): string
     {
-        $company = app(CompanyProfile::class)->data();
-        $companyName = trim((string) ($company['name'] ?? '')) ?: 'Company';
-        $contactLine = collect([$company['email'] ?? null, $company['phone'] ?? null])
-            ->map(fn ($value) => trim((string) $value))
-            ->filter()
-            ->implode(' or ') ?: 'the contact details on the invoice';
-
-        return 'Dear ' . $invoice->customer_name . ",\n\n"
-            . 'Please find your invoice ' . $invoice->invoice_number . ' for KES ' . number_format((float) $invoice->total_amount, 2) . ".\n\n"
-            . 'Kindly review the attached invoice and use the payment details provided. For any questions, contact us at '
-            . $contactLine . ".\n\n"
-            . 'Thank you for choosing ' . $companyName . '.';
+        return '';
     }
 
     private function authorizeInvoiceAccess(Invoice $invoice): void
@@ -893,17 +1076,9 @@ class InvoiceController extends Controller
                 emailLogId: $emailLog?->getKey(),
             ));
 
-            $messageId = $this->validatedSentMessageId($sentMessage, 'Invoice');
+            $this->validatedSentMessageId($sentMessage, 'Invoice');
             $this->markInvoiceSent($invoice, $recipient, $user);
             $this->markEmailLogSent($emailLog);
-            $this->recordInvoiceEmailDelivery(
-                $invoice,
-                Invoice::STATUS_SENT,
-                $subject,
-                $recipient,
-                null,
-                'Invoice email accepted by the mail transport. Message ID: '.$messageId,
-            );
 
             return [
                 'sent' => true,
@@ -913,7 +1088,6 @@ class InvoiceController extends Controller
         } catch (Throwable $exception) {
             $invoice->update(['status' => Invoice::STATUS_FAILED]);
             $this->markEmailLogFailed($emailLog, $exception);
-            $this->recordInvoiceEmailDelivery($invoice, Invoice::STATUS_FAILED, $subject, $recipient, $exception);
             report($exception);
 
             return [
@@ -950,39 +1124,6 @@ class InvoiceController extends Controller
             null,
             'email'
         );
-    }
-
-    private function recordInvoiceEmailDelivery(Invoice $invoice, string $status, string $subject, ?string $recipient = null, ?Throwable $exception = null, ?string $responseMessage = null): void
-    {
-        if (!Schema::hasTable('email_delivery_logs')) {
-            return;
-        }
-
-        $now = now();
-        $data = [
-            'form_type' => 'invoice',
-            'recipient_email' => Str::limit((string) ($recipient ?: $invoice->customer_email), 190, ''),
-            'status' => $status,
-            'direction' => 'client',
-            'subject' => Str::limit($subject, 190, ''),
-            'transport' => Str::limit((string) config('mail.default'), 190, ''),
-            'response_message' => $responseMessage
-                ? Str::limit($responseMessage, 1000, '')
-                : ($exception
-                ? Str::limit($exception->getMessage(), 1000, '')
-                : 'Invoice email sent successfully.'),
-            'created_at' => $now,
-        ];
-
-        if (Schema::hasColumn('email_delivery_logs', 'updated_at')) {
-            $data['updated_at'] = $now;
-        }
-
-        try {
-            DB::table('email_delivery_logs')->insert($data);
-        } catch (Throwable $logException) {
-            report($logException);
-        }
     }
 
     private function createInvoiceEmailLog(Invoice $invoice, string $recipient, string $subject): ?EmailLog
