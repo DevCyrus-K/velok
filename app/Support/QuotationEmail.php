@@ -120,7 +120,7 @@ class QuotationEmail
         if (in_array(Str::lower($transport), ['array', 'log'], true)) {
             throw new RuntimeException(
                 'Quotation email failed: MAIL_MAILER='.$transport
-                .' only stores email locally. Configure smtp, resend, postmark, mailgun, or ses before sending quotations.'
+                .' only stores email locally. Configure smtp, resend, postmark, or mailgun before sending quotations.'
             );
         }
     }

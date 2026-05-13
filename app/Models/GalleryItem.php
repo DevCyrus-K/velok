@@ -2,15 +2,17 @@
 
 namespace App\Models;
 
+use App\Services\StorageService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class GalleryItem extends Model
 {
     public const STATUS_DRAFT = 'draft';
+
     public const STATUS_PUBLISHED = 'published';
+
     public const STATUS_ARCHIVED = 'archived';
 
     protected $table = 'gallery';
@@ -19,6 +21,8 @@ class GalleryItem extends Model
         'title',
         'image_path',
         'image_url',
+        'image_public_id',
+        'legacy_image_path',
         'thumbnail_url',
         'description',
         'category',
@@ -26,6 +30,9 @@ class GalleryItem extends Model
         'featured',
         'status',
         'order',
+        'storage_key',
+        'storage_url',
+        'legacy_file_path',
     ];
 
     protected $casts = [
@@ -42,7 +49,7 @@ class GalleryItem extends Model
 
     public function reference(): string
     {
-        return '#GAL-' . str_pad((string) $this->id, 4, '0', STR_PAD_LEFT);
+        return '#GAL-'.str_pad((string) $this->id, 4, '0', STR_PAD_LEFT);
     }
 
     public static function statusOptions(): array
@@ -70,26 +77,18 @@ class GalleryItem extends Model
 
     public function imagePath(): string
     {
-        return (string) ($this->image_path ?: $this->image_url ?: '');
+        return (string) ($this->image_path ?: $this->image_public_id ?: $this->image_url ?: '');
     }
 
     public function publicUrl(): string
     {
-        $path = $this->imagePath();
+        $path = (string) ($this->image_url ?: $this->imagePath());
 
         if (Str::startsWith($path, ['http://', 'https://', '/'])) {
             return $path;
         }
 
-        if (Str::startsWith($path, 'storage/')) {
-            return '/' . ltrim($path, '/');
-        }
-
-        if (Storage::disk('public')->exists($path)) {
-            return Storage::disk('public')->url($path);
-        }
-
-        return route('gallery.asset', ['path' => ltrim($path, '/')]);
+        return app(StorageService::class)->url($path) ?: $path;
     }
 
     public function altText(): string

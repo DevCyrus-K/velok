@@ -277,12 +277,12 @@
                     </div>
                     <div class="col-md-6">
                         <label class="form-label" for="companyLogo">Company Logo</label>
-                        <input id="companyLogo" name="logo" type="file" accept=".jpg,.jpeg,.png,.webp,.svg" class="form-control @error('logo') is-invalid @enderror">
+                        <input id="companyLogo" name="logo" type="file" accept=".jpg,.jpeg,.png,.webp,.gif" class="form-control @error('logo') is-invalid @enderror">
                         @error('logo')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
                     <div class="col-md-6 d-flex align-items-end">
                         @if(!empty($settings['company']['logo_path']))
-                            <img src="{{ asset(ltrim($settings['company']['logo_path'], '/')) }}" alt="Company logo preview" style="height:40px; width:auto; object-fit:contain;">
+                            <img src="{{ app(\App\Support\CompanyProfile::class)->logoUrl() }}" alt="Company logo preview" style="height:40px; width:auto; object-fit:contain;">
                         @endif
                     </div>
                     <div class="col-12">

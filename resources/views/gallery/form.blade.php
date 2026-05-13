@@ -44,13 +44,13 @@
                             @error('status')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label" for="image_path">Existing Image Path</label>
-                            <input class="form-control @error('image_path') is-invalid @enderror" id="image_path" name="image_path" type="text" value="{{ old('image_path', $item->imagePath()) }}" placeholder="assets/img/post-1.jpg">
+                            <label class="form-label" for="image_path">Cloudinary URL or Public ID</label>
+                            <input class="form-control @error('image_path') is-invalid @enderror" id="image_path" name="image_path" type="text" value="{{ old('image_path', $item->imagePath()) }}" placeholder="https://res.cloudinary.com/...">
                             @error('image_path')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
                         <div class="col-md-6">
                             <label class="form-label" for="image_file">Upload Image</label>
-                            <input accept="image/jpeg,image/png,image/webp" class="form-control @error('image_file') is-invalid @enderror" id="image_file" name="image_file" type="file">
+                            <input accept="image/jpeg,image/png,image/webp,image/gif" class="form-control @error('image_file') is-invalid @enderror" id="image_file" name="image_file" type="file">
                             @error('image_file')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
                         <div class="col-md-5">

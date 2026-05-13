@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Quotation;
 use App\Models\QuoteRequest;
 use App\Services\ServiceAgreementService;
+use App\Services\StorageService;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class ServiceAgreementController extends Controller
@@ -22,16 +22,12 @@ class ServiceAgreementController extends Controller
         try {
             $path = $quotation->service_agreement_path;
 
-            if (! is_string($path) || $path === '' || ! Storage::disk($agreements->storageDisk())->exists($path)) {
+            if (! is_string($path) || $path === '' || ! app(StorageService::class)->exists($path)) {
                 $path = $agreements->generateForApprovedQuotation($quotation, auth()->user());
                 $quotation->refresh();
             }
 
-            return Storage::disk($agreements->storageDisk())->download(
-                $path,
-                $agreements->downloadFilename($quotation),
-                ['Content-Type' => 'application/pdf']
-            );
+            return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($path));
         } catch (Throwable $exception) {
             report($exception);
 

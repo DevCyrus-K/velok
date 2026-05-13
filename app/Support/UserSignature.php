@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\User;
+use App\Services\StorageService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -24,7 +25,7 @@ class UserSignature
 
     public function disk(): string
     {
-        return (string) config('filesystems.default', 'local');
+        return 'public';
     }
 
     public function routeUrl(?User $user): ?string
@@ -34,10 +35,7 @@ class UserSignature
 
     public function storeUploaded(UploadedFile $file): string
     {
-        $extension = $file->extension() ?: ($file->getMimeType() === 'image/png' ? 'png' : 'jpg');
-        $extension = in_array($extension, ['jpg', 'jpeg', 'png'], true) ? $extension : 'jpg';
-
-        return $file->storeAs('signatures', Str::uuid().'.'.$extension, $this->disk());
+        return app(StorageService::class)->storeUploadedFile($file, 'images/signatures')['key'];
     }
 
     public function storeDrawn(string $signatureData, User $user): string
@@ -56,10 +54,9 @@ class UserSignature
             ]);
         }
 
-        $path = 'signatures/signature-'.$user->getKey().'-'.Str::uuid().'.png';
-        Storage::disk($this->disk())->put($path, $signature);
+        $filename = 'signature-'.$user->getKey().'-'.Str::uuid().'.png';
 
-        return $path;
+        return app(StorageService::class)->uploadFile($signature, $filename, 'image/png', 'images/signatures')['key'];
     }
 
     public function delete(?string $path): void
@@ -68,10 +65,17 @@ class UserSignature
             return;
         }
 
-        $stored = $this->storedFile($path);
-
-        if ($stored) {
+        if ($stored = $this->storedFile($path)) {
             Storage::disk($stored['disk'])->delete($stored['path']);
+
+            return;
+        }
+
+        $storage = app(StorageService::class);
+        $key = $storage->normalizeKey($path);
+
+        if ($key && ! Str::startsWith($key, ['http://', 'https://', '/'])) {
+            $storage->deleteImage($key);
         }
     }
 
@@ -79,27 +83,56 @@ class UserSignature
     {
         $stored = $this->storedFile($path);
 
-        if (! $stored) {
-            return null;
+        if ($stored) {
+            return Storage::disk($stored['disk'])->get($stored['path']);
         }
 
-        return Storage::disk($stored['disk'])->get($stored['path']);
+        $storage = app(StorageService::class);
+        $key = $storage->normalizeKey($path);
+
+        if ($key) {
+            $content = $storage->contents($key);
+
+            if ($content !== null) {
+                return $content;
+            }
+        }
+
+        return null;
     }
 
     public function mimeType(?string $path): ?string
     {
         $stored = $this->storedFile($path);
 
-        if (! $stored) {
-            return null;
+        if ($stored) {
+            return Storage::disk($stored['disk'])->mimeType($stored['path']) ?: 'image/png';
         }
 
-        return Storage::disk($stored['disk'])->mimeType($stored['path']) ?: 'image/png';
+        $storage = app(StorageService::class);
+        $key = $storage->normalizeKey($path);
+
+        if ($key) {
+            $mime = $storage->mimeType($key);
+
+            if ($mime) {
+                return $mime;
+            }
+        }
+
+        return null;
     }
 
     public function exists(?string $path): bool
     {
-        return $this->storedFile($path) !== null;
+        if ($this->storedFile($path) !== null) {
+            return true;
+        }
+
+        $storage = app(StorageService::class);
+        $key = $storage->normalizeKey($path);
+
+        return $key !== null && $storage->exists($key);
     }
 
     public function dataUri(?string $path): ?string
@@ -126,7 +159,7 @@ class UserSignature
             ? Str::after($path, '/storage/')
             : ltrim($path, '/');
 
-        foreach (array_unique([$this->disk(), 'public', 'local']) as $disk) {
+        foreach (array_unique([$this->disk(), 'local']) as $disk) {
             if (Storage::disk($disk)->exists($relativePath)) {
                 return [
                     'disk' => $disk,

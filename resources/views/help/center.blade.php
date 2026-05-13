@@ -2159,13 +2159,11 @@
 
                 <h4>Solution:</h4>
                 <ol>
-                    <li><strong>Check File Permissions:</strong>
-                        <p>Run these commands on your server (if you have access):</p>
-                        <pre>chmod -R 775 storage/
-chmod -R 775 bootstrap/cache/</pre>
+                    <li><strong>Check Storage Health:</strong>
+                        <p>Open Admin → Storage Health and confirm Cloudinary and Backblaze B2 are connected.</p>
                     </li>
-                    <li><strong>Ensure Storage Link Exists:</strong>
-                        <p>Run: <code>php artisan storage:link</code></p>
+                    <li><strong>Check Writable Temp Folders:</strong>
+                        <p>Make sure the server can write to the framework cache and temporary PDF directory.</p>
                     </li>
                     <li><strong>Verify Company Logo and Signature Exist:</strong>
                         <ul>

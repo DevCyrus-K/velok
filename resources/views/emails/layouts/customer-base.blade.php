@@ -3,7 +3,6 @@
     $companyName = trim((string) ($company['name'] ?? '')) ?: config('app.name');
     $companyEmail = trim((string) ($company['email'] ?? ''));
     $companyPhone = trim((string) ($company['phone'] ?? ''));
-    $companyLogoPath = trim((string) ($company['logo_path'] ?? 'images/logo-dark.png'));
     $currentYear = date('Y');
 @endphp
 <!doctype html>

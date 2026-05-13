@@ -57,9 +57,7 @@ class ContentApiController extends Controller
                 'id' => $item->id,
                 'title' => $item->title,
                 'image_path' => $item->imagePath(),
-                'image_url' => str_starts_with($item->imagePath(), 'storage/')
-                    ? '/' . $item->imagePath()
-                    : $item->imagePath(),
+                'image_url' => $item->publicUrl(),
                 'category' => $item->category,
                 'alt_text' => $item->altText(),
                 'featured' => $item->featured,

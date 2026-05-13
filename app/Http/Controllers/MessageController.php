@@ -6,6 +6,7 @@ use App\Mail\MessageMail;
 use App\Models\EmailLog;
 use App\Models\Message;
 use App\Services\MailConfigService;
+use App\Services\StorageService;
 use App\Support\MailSender;
 use App\Support\NotificationLogger;
 use App\Support\TopbarData;
@@ -27,12 +28,8 @@ class MessageController extends Controller
         'application/pdf',
         'image/jpeg',
         'image/png',
-        'text/plain',
-        'text/csv',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'image/webp',
+        'image/gif',
     ];
 
     public function index()
@@ -71,7 +68,7 @@ class MessageController extends Controller
             'subject' => ['required', 'string', 'max:255'],
             'message' => ['required', 'string'],
             'sender_role' => ['nullable', Rule::in(MailSender::MESSAGE_ROLES)],
-            'attachment' => ['nullable', 'file', 'max:10240', 'mimetypes:'.implode(',', self::ATTACHMENT_MIMES)],
+            'attachment' => ['nullable', 'file', 'max:51200', 'mimetypes:'.implode(',', self::ATTACHMENT_MIMES)],
         ]);
 
         $recipient = Str::lower(trim($validated['email']));
@@ -288,6 +285,7 @@ class MessageController extends Controller
 
     public function destroy(Request $request, Message $message): JsonResponse|RedirectResponse
     {
+        $this->deleteStoredAttachment($message);
         $message->delete();
         app(TopbarData::class)->forgetNotifications();
 
@@ -391,7 +389,7 @@ class MessageController extends Controller
             'error' => $errorMessage,
             'exception' => class_basename($exception),
         ]);
-        
+
         if ($request->expectsJson()) {
             return response()->json([
                 'success' => false,
@@ -433,14 +431,49 @@ class MessageController extends Controller
         }
 
         $file = $request->file('attachment');
-        $extension = $file->guessExtension() ?: $file->getClientOriginalExtension() ?: 'bin';
-        $path = $file->storeAs('message-attachments', (string) Str::uuid().'.'.$extension, 'local');
+        $mime = (string) $file->getMimeType();
+        $folder = $mime === 'application/pdf' ? 'pdfs/message-attachments' : 'images/message-attachments';
+        $uploaded = app(StorageService::class)->storeUploadedFile($file, $folder);
 
-        return [
-            'attachment_path' => $path,
+        $payload = [
+            'attachment_path' => $uploaded['key'],
             'attachment_original_name' => Str::limit($file->getClientOriginalName(), 255, ''),
-            'attachment_mime' => Str::limit((string) $file->getMimeType(), 100, ''),
+            'attachment_mime' => Str::limit($mime, 100, ''),
+            'storage_key' => $uploaded['key'],
+            'storage_url' => $uploaded['url'],
         ];
+
+        if ($mime === 'application/pdf') {
+            $payload['pdf_storage_key'] = $uploaded['key'];
+            $payload['pdf_storage_file_id'] = $uploaded['fileId'] ?? null;
+            $payload['pdf_storage_url'] = $uploaded['url'];
+        } else {
+            $payload['image_public_id'] = $uploaded['public_id'] ?? $uploaded['key'];
+            $payload['image_url'] = $uploaded['url'];
+        }
+
+        return $payload;
+    }
+
+    private function deleteStoredAttachment(Message $message): void
+    {
+        $path = $message->attachment_path;
+
+        if (! is_string($path) || trim($path) === '' || Str::startsWith($path, ['http://', 'https://', '/'])) {
+            return;
+        }
+
+        if ($message->attachment_mime === 'application/pdf') {
+            if (! $message->pdf_storage_file_id) {
+                return;
+            }
+
+            app(StorageService::class)->deletePDF($message->pdf_storage_file_id, $message->pdf_storage_key ?: $path);
+
+            return;
+        }
+
+        app(StorageService::class)->deleteImage($message->image_public_id ?: $path);
     }
 
     private function recipientName(string $email): string

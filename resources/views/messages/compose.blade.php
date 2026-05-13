@@ -49,7 +49,7 @@
                     <div class="mb-3">
                         <label class="form-label" for="attachment">Attach File</label>
                         <input type="file" id="attachment" name="attachment" class="form-control"
-                            accept=".pdf,.jpg,.jpeg,.png,.txt,.csv,.doc,.docx,.xls,.xlsx">
+                            accept=".pdf,.jpg,.jpeg,.png,.webp,.gif">
                         <div class="form-text">Optional. PDF, image, text, CSV, Word, or Excel files up to 10MB.</div>
                         <div class="invalid-feedback" data-error-for="attachment"></div>
                     </div>

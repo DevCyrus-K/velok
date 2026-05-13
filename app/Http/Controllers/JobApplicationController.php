@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\JobApplication;
+use App\Services\StorageService;
 use App\Support\NotificationLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -61,6 +62,10 @@ class JobApplicationController extends Controller
 
     public function destroy(JobApplication $application): RedirectResponse
     {
+        if ($application->pdf_storage_file_id && $application->pdf_storage_key) {
+            app(StorageService::class)->deletePDF($application->pdf_storage_file_id, $application->pdf_storage_key);
+        }
+
         $application->delete();
 
         return redirect()

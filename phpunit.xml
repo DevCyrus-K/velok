@@ -27,6 +27,13 @@
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
+        <env name="CLOUDINARY_CLOUD_NAME" value="test-cloud"/>
+        <env name="CLOUDINARY_API_KEY" value="test-key"/>
+        <env name="CLOUDINARY_API_SECRET" value="test-secret"/>
+        <env name="B2_APPLICATION_KEY_ID" value="test-key-id"/>
+        <env name="B2_APPLICATION_KEY" value="test-application-key"/>
+        <env name="B2_BUCKET_ID" value="test-bucket-id"/>
+        <env name="B2_BUCKET_NAME" value="test-bucket"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

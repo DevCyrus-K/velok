@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Models\Message;
+use App\Services\StorageService;
 use App\Support\MailSender;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -10,7 +11,6 @@ use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Storage;
 
 class MessageMail extends Mailable
 {
@@ -52,11 +52,20 @@ class MessageMail extends Mailable
     {
         $path = $this->attachmentPath ?: $this->message->attachment_path;
 
-        if (! $path || ! Storage::disk('local')->exists($path)) {
+        if (! $path) {
             return [];
         }
 
-        $attachment = Attachment::fromPath(Storage::disk('local')->path($path));
+        $contents = app(StorageService::class)->contents($path);
+
+        if ($contents === null) {
+            return [];
+        }
+
+        $attachment = Attachment::fromData(
+            fn () => $contents,
+            $this->attachmentOriginalName ?: $this->message->attachment_original_name ?: basename((string) $path)
+        );
 
         if ($this->attachmentOriginalName || $this->message->attachment_original_name) {
             $attachment = $attachment->as($this->attachmentOriginalName ?: $this->message->attachment_original_name);

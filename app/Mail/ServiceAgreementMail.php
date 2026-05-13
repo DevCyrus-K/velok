@@ -2,14 +2,16 @@
 
 namespace App\Mail;
 
+use App\Models\EmailLog;
 use App\Models\Quotation;
+use App\Services\StorageService;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 
 class ServiceAgreementMail extends Mailable
 {
@@ -48,8 +50,14 @@ class ServiceAgreementMail extends Mailable
 
     public function attachments(): array
     {
+        $contents = app(StorageService::class)->contents($this->agreementPath);
+
+        if ($contents === null) {
+            throw new RuntimeException('Service Agreement attachment could not be read from Backblaze B2.');
+        }
+
         return [
-            Attachment::fromPath(Storage::disk('local')->path($this->agreementPath))
+            Attachment::fromData(fn () => $contents, $this->agreementFilename)
                 ->as($this->agreementFilename)
                 ->withMime('application/pdf'),
         ];
@@ -71,7 +79,7 @@ class ServiceAgreementMail extends Mailable
             return null;
         }
 
-        return \App\Models\EmailLog::query()
+        return EmailLog::query()
             ->whereKey($this->emailLogId)
             ->value('tracking_token');
     }

@@ -2,15 +2,17 @@
 
 namespace App\Models;
 
+use App\Services\StorageService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class Review extends Model
 {
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_APPROVED = 'approved';
+
     public const STATUS_DECLINED = 'declined';
 
     protected $fillable = [
@@ -19,6 +21,9 @@ class Review extends Model
         'rating',
         'review_message',
         'photo_path',
+        'image_url',
+        'image_public_id',
+        'legacy_image_path',
         'status',
         'featured',
         'moderation_notes',
@@ -28,6 +33,9 @@ class Review extends Model
         'source_page',
         'ip_address',
         'user_agent',
+        'storage_key',
+        'storage_url',
+        'legacy_file_path',
     ];
 
     protected $casts = [
@@ -46,7 +54,7 @@ class Review extends Model
 
     public function reference(): string
     {
-        return '#REV-' . str_pad((string) $this->id, 5, '0', STR_PAD_LEFT);
+        return '#REV-'.str_pad((string) $this->id, 5, '0', STR_PAD_LEFT);
     }
 
     public function initials(): string
@@ -96,10 +104,16 @@ class Review extends Model
 
     public function photoUrl(): string
     {
+        if (is_string($this->image_url) && trim($this->image_url) !== '') {
+            return $this->image_url;
+        }
+
         if (Str::startsWith((string) $this->photo_path, ['http://', 'https://', '/'])) {
             return (string) $this->photo_path;
         }
 
-        return Storage::disk('public')->url((string) $this->photo_path);
+        $path = (string) ($this->image_public_id ?: $this->photo_path);
+
+        return app(StorageService::class)->url($path) ?: (string) $this->photo_path;
     }
 }

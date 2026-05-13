@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\QuotationFormRequest;
+use App\Mail\DepositReceivedMail;
 use App\Models\Quotation;
 use App\Models\QuoteRequest;
 use App\Models\User;
 use App\Services\ServiceAgreementService;
+use App\Services\StorageService;
 use App\Support\BookingFlow;
 use App\Support\CompanyProfile;
 use App\Support\PdfDocumentName;
@@ -25,7 +27,9 @@ use Throwable;
 class QuotationController extends Controller
 {
     private const DEFAULT_PAYMENT_TERMS = '50% deposit required to confirm booking. Remaining balance due on day of move. Accepted payments: M-Pesa, Bank Transfer, Cash.';
+
     private const DEFAULT_CANCELLATION_POLICY = 'Free cancellation up to 48 hours before the scheduled move date. Cancellations made within 48 hours will incur a cancellation fee.';
+
     private const DEFAULT_CANCELLATION_NOTICE_HOURS = 48;
 
     public function __construct(
@@ -34,7 +38,7 @@ class QuotationController extends Controller
 
     public function create(QuoteRequest $quote, Request $request)
     {
-        $quotation = Quotation::where('quote_request_id', $quote->id)->first() ?? new Quotation();
+        $quotation = Quotation::where('quote_request_id', $quote->id)->first() ?? new Quotation;
 
         if (! $quotation->exists && in_array($quote->status, [
             QuoteRequest::STATUS_NEW,
@@ -193,6 +197,19 @@ class QuotationController extends Controller
         $authorization = $this->authorizationViewData($request->user(), $quotation, $quotation->quoteRequest);
         $user = $request->user();
 
+        if ($quotation->quote_pdf_storage_key) {
+            $quotation->logStage(
+                'PDF_DOWNLOADED',
+                'Quote PDF downloaded',
+                'admin',
+                $user?->name,
+                null,
+                'download'
+            );
+
+            return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($quotation->quote_pdf_storage_key));
+        }
+
         $pdf = Pdf::loadView('quotes.pdf', [
             'quote' => $quotation->quoteRequest,
             'quotation' => $quotation,
@@ -223,7 +240,22 @@ class QuotationController extends Controller
             'download'
         );
 
-        return $pdf->download(app(PdfDocumentName::class)->quotationFilename($quotation));
+        $uploaded = app(StorageService::class)->uploadGeneratedPdf(
+            $pdf->output(),
+            app(PdfDocumentName::class)->quotationFilename($quotation),
+            'quotes'
+        );
+
+        $quotation->update([
+            'quote_pdf_storage_key' => $uploaded['key'],
+            'quote_pdf_storage_file_id' => $uploaded['fileId'],
+            'quote_pdf_storage_url' => $uploaded['url'],
+            'pdf_storage_key' => $uploaded['key'],
+            'pdf_storage_file_id' => $uploaded['fileId'],
+            'pdf_storage_url' => $uploaded['url'],
+        ]);
+
+        return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($uploaded['key']));
     }
 
     public function send(Request $request, Quotation $quotation, QuotationEmail $quotationEmail): RedirectResponse|JsonResponse
@@ -493,6 +525,7 @@ class QuotationController extends Controller
         }
 
         DB::transaction(function () use ($quotation, $quote): void {
+            $this->deleteStoredQuotationFiles($quotation);
             $quotation->delete();
 
             if ($quote) {
@@ -503,6 +536,23 @@ class QuotationController extends Controller
         return $quote
             ? redirect()->route('quotes.show', $quote)->with('toast-success', 'Quotation deleted successfully.')
             : redirect()->route('quotes.index')->with('toast-success', 'Quotation deleted successfully.');
+    }
+
+    private function deleteStoredQuotationFiles(Quotation $quotation): void
+    {
+        $storage = app(StorageService::class);
+
+        if ($quotation->quote_pdf_storage_file_id && $quotation->quote_pdf_storage_key) {
+            $storage->deletePDF($quotation->quote_pdf_storage_file_id, $quotation->quote_pdf_storage_key);
+        }
+
+        if ($quotation->service_agreement_storage_file_id && $quotation->service_agreement_path) {
+            $storage->deletePDF($quotation->service_agreement_storage_file_id, $quotation->service_agreement_path);
+        }
+
+        if ($quotation->image_public_id) {
+            $storage->deleteImage($quotation->image_public_id);
+        }
     }
 
     private function formViewData(QuoteRequest $quote, Quotation $quotation, ?User $user): array
@@ -648,8 +698,8 @@ class QuotationController extends Controller
             ."📅 *Move Date:* {$moveDate}\n"
             ."📍 *From:* {$quotation->pickup_location}\n"
             ."📍 *To:* {$quotation->dropoff_location}\n"
-            ."💰 *Total:* KES ".number_format($quotation->total, 2)."\n"
-            ."💳 *Deposit Required:* KES ".number_format($quotation->depositAmount(), 2)."\n"
+            .'💰 *Total:* KES '.number_format($quotation->total, 2)."\n"
+            .'💳 *Deposit Required:* KES '.number_format($quotation->depositAmount(), 2)."\n"
             ."⏳ *Valid Until:* {$validUntil}\n\n"
             ."📄 *Download Quote PDF:*\n{$pdfUrl}\n\n"
             ."✅ *Approve Your Quotation:*\n{$approvalUrl}\n\n"
@@ -668,21 +718,21 @@ class QuotationController extends Controller
 
         if (in_array($preference, ['email', 'both'], true)) {
             Mail::to($quotation->customer_email)
-                ->send(new \App\Mail\DepositReceivedMail($quotation));
+                ->send(new DepositReceivedMail($quotation));
         }
 
         if (in_array($preference, ['whatsapp', 'both'], true)) {
             $message = "Hello {$quotation->customer_name}! ✅\n\n"
                 ."*Deposit Received!*\n"
-                ."Amount: KES ".number_format($quotation->depositAmount(), 2)."\n"
+                .'Amount: KES '.number_format($quotation->depositAmount(), 2)."\n"
                 ."Reference: {$quotation->deposit_reference}\n\n"
                 ."*Your booking is now CONFIRMED* 🎉\n"
-                ."📅 Move Date: ".($quotation->move_date?->format('d M Y') ?? 'To be confirmed')."\n"
+                .'📅 Move Date: '.($quotation->move_date?->format('d M Y') ?? 'To be confirmed')."\n"
                 ."📍 Pickup: {$quotation->pickup_location}\n"
                 ."📍 Drop-off: {$quotation->dropoff_location}\n\n"
-                ."Balance Due on Move Day: KES ".number_format($quotation->balanceDue(), 2)."\n\n"
-                ."We will see you on ".($quotation->move_date?->format('d M Y') ?? 'move day')."! 🚛\n"
-                ."*".config('app.name')." Team*";
+                .'Balance Due on Move Day: KES '.number_format($quotation->balanceDue(), 2)."\n\n"
+                .'We will see you on '.($quotation->move_date?->format('d M Y') ?? 'move day')."! 🚛\n"
+                .'*'.config('app.name').' Team*';
 
             $quotation->update([
                 'deposit_whatsapp_url' => app(BookingFlow::class)->whatsappUrl($quotation->customer_phone, $message),
@@ -698,5 +748,4 @@ class QuotationController extends Controller
 
         return QuoteRequest::STATUS_CREATED;
     }
-
 }

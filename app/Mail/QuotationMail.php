@@ -2,10 +2,12 @@
 
 namespace App\Mail;
 
+use App\Models\EmailLog;
 use App\Models\Quotation;
 use App\Models\User;
-use App\Support\CompanyProfile;
+use App\Services\StorageService;
 use App\Support\BookingFlow;
+use App\Support\CompanyProfile;
 use App\Support\MailSender;
 use App\Support\PdfDocumentName;
 use App\Support\UserSignature;
@@ -15,6 +17,7 @@ use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Schema;
 
 class QuotationMail extends Mailable
 {
@@ -70,38 +73,52 @@ class QuotationMail extends Mailable
             return [];
         }
 
+        $filename = $this->attachmentName();
+        $contents = Pdf::loadView('quotes.pdf', [
+            'quote' => $this->quotation->quoteRequest,
+            'quotation' => $this->quotation,
+            'company' => app(CompanyProfile::class)->data(),
+            'logoDataUri' => app(CompanyProfile::class)->logoDataUri(),
+            'user' => $this->user,
+            'signatureDataUri' => app(UserSignature::class)->dataUri($this->user?->signaturePath()),
+            'paymentMethods' => app(BookingFlow::class)->paymentMethodDisplays(),
+            'thankYouMessage' => app(CompanyProfile::class)->thankYouMessage(),
+            'approvalUrl' => route('quote.customer.approve', ['token' => $this->quotation->approval_token]),
+            'pdfUrl' => route('quote.pdf.download', ['id' => $this->quotation->id, 'token' => $this->quotation->pdf_token]),
+            'authorization' => [
+                'name' => $this->user?->name ?: ($this->quotation->authorized_by ?: 'Pending'),
+                'job_title' => $this->user?->job_title ?: ($this->quotation->authorized_role ?: 'Authorized Signatory'),
+                'signature_path' => $this->user?->signaturePath() ?: $this->quotation->signature,
+                'is_complete' => app(UserSignature::class)->exists($this->user?->signaturePath()),
+                'date_label' => $this->quotation->authorizationDate()?->format('d M Y') ?? now()->format('d M Y'),
+                'prompt' => 'Signature not available',
+            ],
+        ])->setPaper('a4', 'portrait')
+            ->setOptions([
+                'dpi' => 150,
+                'enable_html5_parser' => true,
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'Inter',
+            ])
+            ->output();
+        $uploaded = app(StorageService::class)->uploadGeneratedPdf($contents, $filename, 'quotes');
+
+        if (Schema::hasColumn('quotations', 'quote_pdf_storage_key')) {
+            $this->quotation->update([
+                'quote_pdf_storage_key' => $uploaded['key'],
+                'quote_pdf_storage_file_id' => $uploaded['fileId'],
+                'quote_pdf_storage_url' => $uploaded['url'],
+                'pdf_storage_key' => $uploaded['key'],
+                'pdf_storage_file_id' => $uploaded['fileId'],
+                'pdf_storage_url' => $uploaded['url'],
+            ]);
+        }
+
         return [
-            Attachment::fromData(
-                fn (): string => Pdf::loadView('quotes.pdf', [
-                    'quote' => $this->quotation->quoteRequest,
-                    'quotation' => $this->quotation,
-                    'company' => app(CompanyProfile::class)->data(),
-                    'logoDataUri' => app(CompanyProfile::class)->logoDataUri(),
-                    'user' => $this->user,
-                    'signatureDataUri' => app(UserSignature::class)->dataUri($this->user?->signaturePath()),
-                    'paymentMethods' => app(BookingFlow::class)->paymentMethodDisplays(),
-                    'thankYouMessage' => app(CompanyProfile::class)->thankYouMessage(),
-                    'approvalUrl' => route('quote.customer.approve', ['token' => $this->quotation->approval_token]),
-                    'pdfUrl' => route('quote.pdf.download', ['id' => $this->quotation->id, 'token' => $this->quotation->pdf_token]),
-                    'authorization' => [
-                        'name' => $this->user?->name ?: ($this->quotation->authorized_by ?: 'Pending'),
-                        'job_title' => $this->user?->job_title ?: ($this->quotation->authorized_role ?: 'Authorized Signatory'),
-                        'signature_path' => $this->user?->signaturePath() ?: $this->quotation->signature,
-                        'is_complete' => app(UserSignature::class)->exists($this->user?->signaturePath()),
-                        'date_label' => $this->quotation->authorizationDate()?->format('d M Y') ?? now()->format('d M Y'),
-                        'prompt' => 'Signature not available',
-                    ],
-                ])->setPaper('a4', 'portrait')
-                    ->setOptions([
-                        'dpi' => 150,
-                        'enable_html5_parser' => true,
-                        'isHtml5ParserEnabled' => true,
-                        'isRemoteEnabled' => true,
-                        'defaultFont' => 'Inter',
-                    ])
-                    ->output(),
-                $this->attachmentName(),
-            )->withMime('application/pdf'),
+            Attachment::fromData(fn () => $contents, $filename)
+                ->as($filename)
+                ->withMime('application/pdf'),
         ];
     }
 
@@ -124,7 +141,7 @@ class QuotationMail extends Mailable
             return null;
         }
 
-        return \App\Models\EmailLog::query()
+        return EmailLog::query()
             ->whereKey($this->emailLogId)
             ->value('tracking_token');
     }

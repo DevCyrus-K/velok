@@ -179,7 +179,7 @@
                                         </div>
                                         <div class="{{ $signatureEditorOpen ? '' : 'd-none' }}" id="signature-editor">
                                             <div class="mb-3">
-                                                <input accept="image/png,image/jpeg" class="form-control @error('signature_upload') is-invalid @enderror" id="signature_upload" name="signature_upload" type="file">
+                                                <input accept="image/png,image/jpeg,image/webp" class="form-control @error('signature_upload') is-invalid @enderror" id="signature_upload" name="signature_upload" type="file">
                                                 @error('signature_upload')
                                                     <div class="invalid-feedback">{{ $message }}</div>
                                                 @enderror

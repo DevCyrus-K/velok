@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Review;
+use App\Services\StorageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -45,12 +46,12 @@ class ReviewApiController extends Controller
             'review-role' => ['required_without:reviewer_role', 'nullable', 'string', 'max:120'],
             'review-rating' => ['required_without:rating', 'nullable'],
             'review-message' => ['required_without:review_message', 'nullable', 'string', 'min:20', 'max:4000'],
-            'review-photo' => ['required_without:photo', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'review-photo' => ['required_without:photo', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240'],
             'reviewer_name' => ['required_without:review-name', 'nullable', 'string', 'max:120'],
             'reviewer_role' => ['required_without:review-role', 'nullable', 'string', 'max:120'],
             'rating' => ['required_without:review-rating', 'nullable'],
             'review_message' => ['required_without:review-message', 'nullable', 'string', 'min:20', 'max:4000'],
-            'photo' => ['required_without:review-photo', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'photo' => ['required_without:review-photo', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240'],
             'source_page' => ['nullable', 'string', 'max:255'],
         ]);
 
@@ -73,7 +74,7 @@ class ReviewApiController extends Controller
 
         $photo = $request->file('review-photo') ?: $request->file('photo');
 
-        if (!$photo instanceof UploadedFile) {
+        if (! $photo instanceof UploadedFile) {
             return response()->json([
                 'ok' => false,
                 'success' => false,
@@ -87,16 +88,18 @@ class ReviewApiController extends Controller
         $name = $this->squish((string) $request->input('review-name', $request->input('reviewer_name')));
         $role = $this->squish((string) $request->input('review-role', $request->input('reviewer_role')));
         $message = trim((string) $request->input('review-message', $request->input('review_message')));
-        $extension = strtolower($photo->getClientOriginalExtension() ?: $photo->extension() ?: 'jpg');
-        $filename = Str::slug($name ?: 'customer-review') . '-' . now()->format('YmdHis') . '-' . Str::random(6) . '.' . $extension;
-        $photoPath = $photo->storeAs('reviews', $filename, 'public');
+        $uploaded = app(StorageService::class)->storeUploadedFile($photo, 'images/reviews');
 
         $review = Review::query()->create([
             'reviewer_name' => $name,
             'reviewer_role' => $role,
             'rating' => $rating,
             'review_message' => $message,
-            'photo_path' => $photoPath,
+            'photo_path' => $uploaded['key'],
+            'image_url' => $uploaded['url'],
+            'image_public_id' => $uploaded['public_id'] ?? $uploaded['key'],
+            'storage_key' => $uploaded['key'],
+            'storage_url' => $uploaded['url'],
             'status' => Review::STATUS_PENDING,
             'featured' => false,
             'submitted_at' => now(),
@@ -122,7 +125,7 @@ class ReviewApiController extends Controller
     {
         $raw = str_replace(',', '.', trim((string) $value));
 
-        if (!preg_match('/^(?:0\.5|[1-4](?:\.0|\.5)?|5(?:\.0)?)$/', $raw)) {
+        if (! preg_match('/^(?:0\.5|[1-4](?:\.0|\.5)?|5(?:\.0)?)$/', $raw)) {
             return null;
         }
 

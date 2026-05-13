@@ -4,7 +4,7 @@
     $thankYouMessage = $thankYouMessage ?? app(\App\Support\CompanyProfile::class)->thankYouMessage();
     $authorization = $authorization ?? app(\App\Support\InvoiceAuthorization::class)->data($invoice, $company, auth()->user());
     $companyName = trim((string) ($company['name'] ?? ''));
-    $companyLogoPath = trim((string) ($company['logo_path'] ?? ''));
+    $companyLogoUrl = app(\App\Support\CompanyProfile::class)->logoUrl();
     $companyAddressLine = trim((string) ($company['address_line_1'] ?? ''));
     $companyContactLine = collect([$company['phone'] ?? null, $company['email'] ?? null])
         ->map(fn ($value) => trim((string) $value))
@@ -20,8 +20,8 @@
         </div>
         <div class="text-md-end">
             <div class="d-inline-flex align-items-center gap-2 justify-content-md-end">
-                @if($companyLogoPath !== '')
-                    <img alt="{{ $companyName ?: 'Company' }} logo" height="24" src="{{ asset(ltrim($companyLogoPath, '/')) }}">
+                @if($companyLogoUrl !== '')
+                    <img alt="{{ $companyName ?: 'Company' }} logo" height="24" src="{{ $companyLogoUrl }}">
                 @endif
                 @if($companyName !== '')
                     <span class="fw-semibold">{{ $companyName }}</span>

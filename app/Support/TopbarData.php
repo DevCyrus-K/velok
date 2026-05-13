@@ -5,11 +5,11 @@ namespace App\Support;
 use App\Models\ActivityNotification;
 use App\Models\Message;
 use App\Models\User;
+use App\Services\StorageService;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class TopbarData
@@ -152,6 +152,7 @@ class TopbarData
         if ($user instanceof Model) {
             $avatar = $user->getAttribute('avatar')
                 ?? $user->getAttribute('avatar_path')
+                ?? $user->getAttribute('image_url')
                 ?? $user->getAttribute('profile_photo_path');
         }
 
@@ -165,7 +166,7 @@ class TopbarData
             return $avatar;
         }
 
-        return Storage::url($avatar);
+        return app(StorageService::class)->url($avatar) ?: self::DEFAULT_AVATAR;
     }
 
     public function initials(Authenticatable $user): string
@@ -206,6 +207,7 @@ class TopbarData
 
         $avatar = $user->getAttribute('avatar')
             ?? $user->getAttribute('avatar_path')
+            ?? $user->getAttribute('image_url')
             ?? $user->getAttribute('profile_photo_path');
 
         return is_string($avatar) && trim($avatar) !== '';

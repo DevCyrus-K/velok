@@ -98,7 +98,9 @@ it('generates stores emails and downloads a service agreement when a quotation i
         ->and($quotation->service_agreement_email_attempts)->toBe(1)
         ->and($quotation->service_agreement_emailed_at)->not->toBeNull();
 
-    Storage::disk('local')->assertExists($quotation->service_agreement_path);
+    expect($quotation->service_agreement_path)->toStartWith('agreements/')
+        ->and($quotation->service_agreement_storage_file_id)->not->toBeNull()
+        ->and($quotation->pdf_storage_file_id)->toBe($quotation->service_agreement_storage_file_id);
     Mail::assertSent(ServiceAgreementMail::class, fn (ServiceAgreementMail $mail) => $mail->hasTo('agreement.client@example.com'));
 
     $emailLog = EmailLog::query()
@@ -110,11 +112,11 @@ it('generates stores emails and downloads a service agreement when a quotation i
     expect($emailLog->status)->toBe(EmailLog::STATUS_SENT)
         ->and($emailLog->sent_at)->not->toBeNull();
 
-    $this->actingAs($user)
-        ->get(route('admin.agreements.download', $quote))
-        ->assertOk()
-        ->assertHeader('content-type', 'application/pdf')
-        ->assertHeader('content-disposition', 'attachment; filename=service_agreement_'.$quote->id.'.pdf');
+    $downloadResponse = $this->actingAs($user)
+        ->get(route('admin.agreements.download', $quote));
+
+    $downloadResponse->assertRedirect();
+    expect($downloadResponse->headers->get('Location'))->toContain('https://b2.test/file/test-bucket/agreements/');
 });
 
 it('marks agreement email failed after retry and alerts admin when delivery fails', function () {

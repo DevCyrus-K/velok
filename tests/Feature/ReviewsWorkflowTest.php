@@ -4,7 +4,6 @@ use App\Models\Review;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 
 uses(RefreshDatabase::class);
 
@@ -34,8 +33,6 @@ function reviewPhoto(): UploadedFile
 }
 
 it('accepts review-us form submissions as pending reviews', function () {
-    Storage::fake('public');
-
     $this->post('/api/reviews/submit', reviewSubmissionPayload())
         ->assertCreated()
         ->assertJsonPath('ok', true)
@@ -50,12 +47,12 @@ it('accepts review-us form submissions as pending reviews', function () {
         'status' => Review::STATUS_PENDING,
     ]);
 
-    Storage::disk('public')->assertExists($review->photo_path);
+    expect($review->photo_path)->toStartWith('general/')
+        ->and($review->image_public_id)->toBe($review->photo_path)
+        ->and($review->image_url)->toStartWith('https://res.cloudinary.test/image/upload/');
 });
 
 it('lets admin view approve and decline reviews', function () {
-    Storage::fake('public');
-
     $user = User::factory()->create();
 
     $this->post('/api/reviews/submit', reviewSubmissionPayload([

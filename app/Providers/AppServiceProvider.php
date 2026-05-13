@@ -3,14 +3,15 @@
 namespace App\Providers;
 
 use App\Models\AppSetting;
+use App\Services\StorageService;
 use App\Support\TopbarData;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\View;
+use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -27,6 +28,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(TopbarData $topbarData): void
     {
+        app(StorageService::class)->validateStorageConfiguration();
         $this->configureRateLimiting();
         $this->applyRuntimeSettings();
 

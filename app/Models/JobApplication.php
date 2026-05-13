@@ -10,9 +10,13 @@ use Illuminate\Support\Str;
 class JobApplication extends Model
 {
     public const STATUS_NEW = 'new';
+
     public const STATUS_REVIEWING = 'reviewing';
+
     public const STATUS_SHORTLISTED = 'shortlisted';
+
     public const STATUS_REJECTED = 'rejected';
+
     public const STATUS_HIRED = 'hired';
 
     protected $fillable = [
@@ -28,6 +32,13 @@ class JobApplication extends Model
         'notes',
         'applied_at',
         'source_page',
+        'pdf_storage_key',
+        'pdf_storage_file_id',
+        'pdf_storage_url',
+        'legacy_pdf_path',
+        'storage_key',
+        'storage_url',
+        'legacy_file_path',
     ];
 
     protected $casts = [
@@ -54,7 +65,7 @@ class JobApplication extends Model
 
     public function reference(): string
     {
-        return '#APP-' . str_pad((string) $this->id, 5, '0', STR_PAD_LEFT);
+        return '#APP-'.str_pad((string) $this->id, 5, '0', STR_PAD_LEFT);
     }
 
     public function initials(): string
@@ -101,7 +112,7 @@ class JobApplication extends Model
     {
         $phone = preg_replace('/[^0-9+]/', '', (string) $this->phone);
 
-        return 'tel:' . $phone;
+        return 'tel:'.$phone;
     }
 
     public function whatsappUrl(): ?string
@@ -113,11 +124,11 @@ class JobApplication extends Model
         }
 
         if (str_starts_with($number, '0') && strlen($number) === 10) {
-            $number = '254' . substr($number, 1);
+            $number = '254'.substr($number, 1);
         } elseif (str_starts_with($number, '7') && strlen($number) === 9) {
-            $number = '254' . $number;
+            $number = '254'.$number;
         }
 
-        return 'https://wa.me/' . $number;
+        return 'https://wa.me/'.$number;
     }
 }

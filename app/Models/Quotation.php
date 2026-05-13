@@ -8,9 +8,13 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 class Quotation extends Model
 {
     public const STATUS_DRAFT = 'draft';
+
     public const STATUS_SENT = 'sent';
+
     public const STATUS_APPROVED = 'approved';
+
     public const STATUS_DECLINED = 'declined';
+
     public const STATUS_REJECTED = 'rejected';
 
     protected $table = 'quotations';
@@ -57,13 +61,27 @@ class Quotation extends Model
         'approval_date',
         'signature',
         'signature_type',
+        'image_url',
+        'image_public_id',
+        'legacy_image_path',
         'service_agreement_path',
         'service_agreement_filename',
+        'service_agreement_storage_file_id',
         'service_agreement_generated_at',
         'service_agreement_email_status',
         'service_agreement_emailed_at',
         'service_agreement_email_failed_reason',
         'service_agreement_email_attempts',
+        'storage_key',
+        'storage_url',
+        'legacy_file_path',
+        'pdf_storage_key',
+        'pdf_storage_file_id',
+        'pdf_storage_url',
+        'legacy_pdf_path',
+        'quote_pdf_storage_key',
+        'quote_pdf_storage_file_id',
+        'quote_pdf_storage_url',
     ];
 
     protected $casts = [
@@ -108,9 +126,9 @@ class Quotation extends Model
         string $stage,
         string $description,
         string $triggeredBy = 'system',
-        string $actorName = null,
-        string $actorIp = null,
-        string $channel = null,
+        ?string $actorName = null,
+        ?string $actorIp = null,
+        ?string $channel = null,
         array $metadata = []
     ): void {
         $this->stages()->create([
@@ -226,6 +244,7 @@ class Quotation extends Model
         if (is_string($value)) {
             return json_decode($value, true) ?? [];
         }
+
         return $value ?? [];
     }
 

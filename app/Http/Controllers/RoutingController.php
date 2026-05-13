@@ -10,6 +10,7 @@ use App\Models\Quotation;
 use App\Models\QuoteRequest;
 use App\Services\CustomerSyncService;
 use App\Services\GoogleAnalyticsService;
+use App\Services\StorageService;
 use App\Support\CompanyProfile;
 use App\Support\InvoiceAuthorization;
 use App\Support\PaymentSettings;
@@ -174,28 +175,6 @@ class RoutingController extends BaseController
         }
     }
 
-    public function galleryAsset(Request $request)
-    {
-        $relativePath = ltrim((string) $request->query('path', ''), '/');
-
-        abort_if($relativePath === '' || str_contains($relativePath, "\0"), 404);
-
-        $kwikshiftRoot = realpath(config('services.kwikshift.root'));
-        abort_if($kwikshiftRoot === false, 404);
-
-        $absolutePath = realpath($kwikshiftRoot.DIRECTORY_SEPARATOR.$relativePath);
-        abort_if($absolutePath === false, 404);
-        abort_if(! str_starts_with($absolutePath, $kwikshiftRoot.DIRECTORY_SEPARATOR), 404);
-        abort_if(! is_file($absolutePath), 404);
-
-        $extension = strtolower(pathinfo($absolutePath, PATHINFO_EXTENSION));
-        abort_unless(in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'], true), 404);
-
-        return response()->file($absolutePath, [
-            'Cache-Control' => 'public, max-age=86400',
-        ]);
-    }
-
     private function dashboardPage(): View
     {
         $customerData = $this->customerData();
@@ -251,12 +230,15 @@ class RoutingController extends BaseController
         $reportData = $this->reportDataForDownload($report);
         $filename = Str::slug($reportData['title'] ?? $report).'-report-'.now()->format('Y-m-d').'.pdf';
 
-        return Pdf::loadView('reports.pdf', [
+        $pdf = Pdf::loadView('reports.pdf', [
             'report' => $reportData,
             'generatedAt' => now(),
         ])
-            ->setPaper('a4', 'landscape')
-            ->download($filename);
+            ->setPaper('a4', 'landscape');
+
+        $uploaded = app(StorageService::class)->uploadGeneratedPdf($pdf->output(), $filename, 'reports');
+
+        return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($uploaded['key']));
     }
 
     private function customerData(): array
@@ -282,7 +264,7 @@ class RoutingController extends BaseController
             ->orderByDesc('id');
 
         $customers = $customersQuery->paginate(15);
-        
+
         $allCustomers = $customersQuery->get();
 
         return [

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\AccountProfileRequest;
 use App\Models\User;
+use App\Services\StorageService;
 use App\Support\NotificationLogger;
 use App\Support\TopbarData;
 use App\Support\TwoFactorOtp;
@@ -13,7 +14,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\View\View;
@@ -58,7 +58,9 @@ class AccountController extends Controller
 
         if ($request->hasFile('avatar')) {
             $this->deleteStoredAvatar($user);
-            $validated['avatar_path'] = $request->file('avatar')->store('avatars', 'public');
+            $uploaded = app(StorageService::class)->storeUploadedFile($request->file('avatar'), 'images/avatars');
+            $validated['avatar_path'] = $uploaded['key'];
+            $this->setImageStorageFields($validated, $uploaded);
         }
 
         if ($request->hasFile('signature_upload')) {
@@ -97,14 +99,36 @@ class AccountController extends Controller
         /** @var User $user */
         $user = $request->user();
         $path = $this->userSignature->path($user);
-        $content = $this->userSignature->content($path);
+        abort_if(! $this->userSignature->exists($path), 404);
 
-        abort_if($content === null, 404);
+        $storage = app(StorageService::class);
 
-        return response($content, 200, [
-            'Content-Type' => $this->userSignature->mimeType($path) ?: 'image/png',
-            'Cache-Control' => 'private, max-age=300',
-        ]);
+        if (! Str::startsWith((string) $path, ['avatars/', 'jobs/', 'general/', 'http://', 'https://'])) {
+            $content = $this->userSignature->content($path);
+            abort_if($content === null, 404);
+
+            return response($content, 200, [
+                'Content-Type' => $this->userSignature->mimeType($path) ?: 'image/png',
+            ]);
+        }
+
+        if (! $storage->exists($path)) {
+            $content = $this->userSignature->content($path);
+            abort_if($content === null, 404);
+
+            $uploaded = $storage->uploadFile(
+                $content,
+                basename((string) $path) ?: 'signature.png',
+                $this->userSignature->mimeType($path) ?: 'image/png',
+                'images/signatures'
+            );
+            $signatureUpdate = [];
+            $this->setSignaturePath($signatureUpdate, $uploaded['key']);
+            $user->fill($signatureUpdate)->save();
+            $path = $uploaded['key'];
+        }
+
+        return redirect()->away($storage->url($path) ?: $storage->getSignedUrl($path));
     }
 
     public function updateSecurity(Request $request): RedirectResponse
@@ -314,7 +338,7 @@ class AccountController extends Controller
             return;
         }
 
-        Storage::disk('public')->delete($avatarPath);
+        app(StorageService::class)->deleteImage($avatarPath);
     }
 
     private function signatureUrl(User $user): ?string
@@ -336,6 +360,41 @@ class AccountController extends Controller
 
         if (Schema::hasColumn('users', 'signature_path')) {
             $validated['signature_path'] = $path;
+        }
+
+        if (Schema::hasColumn('users', 'storage_key')) {
+            $validated['storage_key'] = $path;
+        }
+
+        if (Schema::hasColumn('users', 'storage_url')) {
+            $validated['storage_url'] = app(StorageService::class)->url($path);
+        }
+
+        if (Schema::hasColumn('users', 'image_public_id')) {
+            $validated['image_public_id'] = $path;
+        }
+
+        if (Schema::hasColumn('users', 'image_url')) {
+            $validated['image_url'] = app(StorageService::class)->url($path);
+        }
+    }
+
+    private function setImageStorageFields(array &$validated, array $uploaded): void
+    {
+        if (Schema::hasColumn('users', 'storage_key')) {
+            $validated['storage_key'] = $uploaded['key'];
+        }
+
+        if (Schema::hasColumn('users', 'storage_url')) {
+            $validated['storage_url'] = $uploaded['url'];
+        }
+
+        if (Schema::hasColumn('users', 'image_public_id')) {
+            $validated['image_public_id'] = $uploaded['public_id'] ?? $uploaded['key'];
+        }
+
+        if (Schema::hasColumn('users', 'image_url')) {
+            $validated['image_url'] = $uploaded['url'];
         }
     }
 }

@@ -3,7 +3,7 @@
     $companyName = trim((string) ($company['name'] ?? config('app.name'))) ?: config('app.name');
     $companyPhone = trim((string) ($company['phone'] ?? ''));
     $companyEmail = trim((string) ($company['email'] ?? ''));
-    $companyLogoPath = trim((string) ($company['logo_path'] ?? ''));
+    $companyLogoUrl = app(\App\Support\CompanyProfile::class)->logoUrl();
     $companyAddress = collect([
         $company['address_line_1'] ?? null,
         $company['address_line_2'] ?? null,
@@ -251,8 +251,8 @@
                             <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:0 0 16px 0;">
                                 <tr>
                                     <td valign="middle" style="padding-right:12px;">
-                                        @if($companyLogoPath !== '')
-                                            <img src="{{ asset(ltrim($companyLogoPath, '/')) }}" alt="{{ $companyName }} logo" width="44" height="40" style="width:44px; height:40px; border-radius: 0;">
+                                        @if($companyLogoUrl !== '')
+                                            <img src="{{ $companyLogoUrl }}" alt="{{ $companyName }} logo" width="44" height="40" style="width:44px; height:40px; border-radius: 0;">
                                         @endif
                                     </td>
                                     <td valign="middle" class="text-light" style="font-family:Arial, Helvetica, sans-serif; font-size:20px; line-height:24px; font-weight:700; color:#ffffff;">

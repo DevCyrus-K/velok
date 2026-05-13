@@ -3,6 +3,8 @@
 namespace App\Support;
 
 use App\Models\AppSetting;
+use App\Services\StorageService;
+use Illuminate\Support\Str;
 
 class CompanyProfile
 {
@@ -27,15 +29,49 @@ class CompanyProfile
 
     public function logoDataUri(): ?string
     {
-        $path = public_path(ltrim((string) ($this->data()['logo_path'] ?? 'images/logo-dark.png'), '/'));
+        $path = trim((string) ($this->data()['logo_path'] ?? 'images/logo-dark.png'));
 
-        if (! is_file($path)) {
+        if ($path === '') {
             return null;
         }
 
-        $mime = mime_content_type($path) ?: 'image/png';
+        if (! Str::startsWith($path, ['http://', 'https://', '/', 'images/logo-'])) {
+            $storage = app(StorageService::class);
+            $content = $storage->contents($path);
 
-        return 'data:'.$mime.';base64,'.base64_encode((string) file_get_contents($path));
+            if ($content !== null) {
+                return 'data:'.($storage->mimeType($path) ?: 'image/png').';base64,'.base64_encode($content);
+            }
+        }
+
+        $localPath = public_path(ltrim($path, '/'));
+
+        if (! is_file($localPath)) {
+            return null;
+        }
+
+        $mime = mime_content_type($localPath) ?: 'image/png';
+
+        return 'data:'.$mime.';base64,'.base64_encode((string) file_get_contents($localPath));
+    }
+
+    public function logoUrl(): string
+    {
+        $path = trim((string) ($this->data()['logo_path'] ?? 'images/logo-dark.png'));
+
+        if ($path === '') {
+            return asset('images/logo-dark.png');
+        }
+
+        if (Str::startsWith($path, ['http://', 'https://', '/'])) {
+            return $path;
+        }
+
+        if (Str::startsWith($path, 'images/logo-')) {
+            return asset($path);
+        }
+
+        return app(StorageService::class)->url($path) ?: asset('images/logo-dark.png');
     }
 
     public function thankYouMessage(): string

@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\CareerJob;
 use App\Models\JobApplication;
+use App\Services\StorageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Validator;
 
 class CareerApiController extends Controller
@@ -52,6 +54,7 @@ class CareerApiController extends Controller
             'phone' => ['required', 'string', 'max:50'],
             'current_location' => ['nullable', 'string', 'max:160'],
             'resume_url' => ['nullable', 'string', 'max:255'],
+            'resume' => ['nullable', 'file', 'max:51200', 'mimetypes:application/pdf'],
             'cover_letter' => ['nullable', 'string'],
             'source_page' => ['nullable', 'string', 'max:255'],
         ]);
@@ -66,8 +69,12 @@ class CareerApiController extends Controller
 
         $validated = $validator->validated();
         $job = $this->findJob($validated);
+        $resume = $request->file('resume');
+        $uploadedResume = $resume instanceof UploadedFile
+            ? app(StorageService::class)->storeUploadedFile($resume, 'pdfs/resumes')
+            : null;
 
-        if (!$job && empty($validated['job_title'])) {
+        if (! $job && empty($validated['job_title'])) {
             return response()->json([
                 'success' => false,
                 'message' => 'Please choose the job you want to apply for.',
@@ -88,11 +95,16 @@ class CareerApiController extends Controller
             'email' => strtolower(trim((string) $validated['email'])),
             'phone' => trim((string) $validated['phone']),
             'current_location' => $this->nullableTrim($validated['current_location'] ?? null),
-            'resume_url' => $this->nullableTrim($validated['resume_url'] ?? null),
+            'resume_url' => $uploadedResume['key'] ?? $this->nullableTrim($validated['resume_url'] ?? null),
             'cover_letter' => $this->nullableTrim($validated['cover_letter'] ?? null),
             'status' => JobApplication::STATUS_NEW,
             'applied_at' => now(),
             'source_page' => $this->nullableTrim($validated['source_page'] ?? null) ?: '/careers',
+            'storage_key' => $uploadedResume['key'] ?? null,
+            'storage_url' => $uploadedResume['url'] ?? null,
+            'pdf_storage_key' => $uploadedResume['key'] ?? null,
+            'pdf_storage_file_id' => $uploadedResume['fileId'] ?? null,
+            'pdf_storage_url' => $uploadedResume['url'] ?? null,
         ]);
 
         return response()->json([
@@ -107,11 +119,11 @@ class CareerApiController extends Controller
 
     private function findJob(array $validated): ?CareerJob
     {
-        if (!empty($validated['job_id'])) {
+        if (! empty($validated['job_id'])) {
             return CareerJob::query()->find($validated['job_id']);
         }
 
-        if (!empty($validated['job_slug'])) {
+        if (! empty($validated['job_slug'])) {
             return CareerJob::query()->where('slug', $validated['job_slug'])->first();
         }
 

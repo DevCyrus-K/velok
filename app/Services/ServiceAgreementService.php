@@ -19,17 +19,18 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Support\Testing\Fakes\MailFake;
+use Mockery\MockInterface;
 use RuntimeException;
 use Throwable;
 
 class ServiceAgreementService
 {
-    private const STORAGE_DISK = 'local';
-    private const STORAGE_DIRECTORY = 'service-agreements';
     private const EMAIL_PENDING = 'pending';
+
     private const EMAIL_SENT = 'sent';
+
     private const EMAIL_FAILED = 'email_failed';
 
     /**
@@ -54,7 +55,6 @@ class ServiceAgreementService
         $company = $this->companyProfileForAgreement();
         $timestamp = now();
         $filename = $this->storedFilename($quotation, $timestamp);
-        $path = self::STORAGE_DIRECTORY.'/'.$filename;
         $pdf = Pdf::loadView('agreements.service', $this->pdfData($quotation, $company))
             ->setPaper('a4', 'portrait')
             ->setOptions([
@@ -66,18 +66,30 @@ class ServiceAgreementService
             ]);
 
         $output = $this->renderPdf($pdf, $company['name']);
-        Storage::disk(self::STORAGE_DISK)->put($path, $output);
+        $tmpPath = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.$filename;
 
-        if (! Storage::disk(self::STORAGE_DISK)->exists($path) || Storage::disk(self::STORAGE_DISK)->size($path) <= 0) {
-            throw new RuntimeException('Service Agreement generation halted: PDF could not be written to disk.');
+        if (@file_put_contents($tmpPath, $output) === false) {
+            throw new RuntimeException('Service Agreement generation halted: PDF could not be written to a temporary file.');
+        }
+
+        $uploaded = app(StorageService::class)->uploadFromLocalPath($tmpPath, 'agreements');
+
+        if (! app(StorageService::class)->exists($uploaded['key'])) {
+            throw new RuntimeException('Service Agreement generation halted: PDF could not be verified in Backblaze B2.');
         }
 
         $quotation->update([
-            'service_agreement_path' => $path,
+            'service_agreement_path' => $uploaded['key'],
             'service_agreement_filename' => $filename,
+            'service_agreement_storage_file_id' => $uploaded['fileId'],
             'service_agreement_generated_at' => $timestamp,
             'service_agreement_email_status' => self::EMAIL_PENDING,
             'service_agreement_email_failed_reason' => null,
+            'storage_key' => $uploaded['key'],
+            'storage_url' => $uploaded['url'],
+            'pdf_storage_key' => $uploaded['key'],
+            'pdf_storage_file_id' => $uploaded['fileId'],
+            'pdf_storage_url' => $uploaded['url'],
         ]);
 
         $quotation->logStage(
@@ -87,10 +99,10 @@ class ServiceAgreementService
             $actor?->name,
             null,
             'pdf',
-            ['path' => $path]
+            ['storage_key' => $uploaded['key']]
         );
 
-        return $path;
+        return $uploaded['key'];
     }
 
     public function downloadFilename(Quotation $quotation): string
@@ -98,18 +110,13 @@ class ServiceAgreementService
         return 'service_agreement_'.$this->quoteId($quotation).'.pdf';
     }
 
-    public function storageDisk(): string
-    {
-        return self::STORAGE_DISK;
-    }
-
     private function sendAgreementEmail(Quotation $quotation, string $path, ?User $actor = null): bool
     {
         $quotation->loadMissing('quoteRequest');
         $this->validateApprovedQuotation($quotation);
 
-        if (! Storage::disk(self::STORAGE_DISK)->exists($path) || Storage::disk(self::STORAGE_DISK)->size($path) <= 0) {
-            throw new RuntimeException('Service Agreement email halted: generated PDF was not found on disk.');
+        if (! app(StorageService::class)->exists($path)) {
+            throw new RuntimeException('Service Agreement email halted: generated PDF was not found in Backblaze B2.');
         }
 
         $company = $this->companyProfileForAgreement();
@@ -321,7 +328,7 @@ class ServiceAgreementService
     }
 
     /**
-     * @param Collection<int, string> $serviceDescriptions
+     * @param  Collection<int, string>  $serviceDescriptions
      * @return Collection<int, array{description: string, quantity: int, unit_price: float, amount: float}>
      */
     private function pricingItems(Quotation $quotation, Collection $serviceDescriptions): Collection
@@ -435,7 +442,7 @@ class ServiceAgreementService
     }
 
     /**
-     * @param array{address: string, name: string} $sender
+     * @param  array{address: string, name: string}  $sender
      */
     private function createEmailLog(Quotation $quotation, array $sender, string $recipient, string $subject): ?EmailLog
     {
@@ -491,7 +498,7 @@ class ServiceAgreementService
         if (in_array(Str::lower($transport), ['array', 'log'], true)) {
             throw new RuntimeException(
                 'Service Agreement email failed: MAIL_MAILER='.$transport
-                .' only stores email locally. Configure smtp, resend, postmark, mailgun, or ses before sending agreements.'
+                .' only stores email locally. Configure smtp, resend, postmark, or mailgun before sending agreements.'
             );
         }
     }
@@ -527,12 +534,12 @@ class ServiceAgreementService
             return false;
         }
 
-        if (is_a($mailer, \Illuminate\Support\Testing\Fakes\MailFake::class)) {
+        if (is_a($mailer, MailFake::class)) {
             return true;
         }
 
-        return interface_exists(\Mockery\MockInterface::class)
-            && $mailer instanceof \Mockery\MockInterface;
+        return interface_exists(MockInterface::class)
+            && $mailer instanceof MockInterface;
     }
 
     private function waitBeforeRetry(): void

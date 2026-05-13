@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\GalleryItem;
+use App\Services\StorageService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -44,7 +45,10 @@ class GalleryController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $item = GalleryItem::query()->create($this->validatedData($request));
+        $payload = $this->validatedData($request);
+        unset($payload['_uploaded_new_image']);
+
+        $item = GalleryItem::query()->create($payload);
 
         return redirect()
             ->route('gallery.show', $item)
@@ -65,7 +69,14 @@ class GalleryController extends Controller
 
     public function update(Request $request, GalleryItem $gallery): RedirectResponse
     {
-        $gallery->update($this->validatedData($request, $gallery));
+        $payload = $this->validatedData($request, $gallery);
+
+        if (($payload['_uploaded_new_image'] ?? false) === true) {
+            $this->deleteStoredImage($gallery);
+        }
+
+        unset($payload['_uploaded_new_image']);
+        $gallery->update($payload);
 
         return redirect()
             ->route('gallery.show', $gallery)
@@ -88,6 +99,7 @@ class GalleryController extends Controller
 
     public function destroy(GalleryItem $gallery): RedirectResponse
     {
+        $this->deleteStoredImage($gallery);
         $gallery->delete();
 
         return redirect()
@@ -115,8 +127,8 @@ class GalleryController extends Controller
     {
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:160'],
-            'image_path' => ['nullable', 'string', 'max:255'],
-            'image_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'image_path' => ['nullable', 'string', 'max:1000'],
+            'image_file' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240'],
             'category' => ['nullable', 'string', 'max:100'],
             'alt_text' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -127,14 +139,14 @@ class GalleryController extends Controller
 
         $imagePath = $this->nullableTrim($validated['image_path'] ?? null);
         $imageFile = $request->file('image_file');
+        $uploaded = null;
 
         if ($imageFile instanceof UploadedFile) {
-            $extension = strtolower($imageFile->getClientOriginalExtension() ?: $imageFile->extension() ?: 'jpg');
-            $filename = Str::slug($validated['title'] ?: 'gallery-image') . '-' . now()->format('YmdHis') . '-' . Str::random(6) . '.' . $extension;
-            $imagePath = 'storage/' . $imageFile->storeAs('gallery', $filename, 'public');
+            $uploaded = app(StorageService::class)->storeUploadedFile($imageFile, 'images/gallery');
+            $imagePath = $uploaded['key'];
         }
 
-        if (!$imagePath && (!$item || !$item->exists)) {
+        if (! $imagePath && (! $item || ! $item->exists)) {
             $request->validate([
                 'image_path' => ['required_without:image_file'],
             ], [
@@ -154,10 +166,37 @@ class GalleryController extends Controller
         ];
 
         if (Schema::hasColumn('gallery', 'image_url')) {
-            $payload['image_url'] = $payload['image_path'];
+            $payload['image_url'] = $uploaded['url'] ?? app(StorageService::class)->url($payload['image_path']) ?? $payload['image_path'];
+        }
+
+        if ($uploaded && Schema::hasColumn('gallery', 'image_public_id')) {
+            $payload['image_public_id'] = $uploaded['public_id'] ?? $uploaded['key'];
+        }
+
+        if ($uploaded && Schema::hasColumn('gallery', 'storage_key')) {
+            $payload['storage_key'] = $uploaded['key'];
+        }
+
+        if ($uploaded && Schema::hasColumn('gallery', 'storage_url')) {
+            $payload['storage_url'] = $uploaded['url'];
+        }
+
+        if ($uploaded) {
+            $payload['_uploaded_new_image'] = true;
         }
 
         return $payload;
+    }
+
+    private function deleteStoredImage(GalleryItem $item): void
+    {
+        $publicId = $item->getAttribute('image_public_id') ?: $item->getAttribute('storage_key') ?: $item->imagePath();
+
+        if (! is_string($publicId) || trim($publicId) === '' || Str::startsWith($publicId, ['http://', 'https://', '/'])) {
+            return;
+        }
+
+        app(StorageService::class)->deleteImage($publicId);
     }
 
     private function squish(string $value): string

@@ -3,7 +3,7 @@
     $companyName = trim((string) ($company['name'] ?? config('app.name'))) ?: config('app.name');
     $companyPhone = trim((string) ($company['phone'] ?? ''));
     $companyEmail = trim((string) ($company['email'] ?? ''));
-    $companyLogoPath = trim((string) ($company['logo_path'] ?? ''));
+    $companyLogoUrl = app(\App\Support\CompanyProfile::class)->logoUrl();
     $companyAddress = collect([
         $company['address_line_1'] ?? null,
         $company['address_line_2'] ?? null,
@@ -116,8 +116,8 @@
         <section class="sheet">
             <div class="doc-head">
                 <div class="logo">
-                    @if($companyLogoPath !== '')
-                        <img alt="{{ $companyName }} logo" src="{{ asset(ltrim($companyLogoPath, '/')) }}">
+                    @if($companyLogoUrl !== '')
+                        <img alt="{{ $companyName }} logo" src="{{ $companyLogoUrl }}">
                     @endif
                 </div>
                 <div class="doc-title">

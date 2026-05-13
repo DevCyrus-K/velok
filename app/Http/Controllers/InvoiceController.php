@@ -11,23 +11,26 @@ use App\Models\Invoice;
 use App\Models\QuoteRequest;
 use App\Models\User;
 use App\Services\PaymentMethodService;
+use App\Services\StorageService;
 use App\Support\BookingFlow;
 use App\Support\CompanyProfile;
 use App\Support\InvoiceAuthorization;
 use App\Support\LeadCategory;
 use App\Support\PdfDocumentName;
+use App\Support\UserSignature;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Mail\SentMessage;
 use Illuminate\Http\Request;
+use Illuminate\Mail\SentMessage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Support\Testing\Fakes\MailFake;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Mockery\MockInterface;
 use RuntimeException;
 use Throwable;
 
@@ -288,6 +291,19 @@ class InvoiceController extends Controller
 
         $user = auth()->user();
 
+        if ($invoice->pdf_storage_key ?: $invoice->storage_key) {
+            $invoice->logStage(
+                'PDF_DOWNLOADED',
+                'Invoice PDF downloaded',
+                'admin',
+                $user?->name,
+                null,
+                'download'
+            );
+
+            return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($invoice->pdf_storage_key ?: $invoice->storage_key));
+        }
+
         $pdf = Pdf::loadView('invoices.pdf', array_merge(['invoice' => $invoice], $this->buildPdfData($user, $invoice)))
             ->setPaper('a4', 'portrait')
             ->setOptions([
@@ -307,7 +323,21 @@ class InvoiceController extends Controller
             'download'
         );
 
-        return $pdf->download($this->invoicePdfFilename($invoice));
+        $uploaded = app(StorageService::class)->uploadGeneratedPdf(
+            $pdf->output(),
+            $this->invoicePdfFilename($invoice),
+            'invoices'
+        );
+
+        $invoice->update([
+            'storage_key' => $uploaded['key'],
+            'storage_url' => $uploaded['url'],
+            'pdf_storage_key' => $uploaded['key'],
+            'pdf_storage_file_id' => $uploaded['fileId'],
+            'pdf_storage_url' => $uploaded['url'],
+        ]);
+
+        return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($uploaded['key']));
     }
 
     public function send(Request $request, Invoice $invoice): RedirectResponse|JsonResponse
@@ -379,6 +409,10 @@ class InvoiceController extends Controller
 
     public function destroy(Invoice $invoice): RedirectResponse
     {
+        if ($invoice->pdf_storage_file_id && $invoice->pdf_storage_key) {
+            app(StorageService::class)->deletePDF($invoice->pdf_storage_file_id, $invoice->pdf_storage_key);
+        }
+
         $invoice->delete();
 
         return redirect()
@@ -721,7 +755,7 @@ class InvoiceController extends Controller
         $reviewLink = $this->reviewLink();
 
         return "Hello {$invoice->customer_name},\n\n"
-            ."Payment received for invoice {$invoice->invoice_number} (KES ".number_format((float) $invoice->total_amount, 2)."). "
+            ."Payment received for invoice {$invoice->invoice_number} (KES ".number_format((float) $invoice->total_amount, 2).'). '
             ."Your move is now marked complete.\n\n"
             ."Thank you for choosing {$companyName}.\n\n"
             ."Review us here: {$reviewLink}";
@@ -751,66 +785,16 @@ class InvoiceController extends Controller
 
         $signaturePath = $user?->signaturePath() ?: $invoice?->quoteRequest?->quotation?->signature;
 
-        // Signature base64 encoding
         $sigBase64 = null;
         $sigMime = 'image/png';
+        $signatureDataUri = app(UserSignature::class)->dataUri($signaturePath);
 
-        try {
-            if ($signaturePath) {
-                // Try storage disk first (R2 or local)
-                if (Storage::exists($signaturePath)) {
-                    $sigContent = Storage::get($signaturePath);
-                    $sigMime = Storage::mimeType($signaturePath)
-                        ?? 'image/png';
-                    $sigBase64 = base64_encode($sigContent);
-                }
-
-                // If not on disk try as full file path
-                elseif (file_exists($signaturePath)) {
-                    $sigContent = file_get_contents($signaturePath);
-                    $finfo = finfo_open(FILEINFO_MIME_TYPE);
-                    $sigMime = finfo_buffer($finfo, $sigContent)
-                        ?? 'image/png';
-                    finfo_close($finfo);
-                    $sigBase64 = base64_encode($sigContent);
-                }
-
-                // Try storage_path as fallback
-                elseif (file_exists(storage_path('app/'.$signaturePath))) {
-                    $fullPath = storage_path('app/'.$signaturePath);
-                    $sigContent = file_get_contents($fullPath);
-                    $finfo = finfo_open(FILEINFO_MIME_TYPE);
-                    $sigMime = finfo_buffer($finfo, $sigContent)
-                        ?? 'image/png';
-                    finfo_close($finfo);
-                    $sigBase64 = base64_encode($sigContent);
-                }
-
-                // Try public storage path as fallback
-                elseif (file_exists(storage_path('app/public/'.$signaturePath))) {
-                    $fullPath = storage_path('app/public/'.$signaturePath);
-                    $sigContent = file_get_contents($fullPath);
-                    $finfo = finfo_open(FILEINFO_MIME_TYPE);
-                    $sigMime = finfo_buffer($finfo, $sigContent)
-                        ?? 'image/png';
-                    finfo_close($finfo);
-                    $sigBase64 = base64_encode($sigContent);
-                }
-
-                // Log if still not found
-                if (! $sigBase64) {
-                    \Log::warning('Signature file not found', [
-                        'user_id' => $user?->id,
-                        'signature' => $signaturePath,
-                    ]);
-                }
-            }
-        } catch (\Exception $e) {
-            \Log::error('Signature base64 error: '.$e->getMessage(), [
-                'user_id' => $user?->id,
-                'signature' => $signaturePath ?? 'null',
-            ]);
-            $sigBase64 = null;
+        if (is_string($signatureDataUri) && str_starts_with($signatureDataUri, 'data:')) {
+            [$meta, $payload] = array_pad(explode(',', $signatureDataUri, 2), 2, null);
+            $sigMime = is_string($meta) && preg_match('/^data:([^;]+)/', $meta, $matches)
+                ? $matches[1]
+                : 'image/png';
+            $sigBase64 = is_string($payload) && $payload !== '' ? $payload : null;
         }
 
         $companyAddress = collect([$company['address_line_1'] ?? null, $company['address_line_2'] ?? null])
@@ -841,6 +825,19 @@ class InvoiceController extends Controller
      */
     private function publicImagePayload(?string $path): array
     {
+        $logoDataUri = app(CompanyProfile::class)->logoDataUri();
+
+        if (is_string($logoDataUri) && str_starts_with($logoDataUri, 'data:')) {
+            [$meta, $payload] = array_pad(explode(',', $logoDataUri, 2), 2, null);
+            $mime = is_string($meta) && preg_match('/^data:([^;]+)/', $meta, $matches)
+                ? $matches[1]
+                : 'image/png';
+
+            if (is_string($payload) && $payload !== '') {
+                return [$payload, $mime];
+            }
+        }
+
         $fullPath = public_path(ltrim((string) $path, '/'));
 
         if (! is_file($fullPath)) {
@@ -883,7 +880,7 @@ class InvoiceController extends Controller
         $company = app(CompanyProfile::class)->data();
         $companyName = trim((string) ($company['name'] ?? '')) ?: 'Company';
 
-        return 'Invoice ' . $invoice->invoice_number . ' from ' . $companyName;
+        return 'Invoice '.$invoice->invoice_number.' from '.$companyName;
     }
 
     private function defaultInvoiceMessage(Invoice $invoice): string
@@ -973,7 +970,7 @@ class InvoiceController extends Controller
     }
 
     /**
-     * @param array<int, string> $descriptions
+     * @param  array<int, string>  $descriptions
      * @return array<int, array{description: string, quantity: int, unit_price: float}>
      */
     private function pricedServiceLineItems(array $descriptions, float $quoteAmount): array
@@ -1022,7 +1019,7 @@ class InvoiceController extends Controller
         $nextId = ((int) Invoice::query()->max('id')) + 1;
 
         do {
-            $invoiceNumber = 'INV-' . str_pad((string) $nextId, 5, '0', STR_PAD_LEFT);
+            $invoiceNumber = 'INV-'.str_pad((string) $nextId, 5, '0', STR_PAD_LEFT);
             $nextId++;
         } while (Invoice::query()->where('invoice_number', $invoiceNumber)->exists());
 
@@ -1047,7 +1044,7 @@ class InvoiceController extends Controller
     }
 
     /**
-     * @param array{recipient_email: string, subject: string, message: string, attach_pdf: bool} $payload
+     * @param  array{recipient_email: string, subject: string, message: string, attach_pdf: bool}  $payload
      * @return array{sent: bool, invoice: Invoice|null, exception: Throwable|null}
      */
     private function sendInvoiceEmailNow(Invoice $invoice, array $payload, ?User $user = null): array
@@ -1185,7 +1182,7 @@ class InvoiceController extends Controller
         if (in_array(Str::lower($transport), ['array', 'log'], true)) {
             throw new RuntimeException(
                 "{$documentLabel} email failed: MAIL_MAILER={$transport} only stores email locally. "
-                .'Configure smtp, resend, postmark, mailgun, or ses before sending invoices.'
+                .'Configure smtp, resend, postmark, or mailgun before sending invoices.'
             );
         }
     }
@@ -1221,12 +1218,12 @@ class InvoiceController extends Controller
             return false;
         }
 
-        if (is_a($mailer, \Illuminate\Support\Testing\Fakes\MailFake::class)) {
+        if (is_a($mailer, MailFake::class)) {
             return true;
         }
 
-        return interface_exists(\Mockery\MockInterface::class)
-            && $mailer instanceof \Mockery\MockInterface;
+        return interface_exists(MockInterface::class)
+            && $mailer instanceof MockInterface;
     }
 
     private function squish(string $value): string
@@ -1289,7 +1286,7 @@ class InvoiceController extends Controller
             ."📋 *Invoice Number:* {$invoice->invoice_number}\n"
             ."📅 *Invoice Date:* {$invoice->invoice_date?->format('d M Y')}\n"
             ."📅 *Due Date:* {$invoice->due_date?->format('d M Y')}\n"
-            ."💰 *Amount Due:* KES ".number_format($invoice->total_amount, 2)."\n\n"
+            .'💰 *Amount Due:* KES '.number_format($invoice->total_amount, 2)."\n\n"
             ."📄 *Download Invoice PDF:*\n{$invoicePdfUrl}\n\n";
 
         if ($quotationPdfUrl) {

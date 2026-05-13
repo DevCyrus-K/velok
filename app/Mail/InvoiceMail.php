@@ -2,8 +2,10 @@
 
 namespace App\Mail;
 
+use App\Models\EmailLog;
 use App\Models\Invoice;
 use App\Models\User;
+use App\Services\StorageService;
 use App\Support\CompanyProfile;
 use App\Support\InvoiceAuthorization;
 use App\Support\MailSender;
@@ -16,6 +18,7 @@ use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Schema;
 
 class InvoiceMail extends Mailable
 {
@@ -63,28 +66,41 @@ class InvoiceMail extends Mailable
             return [];
         }
 
+        $filename = $this->attachmentName();
+        $contents = Pdf::loadView('invoices.pdf', [
+            'invoice' => $this->invoice,
+            'company' => app(CompanyProfile::class)->data(),
+            'logoDataUri' => app(CompanyProfile::class)->logoDataUri(),
+            'paymentMethods' => app(PaymentSettings::class)->methodsForInvoice($this->invoice),
+            'thankYouMessage' => app(CompanyProfile::class)->thankYouMessage(),
+            'authorization' => app(InvoiceAuthorization::class)->data($this->invoice, app(CompanyProfile::class)->data(), $this->user),
+            'signatureDataUri' => app(UserSignature::class)->dataUri($this->user?->signaturePath()),
+            'user' => $this->user,
+        ])->setPaper('a4', 'portrait')
+            ->setOptions([
+                'dpi' => 150,
+                'enable_html5_parser' => true,
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'Inter',
+            ])
+            ->output();
+        $uploaded = app(StorageService::class)->uploadGeneratedPdf($contents, $filename, 'invoices');
+
+        if (Schema::hasColumn('invoices', 'storage_key')) {
+            $this->invoice->update([
+                'storage_key' => $uploaded['key'],
+                'storage_url' => $uploaded['url'],
+                'pdf_storage_key' => $uploaded['key'],
+                'pdf_storage_file_id' => $uploaded['fileId'],
+                'pdf_storage_url' => $uploaded['url'],
+            ]);
+        }
+
         return [
-            Attachment::fromData(
-                fn (): string => Pdf::loadView('invoices.pdf', [
-                    'invoice' => $this->invoice,
-                    'company' => app(CompanyProfile::class)->data(),
-                    'logoDataUri' => app(CompanyProfile::class)->logoDataUri(),
-                    'paymentMethods' => app(PaymentSettings::class)->methodsForInvoice($this->invoice),
-                    'thankYouMessage' => app(CompanyProfile::class)->thankYouMessage(),
-                    'authorization' => app(InvoiceAuthorization::class)->data($this->invoice, app(CompanyProfile::class)->data(), $this->user),
-                    'signatureDataUri' => app(UserSignature::class)->dataUri($this->user?->signaturePath()),
-                    'user' => $this->user,
-                ])->setPaper('a4', 'portrait')
-                    ->setOptions([
-                        'dpi' => 150,
-                        'enable_html5_parser' => true,
-                        'isHtml5ParserEnabled' => true,
-                        'isRemoteEnabled' => true,
-                        'defaultFont' => 'Inter',
-                    ])
-                    ->output(),
-                $this->attachmentName(),
-            )->withMime('application/pdf'),
+            Attachment::fromData(fn () => $contents, $filename)
+                ->as($filename)
+                ->withMime('application/pdf'),
         ];
     }
 
@@ -92,7 +108,7 @@ class InvoiceMail extends Mailable
     {
         $companyName = trim((string) (app(CompanyProfile::class)->data()['name'] ?? '')) ?: 'Company';
 
-        return $this->subjectOverride ?: 'Invoice ' . $this->invoice->invoice_number . ' from ' . $companyName;
+        return $this->subjectOverride ?: 'Invoice '.$this->invoice->invoice_number.' from '.$companyName;
     }
 
     private function attachmentName(): string
@@ -106,7 +122,7 @@ class InvoiceMail extends Mailable
             return null;
         }
 
-        return \App\Models\EmailLog::query()
+        return EmailLog::query()
             ->whereKey($this->emailLogId)
             ->value('tracking_token');
     }

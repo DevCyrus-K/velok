@@ -139,7 +139,7 @@
         $authorization = $authorization ?? app(\App\Support\InvoiceAuthorization::class)->data($invoice, $company);
         $signatureDataUri = $signatureDataUri ?? app(\App\Support\InvoiceAuthorization::class)->signatureDataUri($invoice, $company);
         $companyName = trim((string) ($company['name'] ?? '')) ?: 'Company';
-        $companyLogoPath = trim((string) ($company['logo_path'] ?? ''));
+        $companyLogoUrl = app(\App\Support\CompanyProfile::class)->logoUrl();
         $companyEmail = trim((string) ($company['email'] ?? ''));
         $companyPhone = trim((string) ($company['phone'] ?? ''));
         $companyAddressLines = collect([
@@ -331,8 +331,8 @@
                     <div class="clearfix">
                         <div class="float-sm-end text-sm-end">
                             <div class="auth-logo d-inline-flex align-items-center gap-2">
-                                @if($companyLogoPath !== '')
-                                    <img alt="{{ $companyName }} logo" height="24" src="{{ asset(ltrim($companyLogoPath, '/')) }}" />
+                                @if($companyLogoUrl !== '')
+                                    <img alt="{{ $companyName }} logo" height="24" src="{{ $companyLogoUrl }}" />
                                 @endif
                                 <span class="fw-semibold text-nowrap">{{ $companyName }}</span>
                             </div>

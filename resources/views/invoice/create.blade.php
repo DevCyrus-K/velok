@@ -46,8 +46,7 @@
     })->values();
     $company = $company ?? app(\App\Support\CompanyProfile::class)->data();
     $companyName = trim((string) ($company['name'] ?? '')) ?: 'Company';
-    $companyLogoPath = trim((string) ($company['logo_path'] ?? ''));
-    $companyLogoUrl = $companyLogoPath !== '' ? asset(ltrim($companyLogoPath, '/')) : '';
+    $companyLogoUrl = app(\App\Support\CompanyProfile::class)->logoUrl();
     $companyAddressLines = collect([
         $company['address_line_1'] ?? null,
         $company['address_line_2'] ?? null,

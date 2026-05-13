@@ -3,10 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\QuoteRequestFormRequest;
-use App\Models\QuoteRequest;
 use App\Models\Quotation;
+use App\Models\QuoteRequest;
 use App\Models\User;
 use App\Services\PaymentMethodService;
+use App\Services\StorageService;
 use App\Support\BookingFlow;
 use App\Support\CompanyProfile;
 use App\Support\NotificationLogger;
@@ -17,7 +18,6 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request as HttpRequest;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use Throwable;
 
@@ -103,6 +103,19 @@ class QuoteController extends Controller
         app(BookingFlow::class)->ensureQuotationTokens($quotation);
         $quotation->refresh();
 
+        if ($quotation->quote_pdf_storage_key) {
+            $quotation->logStage(
+                'PDF_DOWNLOADED',
+                'Quote PDF downloaded',
+                'admin',
+                $user?->name,
+                null,
+                'download'
+            );
+
+            return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($quotation->quote_pdf_storage_key));
+        }
+
         $authorization = [
             'name' => $user?->name ?: ($quotation->authorized_by ?: 'Pending'),
             'job_title' => $user?->job_title ?: ($quotation->authorized_role ?: 'Authorized Signatory'),
@@ -138,7 +151,7 @@ class QuoteController extends Controller
             'download'
         );
 
-        return $pdf->download($this->quotePdfFilename($quote));
+        return $this->redirectToStoredQuotePdf($quotation, $pdf->output(), $this->quotePdfFilename($quote));
     }
 
     public function publicPdfDownload(int $id, string $token)
@@ -154,6 +167,19 @@ class QuoteController extends Controller
             403,
             'This PDF download link has expired.'
         );
+
+        if ($quotation->quote_pdf_storage_key) {
+            $quotation->logStage(
+                'PDF_DOWNLOADED',
+                'Customer downloaded quotation PDF',
+                'customer',
+                $quotation->customer_name,
+                request()->ip(),
+                'online'
+            );
+
+            return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($quotation->quote_pdf_storage_key));
+        }
 
         $pdf = Pdf::loadView('quotes.pdf', array_merge([
             'quote' => $quotation->quoteRequest,
@@ -188,7 +214,7 @@ class QuoteController extends Controller
             'online'
         );
 
-        return $pdf->download($this->quotePdfFilename($quotation->quoteRequest));
+        return $this->redirectToStoredQuotePdf($quotation, $pdf->output(), $this->quotePdfFilename($quotation->quoteRequest));
     }
 
     public function send(HttpRequest $request, QuoteRequest $quote, QuotationEmail $quotationEmail): RedirectResponse|JsonResponse
@@ -205,7 +231,7 @@ class QuoteController extends Controller
             return back()->with('toast-error', $message);
         }
 
-        if (! in_array($quote->quotation->status, [\App\Models\Quotation::STATUS_DRAFT, \App\Models\Quotation::STATUS_SENT], true)) {
+        if (! in_array($quote->quotation->status, [Quotation::STATUS_DRAFT, Quotation::STATUS_SENT], true)) {
             $message = 'Only draft or sent quotations can be emailed.';
 
             if ($request->expectsJson()) {
@@ -407,6 +433,21 @@ class QuoteController extends Controller
         return app(PdfDocumentName::class)->quoteRequestFilename($quote);
     }
 
+    private function redirectToStoredQuotePdf(Quotation $quotation, string $contents, string $filename)
+    {
+        $uploaded = app(StorageService::class)->uploadGeneratedPdf($contents, $filename, 'quotes');
+        $quotation->update([
+            'quote_pdf_storage_key' => $uploaded['key'],
+            'quote_pdf_storage_file_id' => $uploaded['fileId'],
+            'quote_pdf_storage_url' => $uploaded['url'],
+            'pdf_storage_key' => $uploaded['key'],
+            'pdf_storage_file_id' => $uploaded['fileId'],
+            'pdf_storage_url' => $uploaded['url'],
+        ]);
+
+        return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($uploaded['key']));
+    }
+
     private function buildPdfData(?User $user, ?Quotation $quotation = null, ?string $signaturePath = null): array
     {
         $company = app(CompanyProfile::class)->data();
@@ -414,66 +455,16 @@ class QuoteController extends Controller
 
         $signaturePath = $signaturePath ?: $user?->signaturePath() ?: $quotation?->signature;
 
-        // Signature base64 encoding
         $sigBase64 = null;
         $sigMime = 'image/png';
+        $signatureDataUri = app(UserSignature::class)->dataUri($signaturePath);
 
-        try {
-            if ($signaturePath) {
-                // Try storage disk first (R2 or local)
-                if (Storage::exists($signaturePath)) {
-                    $sigContent = Storage::get($signaturePath);
-                    $sigMime = Storage::mimeType($signaturePath)
-                        ?? 'image/png';
-                    $sigBase64 = base64_encode($sigContent);
-                }
-
-                // If not on disk try as full file path
-                elseif (file_exists($signaturePath)) {
-                    $sigContent = file_get_contents($signaturePath);
-                    $finfo = finfo_open(FILEINFO_MIME_TYPE);
-                    $sigMime = finfo_buffer($finfo, $sigContent)
-                        ?? 'image/png';
-                    finfo_close($finfo);
-                    $sigBase64 = base64_encode($sigContent);
-                }
-
-                // Try storage_path as fallback
-                elseif (file_exists(storage_path('app/'.$signaturePath))) {
-                    $fullPath = storage_path('app/'.$signaturePath);
-                    $sigContent = file_get_contents($fullPath);
-                    $finfo = finfo_open(FILEINFO_MIME_TYPE);
-                    $sigMime = finfo_buffer($finfo, $sigContent)
-                        ?? 'image/png';
-                    finfo_close($finfo);
-                    $sigBase64 = base64_encode($sigContent);
-                }
-
-                // Try public storage path as fallback
-                elseif (file_exists(storage_path('app/public/'.$signaturePath))) {
-                    $fullPath = storage_path('app/public/'.$signaturePath);
-                    $sigContent = file_get_contents($fullPath);
-                    $finfo = finfo_open(FILEINFO_MIME_TYPE);
-                    $sigMime = finfo_buffer($finfo, $sigContent)
-                        ?? 'image/png';
-                    finfo_close($finfo);
-                    $sigBase64 = base64_encode($sigContent);
-                }
-
-                // Log if still not found
-                if (! $sigBase64) {
-                    \Log::warning('Signature file not found', [
-                        'user_id' => $user?->id,
-                        'signature' => $signaturePath,
-                    ]);
-                }
-            }
-        } catch (\Exception $e) {
-            \Log::error('Signature base64 error: '.$e->getMessage(), [
-                'user_id' => $user?->id,
-                'signature' => $signaturePath ?? 'null',
-            ]);
-            $sigBase64 = null;
+        if (is_string($signatureDataUri) && str_starts_with($signatureDataUri, 'data:')) {
+            [$meta, $payload] = array_pad(explode(',', $signatureDataUri, 2), 2, null);
+            $sigMime = is_string($meta) && preg_match('/^data:([^;]+)/', $meta, $matches)
+                ? $matches[1]
+                : 'image/png';
+            $sigBase64 = is_string($payload) && $payload !== '' ? $payload : null;
         }
 
         $companyAddress = collect([$company['address_line_1'] ?? null, $company['address_line_2'] ?? null])
@@ -504,6 +495,19 @@ class QuoteController extends Controller
      */
     private function publicImagePayload(?string $path): array
     {
+        $logoDataUri = app(CompanyProfile::class)->logoDataUri();
+
+        if (is_string($logoDataUri) && str_starts_with($logoDataUri, 'data:')) {
+            [$meta, $payload] = array_pad(explode(',', $logoDataUri, 2), 2, null);
+            $mime = is_string($meta) && preg_match('/^data:([^;]+)/', $meta, $matches)
+                ? $matches[1]
+                : 'image/png';
+
+            if (is_string($payload) && $payload !== '') {
+                return [$payload, $mime];
+            }
+        }
+
         $fullPath = public_path(ltrim((string) $path, '/'));
 
         if (! is_file($fullPath)) {
@@ -535,5 +539,4 @@ class QuoteController extends Controller
     {
         return str_contains($mime, 'svg') || extension_loaded('gd');
     }
-
 }

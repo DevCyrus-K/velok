@@ -8,11 +8,16 @@ use Illuminate\Support\Facades\Storage;
 
 uses(RefreshDatabase::class);
 
+function fakeSignaturePng(): string
+{
+    return base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=');
+}
+
 function fakeSignatureUpload(): UploadedFile
 {
     return UploadedFile::fake()->createWithContent(
         'signature.png',
-        base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=')
+        fakeSignaturePng()
     );
 }
 
@@ -63,9 +68,8 @@ it('updates account profile information', function () {
         'job_title' => 'Property Advisor',
     ]);
 
-    $this->assertStringStartsWith('signatures/', $user->signature_path);
+    $this->assertStringStartsWith('general/signature_', $user->signature_path);
     expect($user->signature)->toBe($user->signature_path);
-    Storage::disk('local')->assertExists($user->signature_path);
 });
 
 it('stores a drawn account signature path', function () {
@@ -80,19 +84,18 @@ it('stores a drawn account signature path', function () {
         ->patch(route('account.profile.update'), [
             'name' => 'Signer',
             'email' => 'signer@example.com',
-            'signature_data' => 'data:image/png;base64,'.base64_encode('signature'),
+            'signature_data' => 'data:image/png;base64,'.base64_encode(fakeSignaturePng()),
         ])
         ->assertRedirect(route('account.show'));
 
     $user->refresh();
 
-    $this->assertStringStartsWith('signatures/signature-'.$user->id.'-', $user->signature_path);
+    $this->assertStringStartsWith('general/signature-'.$user->id.'-', $user->signature_path);
     $this->assertDatabaseHas('users', [
         'id' => $user->id,
         'signature' => $user->signature_path,
         'signature_path' => $user->signature_path,
     ]);
-    Storage::disk('local')->assertExists($user->signature_path);
 });
 
 it('serves the authenticated users signature through the protected account route', function () {
@@ -105,7 +108,7 @@ it('serves the authenticated users signature through the protected account route
 
     Storage::disk('local')->put(
         'signatures/protected.png',
-        base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=')
+        fakeSignaturePng()
     );
 
     $this->get(route('account.signature'))->assertRedirect(route('login'));

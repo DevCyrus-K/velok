@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
-use App\Support\TopbarData;
 use App\Support\LeadCategory;
 use App\Support\NotificationLogger;
-use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Support\TopbarData;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Message extends Model
 {
@@ -47,6 +47,16 @@ class Message extends Model
         'attachment_original_name',
         'attachment_mime',
         'email_log_id',
+        'image_url',
+        'image_public_id',
+        'legacy_image_path',
+        'pdf_storage_key',
+        'pdf_storage_file_id',
+        'pdf_storage_url',
+        'legacy_pdf_path',
+        'storage_key',
+        'storage_url',
+        'legacy_file_path',
     ];
 
     protected $casts = [

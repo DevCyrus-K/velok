@@ -3,12 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\AppSetting;
+use App\Services\StorageService;
 use App\Support\CompanyProfile;
 use App\Support\PaymentSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\File;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -72,12 +72,12 @@ class SettingsController extends Controller
         };
 
         $target = $request->boolean('manage_apps')
-            ? route('settings.apps') . '#managed-apps'
-            : route('settings.index') . '#' . $section . '-settings';
+            ? route('settings.apps').'#managed-apps'
+            : route('settings.index').'#'.$section.'-settings';
 
         return redirect()
             ->to($target)
-            ->with('toast-success', ucfirst($section) . ' settings saved.');
+            ->with('toast-success', ucfirst($section).' settings saved.');
     }
 
     private function updatePayments(Request $request): void
@@ -264,21 +264,19 @@ class SettingsController extends Controller
             'authorized_representative_name' => ['nullable', 'string', 'max:160'],
             'authorized_representative_title' => ['nullable', 'string', 'max:120'],
             'liability_cap_amount' => ['nullable', 'string', 'max:120'],
-            'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,svg', 'max:4096'],
+            'logo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240'],
         ]);
 
         $logoPath = null;
         if ($request->hasFile('logo')) {
-            $file = $request->file('logo');
-            $directory = public_path('images/company');
-            if (! File::exists($directory)) {
-                File::makeDirectory($directory, 0755, true);
+            $oldLogoPath = app(CompanyProfile::class)->data()['logo_path'] ?? null;
+
+            if (is_string($oldLogoPath) && $oldLogoPath !== '' && ! Str::startsWith($oldLogoPath, ['http://', 'https://', '/', 'images/logo-'])) {
+                app(StorageService::class)->deleteImage($oldLogoPath);
             }
 
-            $extension = strtolower((string) $file->getClientOriginalExtension());
-            $filename = 'company-logo.' . ($extension ?: 'png');
-            $file->move($directory, $filename);
-            $logoPath = 'images/company/' . $filename;
+            $logoPath = app(StorageService::class)
+                ->storeUploadedFile($request->file('logo'), 'images/company')['key'];
         }
 
         AppSetting::setMany('company', [
@@ -382,7 +380,7 @@ class SettingsController extends Controller
                     ->contains(fn ($key) => ($settings['payments'][$key] ?? '0') === '1')
                     ? 'Manual payment methods active'
                     : 'No payment method active',
-                'url' => route('settings.index') . '#payments-settings',
+                'url' => route('settings.index').'#payments-settings',
             ],
             [
                 'name' => 'Email Delivery',
@@ -396,7 +394,7 @@ class SettingsController extends Controller
                 'provider' => 'brevo',
                 'modal_id' => 'configureBrevoApp',
                 'meta' => ($settings['email']['from_address'] ?? '') ?: 'No sender configured',
-                'url' => route('settings.index') . '#email-settings',
+                'url' => route('settings.index').'#email-settings',
             ],
             [
                 'name' => 'Resend',
@@ -410,7 +408,7 @@ class SettingsController extends Controller
                 'provider' => 'resend',
                 'modal_id' => 'configureResendApp',
                 'meta' => $hasResendCredentials ? 'API key saved' : 'API key required',
-                'url' => route('settings.index') . '#email-settings',
+                'url' => route('settings.index').'#email-settings',
             ],
             [
                 'name' => 'Custom SMTP',
@@ -424,7 +422,7 @@ class SettingsController extends Controller
                 'provider' => 'smtp',
                 'modal_id' => 'configureSmtpApp',
                 'meta' => ($settings['email']['smtp_host'] ?? '') ?: 'SMTP host required',
-                'url' => route('settings.index') . '#email-settings',
+                'url' => route('settings.index').'#email-settings',
             ],
             [
                 'name' => 'Google Analytics',
@@ -439,7 +437,7 @@ class SettingsController extends Controller
                 'section' => 'analytics',
                 'modal_id' => 'configureAnalyticsApp',
                 'meta' => ($settings['analytics']['property_id'] ?? '') ?: 'No property ID',
-                'url' => route('settings.index') . '#analytics-settings',
+                'url' => route('settings.index').'#analytics-settings',
             ],
             [
                 'name' => 'SMS Messaging',
@@ -456,7 +454,7 @@ class SettingsController extends Controller
                 'section' => 'sms',
                 'modal_id' => 'configureSmsApp',
                 'meta' => ($settings['sms']['sender_id'] ?? '') ?: 'No sender ID',
-                'url' => route('settings.index') . '#sms-settings',
+                'url' => route('settings.index').'#sms-settings',
             ],
         ];
     }

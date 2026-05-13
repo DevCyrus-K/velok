@@ -21,8 +21,8 @@ class AccountProfileRequest extends FormRequest
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($userId)],
             'phone' => ['nullable', 'string', 'max:40'],
             'job_title' => ['nullable', 'string', 'max:255'],
-            'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
-            'signature_upload' => ['nullable', 'image', 'mimes:jpg,jpeg,png', 'max:2048'],
+            'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'signature_upload' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
             'signature_data' => ['nullable', 'string'],
         ];
     }

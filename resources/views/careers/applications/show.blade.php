@@ -67,7 +67,7 @@
                 @if($application->resume_url)
                     <div class="mt-4">
                         <h6 class="text-muted mb-2">Resume</h6>
-                        <a class="btn btn-outline-primary btn-sm" href="{{ $application->resume_url }}" target="_blank" rel="noopener">
+                        <a class="btn btn-outline-primary btn-sm" href="{{ app(\App\Services\StorageService::class)->url($application->resume_url) ?? $application->resume_url }}" target="_blank" rel="noopener">
                             <i class="icon-sm me-1" data-lucide="external-link"></i>Open Resume
                         </a>
                     </div>

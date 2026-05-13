@@ -148,7 +148,7 @@
     $companyName = trim((string) ($quotation->company_name ?: ($company['name'] ?? '')));
     $companyEmail = trim((string) ($quotation->company_email ?: ($company['email'] ?? '')));
     $companyPhone = trim((string) ($quotation->company_phone ?: ($company['phone'] ?? '')));
-    $companyLogoPath = trim((string) ($company['logo_path'] ?? ''));
+    $companyLogoUrl = app(\App\Support\CompanyProfile::class)->logoUrl();
     $companyAddressLines = collect([
         $company['address_line_1'] ?? null,
         $company['address_line_2'] ?? null,
@@ -297,8 +297,8 @@
                 <div class="clearfix">
                     <div class="float-sm-end">
                         <div class="auth-logo">
-                            @if($companyLogoPath !== '')
-                                <img alt="{{ $companyName ?: 'Company' }} logo" class="me-1" height="24" src="{{ asset(ltrim($companyLogoPath, '/')) }}" />
+                            @if($companyLogoUrl !== '')
+                                <img alt="{{ $companyName ?: 'Company' }} logo" class="me-1" height="24" src="{{ $companyLogoUrl }}" />
                             @endif
                         </div>
                         @if($companyName !== '')

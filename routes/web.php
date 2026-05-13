@@ -18,6 +18,7 @@ use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\RoutingController;
 use App\Http\Controllers\ServiceAgreementController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\StorageHealthController;
 use App\Http\Controllers\TodoController;
 use App\Http\Controllers\TopbarController;
 use Illuminate\Support\Facades\Route;
@@ -57,9 +58,6 @@ Route::get('/quotes/{id}/pdf/{token}', [QuoteController::class, 'publicPdfDownlo
     ->middleware('throttle:20,1')
     ->name('quote.pdf.download');
 
-Route::middleware('auth')->get('/kwikshift-gallery-image', [RoutingController::class, 'galleryAsset'])
-    ->name('gallery.asset');
-
 Route::middleware('auth')->get('/topbar/data', [TopbarController::class, 'getTopbarData'])
     ->name('topbar.data');
 
@@ -83,6 +81,7 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
     Route::delete('account/two-factor', [AccountController::class, 'disableTwoFactor'])->name('account.two-factor.disable');
     Route::post('account/sessions/logout-others', [AccountController::class, 'logoutOtherDevices'])->name('account.sessions.logout-other-devices');
     Route::get('settings', [SettingsController::class, 'index'])->name('settings.index');
+    Route::get('admin/health/storage', [StorageHealthController::class, 'show'])->name('admin.health.storage');
     Route::get('settings/payment', [SettingsController::class, 'paymentSettings'])->name('settings.payment');
     Route::post('settings/payment', [SettingsController::class, 'updatePayment'])->name('settings.payment.update');
     Route::patch('settings/{section}', [SettingsController::class, 'update'])->name('settings.update');

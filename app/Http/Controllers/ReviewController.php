@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Review;
+use App\Services\StorageService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class ReviewController extends Controller
@@ -57,6 +59,12 @@ class ReviewController extends Controller
 
     public function destroy(Review $review): RedirectResponse
     {
+        $publicId = $review->getAttribute('image_public_id') ?: $review->getAttribute('storage_key') ?: $review->photo_path;
+
+        if (is_string($publicId) && trim($publicId) !== '' && ! Str::startsWith($publicId, ['http://', 'https://', '/'])) {
+            app(StorageService::class)->deleteImage($publicId);
+        }
+
         $review->delete();
 
         return redirect()
