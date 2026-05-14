@@ -28,7 +28,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(TopbarData $topbarData): void
     {
-        app(StorageService::class)->validateStorageConfiguration();
+        // Skip storage validation during config caching (artisan commands)
+        // These commands run during Docker build without full env config
+        if (! $this->app->runningInConsole() || $this->app['config']['app.debug']) {
+            app(StorageService::class)->validateStorageConfiguration();
+        }
+        
         $this->configureRateLimiting();
         $this->applyRuntimeSettings();
 
