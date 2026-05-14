@@ -9,6 +9,8 @@
     'closingName' => $companyName,
     'company' => $company,
 ])
+@section('content')
+@php
     $depositAmount = $quotation->depositAmount();
     $balanceDue = $quotation->balanceDue();
     $quoteDate = $quotation->quote_date?->format('d M Y') ?? now()->format('d M Y');
@@ -16,8 +18,8 @@
     $total = number_format((float) $quotation->quote_amount, 2);
 @endphp
 
-<p class="text-body" style="margin:0 0 22px 0; font-family:Arial, Helvetica, sans-serif; font-size:16px; line-height:28px; color:#666666;">
-    {!! nl2br(e($messageBody)) !!}
+<p class="text-body" style="margin:0 0 22px 0; font-family:Arial, Helvetica, sans-serif; font-size:16px; line-height:28px; color:#666666; white-space:pre-line;">
+    {{ $messageBody }}
 </p>
 
 <!-- Quotation Summary Table -->

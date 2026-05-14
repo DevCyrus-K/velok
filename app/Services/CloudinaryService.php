@@ -83,6 +83,15 @@ class CloudinaryService
     /**
      * @return array{key: string, url: string, public_id: string, filename: string, bucket: string, provider: string}
      */
+    public function uploadImage(UploadedFile $file, string $folder): array
+    {
+        // Storage hardening: expose the required Cloudinary upload contract for all image uploads.
+        return $this->uploadUploadedImage($file, $folder);
+    }
+
+    /**
+     * @return array{key: string, url: string, public_id: string, filename: string, bucket: string, provider: string}
+     */
     public function uploadUploadedImage(UploadedFile $file, string $folder): array
     {
         $mimeType = (string) ($file->getMimeType() ?: $file->getClientMimeType());
@@ -109,30 +118,31 @@ class CloudinaryService
     }
 
     /**
-     * @return array{deleted: true, publicId: string}
+     * @return bool
      */
-    public function deleteImage(?string $publicId): array
+    public function deleteImage(?string $publicId): bool
     {
         $publicId = $this->normalizePublicId($publicId);
 
         if ($publicId === null) {
-            return ['deleted' => true, 'publicId' => ''];
+            return true;
         }
 
         if (app()->environment('testing')) {
             unset(self::$fakeImages[$publicId]);
 
-            return ['deleted' => true, 'publicId' => $publicId];
+            return true;
         }
 
         try {
             $this->client()->uploadApi()->destroy($publicId, ['resource_type' => 'image']);
 
-            return ['deleted' => true, 'publicId' => $publicId];
+            return true;
         } catch (Throwable $exception) {
             Log::error('Cloudinary image delete failed', [
                 'public_id' => $publicId,
                 'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
             ]);
 
             throw new RuntimeException("Could not delete image {$publicId} from Cloudinary.", 0, $exception);
@@ -270,6 +280,7 @@ class CloudinaryService
                 'filename' => $filename,
                 'folder' => $profile['folder'],
                 'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
             ]);
 
             throw new RuntimeException("Could not upload {$filename} to Cloudinary.", 0, $exception);

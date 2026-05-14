@@ -5,10 +5,13 @@ namespace App\Models;
 use App\Support\NotificationLogger;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class JobApplication extends Model
 {
+    use SoftDeletes;
+
     public const STATUS_NEW = 'new';
 
     public const STATUS_REVIEWING = 'reviewing';
@@ -45,7 +48,10 @@ class JobApplication extends Model
         'applied_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
+
+    protected $hidden = [];
 
     protected static function booted(): void
     {

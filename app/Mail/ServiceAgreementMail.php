@@ -5,6 +5,8 @@ namespace App\Mail;
 use App\Models\EmailLog;
 use App\Models\Quotation;
 use App\Services\StorageService;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Attachment;
@@ -13,8 +15,9 @@ use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 use RuntimeException;
 
-class ServiceAgreementMail extends Mailable
+class ServiceAgreementMail extends Mailable implements ShouldQueue
 {
+    use Queueable;
     use SerializesModels;
 
     private readonly string $messageSubject;

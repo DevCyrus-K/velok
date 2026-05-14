@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AccountController;
+use App\Http\Controllers\Admin\HealthController;
 use App\Http\Controllers\Auth\ScreenLockController;
 use App\Http\Controllers\CareerJobController;
 use App\Http\Controllers\CustomerController;
@@ -67,7 +68,7 @@ Route::middleware('auth')->post('/topbar/notifications/{notification}/read', [To
 Route::middleware('auth')->post('/topbar/notifications/read-all', [TopbarController::class, 'markAllNotificationsRead'])
     ->name('topbar.notifications.read-all');
 
-Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
+Route::group(['prefix' => '/', 'middleware' => ['auth', 'verified', 'admin']], function () {
     Route::get('lock-screen', [ScreenLockController::class, 'show'])->name('lock-screen');
     Route::post('lock-screen', [ScreenLockController::class, 'lock'])->name('lock-screen.lock');
     Route::post('lock-screen/unlock', [ScreenLockController::class, 'unlock'])->name('lock-screen.unlock');
@@ -81,6 +82,7 @@ Route::group(['prefix' => '/', 'middleware' => 'auth'], function () {
     Route::delete('account/two-factor', [AccountController::class, 'disableTwoFactor'])->name('account.two-factor.disable');
     Route::post('account/sessions/logout-others', [AccountController::class, 'logoutOtherDevices'])->name('account.sessions.logout-other-devices');
     Route::get('settings', [SettingsController::class, 'index'])->name('settings.index');
+    Route::get('admin/health', HealthController::class)->name('admin.health');
     Route::get('admin/health/storage', [StorageHealthController::class, 'show'])->name('admin.health.storage');
     Route::get('settings/payment', [SettingsController::class, 'paymentSettings'])->name('settings.payment');
     Route::post('settings/payment', [SettingsController::class, 'updatePayment'])->name('settings.payment.update');

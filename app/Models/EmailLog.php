@@ -36,6 +36,10 @@ class EmailLog extends Model
         'attempts' => 'integer',
     ];
 
+    protected $hidden = [
+        'tracking_token',
+    ];
+
     protected static function booted(): void
     {
         static::creating(function (EmailLog $emailLog): void {

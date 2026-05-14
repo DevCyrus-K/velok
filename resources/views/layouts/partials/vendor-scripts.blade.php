@@ -1,4 +1,4 @@
-@vite(['resources/js/app.js', 'resources/js/layout.js'])
+@include('layouts.partials.vite-assets', ['assets' => ['resources/js/app.js', 'resources/js/layout.js']])
 
 <script>
     window.showToast = window.showToast || function (message, type = 'success') {

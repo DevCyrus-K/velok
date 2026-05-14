@@ -11,7 +11,7 @@
 
 
 @if(filled($messageBody ?? null))
-{!! nl2br(e($messageBody)) !!}
+{{ $messageBody }}
 @else
 Your invoice from {{ $companyName }} is ready.
 @endif

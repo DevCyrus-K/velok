@@ -30,7 +30,11 @@ class TodoTask extends Model
     protected $casts = [
         'due_date' => 'date',
         'completed_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
+
+    protected $hidden = [];
 
     public function user(): BelongsTo
     {

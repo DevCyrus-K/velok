@@ -18,6 +18,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request as HttpRequest;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Throwable;
 
@@ -258,7 +259,11 @@ class QuoteController extends Controller
         try {
             $result = $quotationEmail->send($quote->quotation, $validated, $request->user());
         } catch (Throwable $exception) {
-            report($exception);
+            // Production hardening: external mail/storage failures are logged with full context.
+            Log::error('Quotation email failed', [
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
 
             if ($request->expectsJson()) {
                 return response()->json([
@@ -517,7 +522,7 @@ class QuoteController extends Controller
         $mime = mime_content_type($fullPath) ?: 'image/png';
 
         if (! $this->canEmbedImageMime($mime)) {
-            $fallbackPath = base_path('Invoma-template/assets/img/logo.svg');
+            $fallbackPath = public_path('images/logo-fallback.svg');
 
             if (is_file($fallbackPath)) {
                 return [

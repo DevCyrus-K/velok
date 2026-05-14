@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Mail\OtpMail;
 use App\Models\User;
 use App\Services\MailConfigService;
 use Illuminate\Support\Facades\Cache;
@@ -22,26 +23,10 @@ class EmailVerificationCode
             'type' => $type,
         ], now()->addMinutes(self::TTL_MINUTES));
 
-        $subject = match ($type) {
-            'password_reset' => 'Your Velok Password Reset Code',
-            default => 'Your Velok Verification Code',
-        };
-
-        $message = match ($type) {
-            'password_reset' => "Your Velok password reset code is {$code}. It expires in " . self::TTL_MINUTES . ' minutes.',
-            default => "Your Velok verification code is {$code}. It expires in " . self::TTL_MINUTES . ' minutes.',
-        };
-
         MailConfigService::apply();
 
-        $sender = app(MailSender::class)->sender(MailSender::NOREPLY);
-
-        Mail::raw($message, function ($mailMessage) use ($user, $subject, $sender): void {
-            $mailMessage
-                ->from($sender['address'], $sender['name'])
-                ->to($user->email)
-                ->subject($subject);
-        });
+        // Queue hardening: verification and reset codes now use the queued OTP mailable.
+        Mail::to($user->email)->send(new OtpMail($code, $type, self::TTL_MINUTES));
     }
 
     public function verify(User $user, string $code, string $type = 'email_verification'): bool

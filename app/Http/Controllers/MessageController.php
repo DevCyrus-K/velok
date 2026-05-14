@@ -112,7 +112,7 @@ class MessageController extends Controller
             app(NotificationLogger::class)->messageSent($message, $recipient, $subject);
             $this->recordEmailDelivery(
                 'message',
-                EmailLog::STATUS_SENT,
+                EmailLog::STATUS_QUEUED,
                 $recipient,
                 $subject,
                 'Message email sent successfully.'
@@ -174,7 +174,7 @@ class MessageController extends Controller
             app(NotificationLogger::class)->messageSent($message, $recipient, $subject);
             $this->recordEmailDelivery(
                 'message_reply',
-                EmailLog::STATUS_SENT,
+                EmailLog::STATUS_QUEUED,
                 $recipient,
                 $subject,
                 'Message reply email sent successfully.'
@@ -252,7 +252,7 @@ class MessageController extends Controller
             app(NotificationLogger::class)->messageSent($message, $recipient, $subject);
             $this->recordEmailDelivery(
                 $isReply ? 'message_reply' : 'message',
-                EmailLog::STATUS_SENT,
+                EmailLog::STATUS_QUEUED,
                 $recipient,
                 $subject,
                 $isReply ? 'Message reply email resent successfully.' : 'Message email resent successfully.'
@@ -277,7 +277,7 @@ class MessageController extends Controller
 
             return response()->json([
                 'success' => false,
-                'error' => $exception->getMessage(),
+                'error' => 'Email could not be sent. Please try again.',
                 'delivery' => $this->deliveryPayload($emailLog->fresh()),
             ], 500);
         }
@@ -352,8 +352,9 @@ class MessageController extends Controller
     private function markEmailLogSent(EmailLog $emailLog): void
     {
         $emailLog->update([
-            'status' => EmailLog::STATUS_SENT,
-            'sent_at' => now(),
+            // Queue hardening: message mail is queued and no longer blocks on SMTP.
+            'status' => EmailLog::STATUS_QUEUED,
+            'sent_at' => null,
             'failed_reason' => null,
         ]);
     }
@@ -388,18 +389,19 @@ class MessageController extends Controller
         Log::error('Message sending failed', [
             'error' => $errorMessage,
             'exception' => class_basename($exception),
+            'trace' => $exception->getTraceAsString(),
         ]);
 
         if ($request->expectsJson()) {
             return response()->json([
                 'success' => false,
-                'error' => $errorMessage,
+                'error' => 'Email could not be sent. Please try again.',
             ], 500)->header('Content-Type', 'application/json');
         }
 
         return back()
             ->withInput()
-            ->with('toast-error', 'Failed to send: '.$errorMessage);
+            ->with('toast-error', 'Email could not be sent. Please try again.');
     }
 
     private function cleanSubject(string $subject): string
@@ -535,7 +537,10 @@ class MessageController extends Controller
         try {
             DB::table('email_delivery_logs')->insert($data);
         } catch (Throwable $logException) {
-            report($logException);
+            Log::error('Email delivery log write failed', [
+                'error' => $logException->getMessage(),
+                'trace' => $logException->getTraceAsString(),
+            ]);
         }
     }
 
@@ -545,6 +550,7 @@ class MessageController extends Controller
             'message_id' => $message->getKey(),
             'recipient_email' => $message->email,
             'error' => $exception->getMessage(),
+            'trace' => $exception->getTraceAsString(),
         ]);
     }
 }

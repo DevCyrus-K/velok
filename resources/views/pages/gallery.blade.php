@@ -1,7 +1,7 @@
 @extends('layouts.vertical', ['title' => 'Gallery'])
 
 @section('css')
-     @vite(['node_modules/glightbox/dist/css/glightbox.min.css'])
+     @include('layouts.partials.vite-assets', ['assets' => ['node_modules/glightbox/dist/css/glightbox.min.css']])
 @endsection
 
 @section('content')
@@ -77,5 +77,5 @@
 @endsection
 
 @section('scripts')
-     @vite(['resources/js/pages/gallery.js'])
+     @include('layouts.partials.vite-assets', ['assets' => ['resources/js/pages/gallery.js']])
 @endsection

@@ -28,7 +28,6 @@
 @import "components/breadcrumb";
 @import "components/buttons";
 @import "components/card";
-@import "components/docs";
 @import "components/dropdown";
 @import "components/forms";
 @import "components/helper";
@@ -51,23 +50,8 @@
 
 // Plugin
 @import "plugins/simplebar";
-@import "plugins/calendar";
-@import "plugins/choice";
-@import "plugins/dropzone";
-@import "plugins/editors";
-@import "plugins/gridjs";
 @import "plugins/apexcharts";
-@import "plugins/google-map";
-@import "plugins/vector-map";
-@import "plugins/flatpicker";
-@import "plugins/swiper";
-@import "plugins/sweetalert";
-@import "plugins/prismjs";
-@import "plugins/range-slider";
 @import "plugins/toastify";
 
 // Pages
-@import "pages/icon-demo";
 @import "pages/authentication";
-@import "pages/pricing";
-@import "pages/timeline";

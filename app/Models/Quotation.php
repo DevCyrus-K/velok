@@ -4,9 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Quotation extends Model
 {
+    use SoftDeletes;
+
     public const STATUS_DRAFT = 'draft';
 
     public const STATUS_SENT = 'sent';
@@ -87,6 +90,9 @@ class Quotation extends Model
     protected $casts = [
         'quote_date' => 'date',
         'quote_valid_until' => 'date',
+        'deposit_percentage' => 'decimal:2',
+        'deposit_amount' => 'decimal:2',
+        'quote_amount' => 'decimal:2',
         'sent_at' => 'datetime',
         'approval_token_expires_at' => 'datetime',
         'deposit_paid' => 'boolean',
@@ -99,6 +105,12 @@ class Quotation extends Model
         'services_included' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
+    ];
+
+    protected $hidden = [
+        'approval_token',
+        'pdf_token',
     ];
 
     public function quoteRequest()

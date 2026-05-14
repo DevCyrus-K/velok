@@ -47,6 +47,7 @@ class User extends Authenticatable
         'bio',
         'password',
         'two_factor_enabled',
+        'is_admin',
     ];
 
     /**
@@ -71,6 +72,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_enabled' => 'boolean',
+            'is_admin' => 'boolean',
             'otp_expires_at' => 'datetime',
             'otp_attempts' => 'integer',
             'last_login_at' => 'datetime',

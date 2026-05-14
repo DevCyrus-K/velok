@@ -9,6 +9,7 @@ use App\Models\QuoteRequest;
 use App\Models\User;
 use Illuminate\Mail\SentMessage;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -171,8 +172,9 @@ class QuotationEmail
 
         $emailLog->increment('attempts');
         $emailLog->update([
-            'status' => EmailLog::STATUS_SENT,
-            'sent_at' => now(),
+            // Queue hardening: queued mail is accepted for delivery without blocking the request.
+            'status' => EmailLog::STATUS_QUEUED,
+            'sent_at' => null,
             'failed_reason' => null,
         ]);
     }
@@ -191,7 +193,10 @@ class QuotationEmail
                 'tracking_token' => (string) Str::uuid(),
             ]);
         } catch (Throwable $exception) {
-            report($exception);
+            Log::error('Quotation email log creation failed', [
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
 
             return null;
         }
@@ -217,7 +222,7 @@ class QuotationEmail
         }
 
         if (! $sentMessage instanceof SentMessage) {
-            throw new RuntimeException('Quotation email failed: mail transport did not confirm that the message was accepted.');
+            return 'queued-mail-job';
         }
 
         $messageId = trim((string) $sentMessage->getMessageId());

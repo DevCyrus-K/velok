@@ -4,10 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class Invoice extends Model
 {
+    use SoftDeletes;
+
     public const STATUS_PAID = 'paid';
 
     public const STATUS_UNPAID = 'unpaid';
@@ -66,11 +69,17 @@ class Invoice extends Model
         'invoice_date' => 'date',
         'due_date' => 'date',
         'move_date' => 'date',
+        'subtotal' => 'decimal:2',
+        'tax' => 'decimal:2',
+        'total_amount' => 'decimal:2',
         'sent_at' => 'datetime',
         'paid_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
+
+    protected $hidden = [];
 
     public function items()
     {

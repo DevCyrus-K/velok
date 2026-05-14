@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\MailConfigService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Throwable;
@@ -67,7 +68,10 @@ class AuthSession
             app(EmailLogRecorder::class)->sent($emailLog);
         } catch (Throwable $exception) {
             app(EmailLogRecorder::class)->failed($emailLog, $exception);
-            report($exception);
+            Log::error('Login alert email failed', [
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
         }
     }
 }

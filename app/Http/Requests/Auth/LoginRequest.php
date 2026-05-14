@@ -183,6 +183,8 @@ class LoginRequest extends FormRequest
             app(EmailLogRecorder::class)->failed($emailLog, $exception);
             Log::warning('Account lock email failed: '.$exception->getMessage(), [
                 'user_id' => $user->getKey(),
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
             ]);
         }
     }

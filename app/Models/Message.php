@@ -67,6 +67,8 @@ class Message extends Model
         'deleted_at' => 'datetime',
     ];
 
+    protected $hidden = [];
+
     public function respondedByUser()
     {
         return $this->belongsTo(User::class, 'responded_by');

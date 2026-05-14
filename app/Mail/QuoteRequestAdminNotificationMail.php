@@ -7,12 +7,13 @@ use App\Models\QuoteRequest;
 use App\Support\CompanyProfile;
 use App\Support\MailSender;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class QuoteRequestAdminNotificationMail extends Mailable
+class QuoteRequestAdminNotificationMail extends Mailable implements ShouldQueue
 {
     use CreatesEmailLog;
     use Queueable;

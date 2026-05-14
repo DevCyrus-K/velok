@@ -18,6 +18,10 @@ class AppSetting extends Model
         'is_secret' => 'boolean',
     ];
 
+    protected $hidden = [
+        'value',
+    ];
+
     public static function groupValues(string $group, array $defaults = []): array
     {
         $values = $defaults;

@@ -47,6 +47,8 @@ class Review extends Model
         'updated_at' => 'datetime',
     ];
 
+    protected $hidden = [];
+
     public function reviewedByUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');

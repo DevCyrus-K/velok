@@ -1,7 +1,7 @@
 @extends('layouts.vertical', ['title' => 'Gallery'])
 
 @section('css')
-    @vite(['node_modules/glightbox/dist/css/glightbox.min.css'])
+    @include('layouts.partials.vite-assets', ['assets' => ['node_modules/glightbox/dist/css/glightbox.min.css']])
     <style>
         .gallery-toolbar > * { flex: 0 1 auto; }
         .gallery-search-bar { min-width: 220px; }
@@ -181,7 +181,7 @@
 @endsection
 
 @section('scripts')
-    @vite(['resources/js/pages/gallery.js'])
+    @include('layouts.partials.vite-assets', ['assets' => ['resources/js/pages/gallery.js']])
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             const searchInput = document.getElementById('gallery-search');

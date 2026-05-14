@@ -29,6 +29,8 @@ class ActivityNotification extends Model
         'read_at' => 'datetime',
     ];
 
+    protected $hidden = [];
+
     protected static function booted(): void
     {
         $flushNotifications = fn () => app(TopbarData::class)->forgetNotifications();

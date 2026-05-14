@@ -15,8 +15,8 @@
     <p class="text-heading" style="margin:0 0 18px 0; font-family:Arial, Helvetica, sans-serif; font-size:17px; line-height:28px; color:#04223e;">
         Dear {{ $quote->full_name }},
     </p>
-    <div style="font-size:16px; line-height:28px; color:#5c6b7a; margin-bottom:22px; font-family:Arial, Helvetica, sans-serif;">
-        {!! nl2br(e($messageBody)) !!}
+    <div style="font-size:16px; line-height:28px; color:#5c6b7a; margin-bottom:22px; font-family:Arial, Helvetica, sans-serif; white-space:pre-line;">
+        {{ $messageBody }}
     </div>
 
     <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="width:100%; border-collapse:collapse; margin:0 0 24px 0; border:1px solid #e6edf5;">

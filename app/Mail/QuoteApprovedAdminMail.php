@@ -5,13 +5,16 @@ namespace App\Mail;
 use App\Models\Quotation;
 use App\Support\CompanyProfile;
 use App\Support\MailSender;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class QuoteApprovedAdminMail extends Mailable
+class QuoteApprovedAdminMail extends Mailable implements ShouldQueue
 {
+    use Queueable;
     use SerializesModels;
 
     public function __construct(public Quotation $quotation, private readonly ?string $trackingToken = null) {}

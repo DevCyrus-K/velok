@@ -57,6 +57,8 @@ class TwoFactorOtp
             Log::error('OTP email failed: '.$exception->getMessage(), [
                 'user_id' => $user->getKey(),
                 'type' => 'two_factor',
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
             ]);
 
             throw $exception;
@@ -166,7 +168,10 @@ class TwoFactorOtp
                 'sent_at' => null,
             ]);
         } catch (Throwable $exception) {
-            report($exception);
+            Log::error('OTP email log creation failed', [
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
 
             return null;
         }

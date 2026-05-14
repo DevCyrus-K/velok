@@ -27,6 +27,8 @@ class Faq extends Model
         'updated_at' => 'datetime',
     ];
 
+    protected $hidden = [];
+
     public function reference(): string
     {
         return '#FAQ-' . str_pad((string) $this->id, 4, '0', STR_PAD_LEFT);

@@ -5,12 +5,13 @@ namespace App\Mail;
 use App\Models\User;
 use App\Support\MailSender;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class LoginAlertMail extends Mailable
+class LoginAlertMail extends Mailable implements ShouldQueue
 {
     use Queueable;
     use SerializesModels;

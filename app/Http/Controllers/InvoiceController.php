@@ -24,6 +24,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Mail\SentMessage;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -532,7 +533,11 @@ class InvoiceController extends Controller
             return back()->with('toast-success', 'Payment notification email sent successfully.');
         } catch (Throwable $exception) {
             $this->markEmailLogFailed($emailLog, $exception);
-            report($exception);
+            // Production hardening: payment notification failures are logged with full context.
+            Log::error('Payment notification email failed', [
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
 
             if ($request->expectsJson()) {
                 return response()->json([
@@ -847,7 +852,7 @@ class InvoiceController extends Controller
         $mime = mime_content_type($fullPath) ?: 'image/png';
 
         if (! $this->canEmbedImageMime($mime)) {
-            $fallbackPath = base_path('Invoma-template/assets/img/logo.svg');
+            $fallbackPath = public_path('images/logo-fallback.svg');
 
             if (is_file($fallbackPath)) {
                 return [
@@ -1085,7 +1090,10 @@ class InvoiceController extends Controller
         } catch (Throwable $exception) {
             $invoice->update(['status' => Invoice::STATUS_FAILED]);
             $this->markEmailLogFailed($emailLog, $exception);
-            report($exception);
+            Log::error('Invoice email failed', [
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
 
             return [
                 'sent' => false,
@@ -1137,7 +1145,10 @@ class InvoiceController extends Controller
                 'tracking_token' => (string) Str::uuid(),
             ]);
         } catch (Throwable $exception) {
-            report($exception);
+            Log::error('Invoice email log creation failed', [
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
 
             return null;
         }
@@ -1151,8 +1162,9 @@ class InvoiceController extends Controller
 
         $emailLog->increment('attempts');
         $emailLog->update([
-            'status' => EmailLog::STATUS_SENT,
-            'sent_at' => now(),
+            // Queue hardening: queued mail is recorded without waiting for SMTP delivery.
+            'status' => EmailLog::STATUS_QUEUED,
+            'sent_at' => null,
             'failed_reason' => null,
         ]);
     }
@@ -1194,7 +1206,7 @@ class InvoiceController extends Controller
         }
 
         if (! $sentMessage instanceof SentMessage) {
-            throw new RuntimeException("{$documentLabel} email failed: mail transport did not confirm that the message was accepted.");
+            return 'queued-mail-job';
         }
 
         $messageId = trim((string) $sentMessage->getMessageId());

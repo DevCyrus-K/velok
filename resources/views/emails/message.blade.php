@@ -16,8 +16,8 @@
                         </td>
                     </tr>
                     <tr>
-                        <td style="padding:28px;font-size:15px;line-height:1.65;color:#1f2937;">
-                            {!! nl2br(e($body)) !!}
+                        <td style="padding:28px;font-size:15px;line-height:1.65;color:#1f2937;white-space:pre-line;">
+                            {{ $body }}
                         </td>
                     </tr>
                 </table>

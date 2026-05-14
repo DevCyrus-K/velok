@@ -3,6 +3,8 @@
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -23,13 +25,32 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->alias([
+            'admin' => \App\Http\Middleware\EnsureAdmin::class,
             'otp.session' => \App\Http\Middleware\EnsureOtpSession::class,
             'block.suspicious.login.ip' => \App\Http\Middleware\BlockSuspiciousLoginIp::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        $exceptions->render(function (Throwable $e) {
-            if ($e instanceof \Symfony\Component\HttpKernel\Exception\HttpException) {
+        $exceptions->report(function (Throwable $e): void {
+            // Production hardening: every unhandled exception is logged with full context.
+            Log::error('Unhandled application exception', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        });
+
+        $exceptions->render(function (Throwable $e, $request) {
+            if ($request->expectsJson() || $request->is('api/*')) {
+                $statusCode = $e instanceof HttpException ? $e->getStatusCode() : 500;
+
+                return response()->json([
+                    'message' => $statusCode >= 500
+                        ? 'Something went wrong. Please try again.'
+                        : ($e->getMessage() ?: 'Request could not be completed.'),
+                ], $statusCode);
+            }
+
+            if ($e instanceof HttpException) {
                 $statusCode = $e->getStatusCode();
                 
                 if ($statusCode === 404) {

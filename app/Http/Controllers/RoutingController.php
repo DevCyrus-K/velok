@@ -85,11 +85,7 @@ class RoutingController extends BaseController
             return $this->customersPage();
         }
 
-        try {
-            return view($first);
-        } catch (\InvalidArgumentException $e) {
-            return response()->view('errors.404', ['exception' => $e], 404);
-        }
+        return $this->notFound();
     }
 
     /**
@@ -152,11 +148,7 @@ class RoutingController extends BaseController
             return $this->invoiceDetailsPage();
         }
 
-        try {
-            return view($first.'.'.$second);
-        } catch (\InvalidArgumentException $e) {
-            return response()->view('errors.404', ['exception' => $e], 404);
-        }
+        return $this->notFound();
     }
 
     /**
@@ -168,11 +160,12 @@ class RoutingController extends BaseController
             return $this->invoiceDetailsPage($third);
         }
 
-        try {
-            return view($first.'.'.$second.'.'.$third);
-        } catch (\InvalidArgumentException $e) {
-            return response()->view('errors.404', ['exception' => $e], 404);
-        }
+        return $this->notFound();
+    }
+
+    private function notFound(): Response
+    {
+        return response()->view('errors.404', [], 404);
     }
 
     private function dashboardPage(): View

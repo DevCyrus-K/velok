@@ -42,6 +42,8 @@ class GalleryItem extends Model
         'updated_at' => 'datetime',
     ];
 
+    protected $hidden = [];
+
     public function scopePublished(Builder $query): Builder
     {
         return $query->where('status', 'published');

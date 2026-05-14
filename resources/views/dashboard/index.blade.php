@@ -515,5 +515,5 @@
     ];
 @endphp
 <script id="dashboard-chart-data" type="application/json">@json($dashboardChartData)</script>
-@vite(['resources/js/pages/dashboard.js'])
+@include('layouts.partials.vite-assets', ['assets' => ['resources/js/pages/dashboard.js']])
 @endsection

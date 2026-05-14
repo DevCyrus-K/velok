@@ -14,6 +14,7 @@ use App\Support\NotificationLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -119,7 +120,11 @@ class QuoteApprovalController extends Controller
         try {
             $serviceAgreements->generateAndSendForApprovedQuotation($quotation);
         } catch (Throwable $exception) {
-            report($exception);
+            // Production hardening: client approval continues while storage/mail failures are logged.
+            Log::error('Service agreement generation failed after client approval', [
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
         }
 
         $adminEmail = $this->adminEmail();
@@ -180,7 +185,10 @@ class QuoteApprovalController extends Controller
             $this->markEmailLogSent($emailLog);
         } catch (Throwable $exception) {
             $this->markEmailLogFailed($emailLog, $exception);
-            report($exception);
+            Log::error('Quote approval notification failed', [
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
         }
     }
 
@@ -198,7 +206,10 @@ class QuoteApprovalController extends Controller
                 'tracking_token' => (string) Str::uuid(),
             ]);
         } catch (Throwable $exception) {
-            report($exception);
+            Log::error('Quote approval email log creation failed', [
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
 
             return null;
         }
@@ -212,8 +223,8 @@ class QuoteApprovalController extends Controller
 
         $emailLog->increment('attempts');
         $emailLog->update([
-            'status' => EmailLog::STATUS_SENT,
-            'sent_at' => now(),
+            'status' => EmailLog::STATUS_QUEUED,
+            'sent_at' => null,
             'failed_reason' => null,
         ]);
     }

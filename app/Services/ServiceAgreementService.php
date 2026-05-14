@@ -183,6 +183,7 @@ class ServiceAgreementService
                     'recipient' => $recipient,
                     'attempt' => $attempt,
                     'error' => $exception->getMessage(),
+                    'trace' => $exception->getTraceAsString(),
                 ]);
 
                 if ($attempt === 1) {
@@ -461,7 +462,10 @@ class ServiceAgreementService
                 'tracking_token' => (string) Str::uuid(),
             ]);
         } catch (Throwable $exception) {
-            report($exception);
+            Log::error('Service agreement email log creation failed', [
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
 
             return null;
         }
@@ -470,8 +474,9 @@ class ServiceAgreementService
     private function markEmailLogSent(?EmailLog $emailLog, int $attempt): void
     {
         $emailLog?->update([
-            'status' => EmailLog::STATUS_SENT,
-            'sent_at' => now(),
+            // Queue hardening: service agreement mail is queued instead of sent in-request.
+            'status' => EmailLog::STATUS_QUEUED,
+            'sent_at' => null,
             'failed_reason' => null,
             'attempts' => $attempt,
         ]);
@@ -510,7 +515,7 @@ class ServiceAgreementService
         }
 
         if (! $sentMessage instanceof SentMessage) {
-            throw new RuntimeException('Service Agreement email failed: mail transport did not confirm that the message was accepted.');
+            return 'queued-mail-job';
         }
 
         $messageId = trim((string) $sentMessage->getMessageId());

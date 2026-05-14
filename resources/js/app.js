@@ -4,10 +4,6 @@
 * Module/App: Main Js
 */
 
-import $ from 'jquery'
-
-window.jQuery = window.$ = $
-
 import bootstrap from 'bootstrap/dist/js/bootstrap.min.js'
 window.bootstrap = bootstrap;
 
@@ -18,8 +14,6 @@ import 'simplebar'
 import 'iconify-icon'
 import { createIcons, icons } from "lucide";
 
-import Inputmask from 'inputmask';
-import Choices from 'choices.js';
 import Toastify from 'toastify-js';
 import './location-autocomplete';
 
@@ -158,126 +152,6 @@ class FormValidation {
   init() {
     this.initFormValidation();
   }
-}
-
-//  Form Advanced
-class FormAdvanced {
-
-  initMask() {
-    document.querySelectorAll('[data-toggle="input-mask"]').forEach(e => {
-      const maskFormat = e.getAttribute('data-mask-format').toString().replaceAll('0', '9');
-      e.setAttribute("data-mask-format", maskFormat);
-      const im = new Inputmask(maskFormat);
-      im.mask(e);
-    });
-  }
-
-  // Choices Select plugin
-  initFormChoices() {
-    var choicesExamples = document.querySelectorAll("[data-choices]");
-    choicesExamples.forEach(function (item) {
-      var choiceData = {};
-      var isChoicesVal = item.attributes;
-
-      if (isChoicesVal["data-choices-groups"]) {
-        choiceData.placeholderValue = "This is a placeholder set in the config";
-      }
-      if (isChoicesVal["data-choices-search-false"]) {
-        choiceData.searchEnabled = false;
-      }
-      if (isChoicesVal["data-choices-search-true"]) {
-        choiceData.searchEnabled = true;
-      }
-      if (isChoicesVal["data-choices-removeItem"]) {
-        choiceData.removeItemButton = true;
-      }
-      if (isChoicesVal["data-choices-sorting-false"]) {
-        choiceData.shouldSort = false;
-      }
-      if (isChoicesVal["data-choices-sorting-true"]) {
-        choiceData.shouldSort = true;
-      }
-      if (isChoicesVal["data-choices-multiple-remove"]) {
-        choiceData.removeItemButton = true;
-      }
-
-      // **FIXED:** Correctly set maxItemCount as a number
-      if (isChoicesVal["data-choices-limit"]) {
-        choiceData.maxItemCount = parseInt(isChoicesVal["data-choices-limit"].value);
-      }
-
-      // **FIXED:** Correctly set editItems as a boolean
-      if (isChoicesVal["data-choices-editItem-true"]) {
-        choiceData.editItems = true;
-      }
-      if (isChoicesVal["data-choices-editItem-false"]) {
-        choiceData.editItems = false;
-      }
-
-      if (isChoicesVal["data-choices-text-unique-true"]) {
-        choiceData.duplicateItemsAllowed = false;
-        choiceData.paste = false;
-      }
-      if (isChoicesVal["data-choices-text-disabled-true"]) {
-        choiceData.addItems = false;
-      }
-
-      const choicesInstance = new Choices(item, choiceData);
-
-      // **FIXED:** Conditionally disable the instance after it's created
-      if (isChoicesVal["data-choices-text-disabled-true"]) {
-        choicesInstance.disable();
-      }
-    });
-  }
-
-  init() {
-    this.initMask();
-    this.initFormChoices();
-  }
-
-}
-
-// Dragula (Draggable Components)
-class Dragula {
-
-  initDragula() {
-
-    document.querySelectorAll("[data-plugin=dragula]")
-
-      .forEach(function (element) {
-
-        const containersIds = JSON.parse(element.getAttribute('data-containers'));
-        let containers = [];
-        if (containersIds) {
-          for (let i = 0; i < containersIds.length; i++) {
-            containers.push(document.querySelectorAll("#" + containersIds[i])[0]);
-          }
-        } else {
-          containers = [element];
-        }
-
-        // if handle provided
-        const handleClass = element.getAttribute('data-handleclass');
-
-        // init dragula
-        if (handleClass) {
-          dragula(containers, {
-            moves: function (el, container, handle) {
-              return handle.classList.contains(handleClass);
-            }
-          });
-        } else {
-          dragula(containers);
-        }
-
-      });
-  }
-
-  init() {
-    this.initDragula();
-  }
-
 }
 
 // Toast Notification
@@ -986,8 +860,6 @@ class ConfirmationModal {
 document.addEventListener('DOMContentLoaded', function (e) {
   new Components().init();
   new FormValidation().init();
-  new FormAdvanced().init();
-  new Dragula().init();
   new ToastNotification().init();
   new AsyncActionFeedback().init();
   new ConfirmationModal().init();

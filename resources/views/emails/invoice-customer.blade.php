@@ -17,8 +17,8 @@
     $companyEmail = trim((string) ($company['email'] ?? ''));
 @endphp
 
-<p class="text-body" style="margin:0 0 22px 0; font-family:Arial, Helvetica, sans-serif; font-size:16px; line-height:28px; color:#666666;">
-    {!! nl2br(e($messageBody ?? 'Please find your invoice details below. Please review and process payment at your earliest convenience.')) !!}
+<p class="text-body" style="margin:0 0 22px 0; font-family:Arial, Helvetica, sans-serif; font-size:16px; line-height:28px; color:#666666; white-space:pre-line;">
+    {{ $messageBody ?? 'Please find your invoice details below. Please review and process payment at your earliest convenience.' }}
 </p>
 
 <!-- Invoice Summary Table -->
@@ -67,7 +67,7 @@
     @foreach($paymentMethods as $method)
     <p class="text-body" style="margin:0 0 12px 0; font-family:Arial, Helvetica, sans-serif; font-size:14px; line-height:24px; color:#666666;">
         <strong>{{ $method['label'] ?? 'Payment Method' }}:</strong><br>
-        {!! nl2br(e($method['details'] ?? '')) !!}
+        <span style="white-space:pre-line;">{{ $method['details'] ?? '' }}</span>
     </p>
     @endforeach
 @else

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -16,6 +17,8 @@ class BackblazeB2Service
         'B2_BUCKET_ID',
         'B2_BUCKET_NAME',
     ];
+
+    private const AUTH_CACHE_KEY = 'backblaze_b2.authorization';
 
     private ?array $authorization = null;
 
@@ -54,7 +57,7 @@ class BackblazeB2Service
     /**
      * @return array<string, mixed>
      */
-    public function authorizeB2(): array
+    public function authorizeAccount(): array
     {
         $this->validateConfiguration();
 
@@ -62,37 +65,70 @@ class BackblazeB2Service
             return $this->authorization;
         }
 
-        $response = Http::withBasicAuth(
-            (string) config('services.backblaze_b2.application_key_id'),
-            (string) config('services.backblaze_b2.application_key')
-        )
-            ->timeout(20)
-            ->get('https://api.backblazeb2.com/b2api/v3/b2_authorize_account');
+        // Storage hardening: cache the B2 account token for 23 hours so requests do not re-authorize.
+        return $this->authorization = Cache::remember(self::AUTH_CACHE_KEY, now()->addHours(23), function (): array {
+            try {
+                $response = Http::withBasicAuth(
+                    (string) config('services.backblaze_b2.application_key_id'),
+                    (string) config('services.backblaze_b2.application_key')
+                )
+                    ->timeout(20)
+                    ->post('https://api.backblazeb2.com/b2api/v3/b2_authorize_account');
 
-        if (! $response->successful()) {
-            throw new RuntimeException('Backblaze B2 authorization failed with status '.$response->status().'.');
-        }
+                if (! $response->successful()) {
+                    throw new RuntimeException('Backblaze B2 authorization failed with status '.$response->status().'.');
+                }
 
-        $data = $response->json();
-        $apiUrl = data_get($data, 'apiInfo.storageApi.apiUrl') ?: ($data['apiUrl'] ?? null);
-        $downloadUrl = data_get($data, 'apiInfo.storageApi.downloadUrl') ?: ($data['downloadUrl'] ?? null);
-        $authorizationToken = $data['authorizationToken'] ?? null;
+                $data = $response->json();
+                $apiUrl = data_get($data, 'apiInfo.storageApi.apiUrl') ?: ($data['apiUrl'] ?? null);
+                $downloadUrl = data_get($data, 'apiInfo.storageApi.downloadUrl') ?: ($data['downloadUrl'] ?? null);
+                $authorizationToken = $data['authorizationToken'] ?? null;
 
-        if (! is_string($apiUrl) || ! is_string($downloadUrl) || ! is_string($authorizationToken)) {
-            throw new RuntimeException('Backblaze B2 authorization response was missing required API URLs.');
-        }
+                if (! is_string($apiUrl) || ! is_string($downloadUrl) || ! is_string($authorizationToken)) {
+                    throw new RuntimeException('Backblaze B2 authorization response was missing required API URLs.');
+                }
 
-        return $this->authorization = [
-            'apiUrl' => rtrim($apiUrl, '/'),
-            'downloadUrl' => rtrim($downloadUrl, '/'),
-            'authorizationToken' => $authorizationToken,
-        ];
+                return [
+                    'apiUrl' => rtrim($apiUrl, '/'),
+                    'downloadUrl' => rtrim($downloadUrl, '/'),
+                    'authorizationToken' => $authorizationToken,
+                ];
+            } catch (Throwable $exception) {
+                Log::error('Backblaze B2 authorization failed', [
+                    'error' => $exception->getMessage(),
+                    'trace' => $exception->getTraceAsString(),
+                ]);
+
+                throw new RuntimeException('Backblaze B2 authorization failed.', 0, $exception);
+            }
+        });
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function authorizeB2(): array
+    {
+        return $this->authorizeAccount();
     }
 
     /**
      * @return array{key: string, fileId: string, url: string, filename: string, bucket: string}
      */
-    public function uploadPDF(string $buffer, string $filename, string $folder): array
+    public function uploadPDF(string $filePathOrBuffer, string $folderOrFilename, ?string $folder = null): array
+    {
+        // Storage hardening: two-argument calls follow the required temp-file upload contract.
+        if ($folder === null) {
+            return $this->uploadPDFLocalPath($filePathOrBuffer, $folderOrFilename);
+        }
+
+        return $this->uploadPDFBuffer($filePathOrBuffer, $folderOrFilename, $folder);
+    }
+
+    /**
+     * @return array{key: string, fileId: string, url: string, filename: string, bucket: string}
+     */
+    private function uploadPDFBuffer(string $buffer, string $filename, string $folder): array
     {
         $folder = $this->cleanFolder($folder);
         $sanitizedFilename = $this->sanitizePdfFilename($filename);
@@ -118,6 +154,7 @@ class BackblazeB2Service
                     'X-Bz-File-Name' => $this->encodeFileName($fullFileName),
                     'X-Bz-Content-Sha1' => sha1($buffer),
                     'Content-Type' => 'application/pdf',
+                    'Content-Length' => (string) strlen($buffer),
                 ])
                     ->timeout(60)
                     ->withBody($buffer, 'application/pdf')
@@ -152,6 +189,7 @@ class BackblazeB2Service
                 'filename' => $filename,
                 'folder' => $folder,
                 'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
             ]);
 
             throw new RuntimeException("Could not upload {$filename} to Backblaze B2.", 0, $exception);
@@ -159,21 +197,21 @@ class BackblazeB2Service
     }
 
     /**
-     * @return array{deleted: true, fileName: string}
+     * @return bool
      */
-    public function deletePDF(?string $fileId, ?string $fileName): array
+    public function deletePDF(?string $fileId, ?string $fileName): bool
     {
         $fileId = is_string($fileId) ? trim($fileId) : '';
         $fileName = $this->normalizeKey($fileName);
 
         if ($fileName === null) {
-            return ['deleted' => true, 'fileName' => ''];
+            return true;
         }
 
         if (app()->environment('testing')) {
             unset(self::$fakePdfs[$fileName]);
 
-            return ['deleted' => true, 'fileName' => $fileName];
+            return true;
         }
 
         if ($fileId === '') {
@@ -188,19 +226,20 @@ class BackblazeB2Service
                 ]);
             });
 
-            return ['deleted' => true, 'fileName' => $fileName];
+            return true;
         } catch (Throwable $exception) {
             Log::error('Backblaze B2 PDF delete failed', [
                 'file_id' => $fileId,
                 'file_name' => $fileName,
                 'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
             ]);
 
             throw new RuntimeException("Could not delete {$fileName} from Backblaze B2.", 0, $exception);
         }
     }
 
-    public function getPDFDownloadUrl(?string $fileName): string
+    public function getDownloadUrl(?string $fileName): string
     {
         $fileName = $this->normalizeKey($fileName);
 
@@ -220,7 +259,7 @@ class BackblazeB2Service
             ]);
 
             $token = (string) ($authData['authorizationToken'] ?? '');
-            $authorization = $this->authorizeB2();
+            $authorization = $this->authorizeAccount();
 
             if ($token === '') {
                 throw new RuntimeException('Backblaze B2 download authorization did not return a token.');
@@ -236,10 +275,23 @@ class BackblazeB2Service
         });
     }
 
+    public function getPDFDownloadUrl(?string $fileName): string
+    {
+        return $this->getDownloadUrl($fileName);
+    }
+
     /**
      * @return array{key: string, fileId: string, url: string, filename: string, bucket: string}
      */
     public function uploadPDFFromLocalPath(string $localFilePath, string $folder): array
+    {
+        return $this->uploadPDFLocalPath($localFilePath, $folder);
+    }
+
+    /**
+     * @return array{key: string, fileId: string, url: string, filename: string, bucket: string}
+     */
+    private function uploadPDFLocalPath(string $localFilePath, string $folder): array
     {
         $filename = basename($localFilePath);
 
@@ -250,16 +302,18 @@ class BackblazeB2Service
                 throw new RuntimeException("Could not read temporary PDF {$localFilePath}.");
             }
 
-            return $this->uploadPDF($buffer, $filename, $folder);
+            return $this->uploadPDFBuffer($buffer, $filename, $folder);
         } catch (Throwable $exception) {
             Log::error('Backblaze B2 local PDF upload failed', [
                 'path' => $localFilePath,
                 'folder' => $folder,
                 'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
             ]);
 
             throw $exception;
         } finally {
+            // Storage hardening: generated PDFs are temporary and removed after B2 upload attempts.
             if (is_file($localFilePath)) {
                 @unlink($localFilePath);
             }
@@ -379,7 +433,7 @@ class BackblazeB2Service
     /**
      * @return array<string, mixed>
      */
-    private function getUploadUrl(): array
+    public function getUploadUrl(): array
     {
         return $this->postJson('b2_get_upload_url', [
             'bucketId' => config('services.backblaze_b2.bucket_id'),
@@ -391,7 +445,7 @@ class BackblazeB2Service
      */
     private function postJson(string $endpoint, array $payload): array
     {
-        $authorization = $this->authorizeB2();
+        $authorization = $this->authorizeAccount();
         $response = Http::withHeaders([
             'Authorization' => (string) $authorization['authorizationToken'],
         ])
@@ -421,7 +475,8 @@ class BackblazeB2Service
             return $callback();
         } catch (BackblazeAuthorizationExpired) {
             $this->authorization = null;
-            $this->authorizeB2();
+            Cache::forget(self::AUTH_CACHE_KEY);
+            $this->authorizeAccount();
 
             return $callback();
         }

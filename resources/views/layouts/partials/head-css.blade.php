@@ -1,3 +1,3 @@
 @yield('css')
-@vite(['resources/scss/app.scss'])
-@vite(['resources/js/config.js'])
+@include('layouts.partials.vite-assets', ['assets' => ['resources/scss/app.scss']])
+@include('layouts.partials.vite-assets', ['assets' => ['resources/js/config.js']])

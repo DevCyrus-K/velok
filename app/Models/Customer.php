@@ -5,10 +5,13 @@ namespace App\Models;
 use App\Support\LeadCategory;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class Customer extends Model
 {
+    use SoftDeletes;
+
     public const STATUS_LEAD = 'lead';
     public const STATUS_ACTIVE_CLIENT = 'active_client';
     public const STATUS_COMPLETED = 'completed';
@@ -38,7 +41,10 @@ class Customer extends Model
         'last_quote_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
+
+    protected $hidden = [];
 
     public static function makeContactKey(string $email, string $phone): string
     {

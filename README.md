@@ -1,3 +1,21 @@
+# Kwikshift Movers
+
+Laravel application for Kwikshift Movers operations, quotations, invoices, service agreements, customer messages, reviews, careers, and reporting.
+
+## Production Deployment Notes
+
+- Set `APP_ENV=production` and `APP_DEBUG=false`.
+- Set `LOG_CHANNEL=daily` so logs rotate on shared hosting.
+- Set `SESSION_SECURE_COOKIE=true` after deploying behind HTTPS.
+- Keep `QUEUE_CONNECTION=database` and run `php artisan queue:work --queue=emails,default`.
+- Keep generated PDFs temporary only in `storage/app/temp`; permanent PDFs belong in Backblaze B2.
+- Images must be uploaded to Cloudinary and rendered from stored Cloudinary URLs.
+- Run `php artisan migrate --force`, then `php artisan config:cache`, `php artisan route:cache`, and `php artisan view:cache`.
+- `php artisan storage:link` is only needed for public build/static assets that intentionally use Laravel public storage. User uploads should not depend on `/storage`.
+- Admin health check is available at `GET /admin/health` behind `auth`, `verified`, and `admin` middleware.
+
+<!-- Production cleanup: project-specific deployment notes now replace relying on framework defaults. -->
+
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
 <p align="center">

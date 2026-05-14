@@ -7,6 +7,7 @@ use App\Models\QuoteRequest;
 use App\Services\ServiceAgreementService;
 use App\Services\StorageService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class ServiceAgreementController extends Controller
@@ -29,7 +30,11 @@ class ServiceAgreementController extends Controller
 
             return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($path));
         } catch (Throwable $exception) {
-            report($exception);
+            // Production hardening: agreement download failures are logged with full context.
+            Log::error('Service agreement download failed', [
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
 
             return $this->downloadErrorResponse($quote, $exception);
         }
@@ -39,6 +44,6 @@ class ServiceAgreementController extends Controller
     {
         return redirect()
             ->route('quotes.show', $quote)
-            ->with('toast-error', $exception->getMessage());
+            ->with('toast-error', 'Service Agreement PDF could not be prepared. Please try again.');
     }
 }

@@ -7,10 +7,13 @@ use App\Support\NotificationLogger;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class QuoteRequest extends Model
 {
+    use SoftDeletes;
+
     public const STATUS_NEW = 'new';
     public const STATUS_EMAILED = 'emailed';
     public const STATUS_EMAIL_FAILED = 'email_failed';
@@ -49,7 +52,10 @@ class QuoteRequest extends Model
         'move_date' => 'date',
         'approval_date' => 'date',
         'created_at' => 'datetime',
+        'deleted_at' => 'datetime',
     ];
+
+    protected $hidden = [];
 
     protected static function booted(): void
     {

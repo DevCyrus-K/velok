@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -70,7 +71,7 @@ class StorageService
         $mimeType = (string) ($file->getMimeType() ?: $file->getClientMimeType());
 
         if ($this->isImageMime($mimeType)) {
-            return $this->cloudinary->uploadUploadedImage($file, $folder);
+            return $this->cloudinary->uploadImage($file, $folder);
         }
 
         if ($this->isPdfMime($mimeType)) {
@@ -119,11 +120,10 @@ class StorageService
      */
     public function uploadGeneratedPdf(string $contents, string $filename, string $folder): array
     {
-        $tmpPath = rtrim(sys_get_temp_dir(), DIRECTORY_SEPARATOR)
-            .DIRECTORY_SEPARATOR
-            .$this->sanitizeBaseName(pathinfo($filename, PATHINFO_FILENAME))
-            .'-'.Str::uuid()
-            .'.pdf';
+        // Storage hardening: generated PDFs are staged only in storage/app/temp before B2 upload.
+        $tempDirectory = storage_path('app/temp');
+        File::ensureDirectoryExists($tempDirectory);
+        $tmpPath = $tempDirectory.DIRECTORY_SEPARATOR.$this->sanitizeBaseName(pathinfo($filename, PATHINFO_FILENAME)).'-'.Str::uuid().'.pdf';
 
         if (@file_put_contents($tmpPath, $contents) === false) {
             throw new RuntimeException("Could not write temporary PDF {$filename} before B2 upload.");
@@ -132,18 +132,12 @@ class StorageService
         return $this->uploadPDFFromLocalPath($tmpPath, $folder);
     }
 
-    /**
-     * @return array{deleted: true, publicId: string}
-     */
-    public function deleteImage(?string $publicId): array
+    public function deleteImage(?string $publicId): bool
     {
         return $this->cloudinary->deleteImage($publicId);
     }
 
-    /**
-     * @return array{deleted: true, fileName: string}
-     */
-    public function deletePDF(?string $fileId, ?string $fileName): array
+    public function deletePDF(?string $fileId, ?string $fileName): bool
     {
         return $this->b2->deletePDF($fileId, $fileName);
     }
@@ -208,10 +202,6 @@ class StorageService
                 : $this->b2->getPDFDownloadUrl($key);
         }
 
-        if (is_file(public_path($key))) {
-            return asset($key);
-        }
-
         return $this->cloudinary->url($key);
     }
 
@@ -241,10 +231,6 @@ class StorageService
             return $this->b2->contents($key);
         }
 
-        if (is_file(public_path($key))) {
-            return (string) file_get_contents(public_path($key));
-        }
-
         return $this->cloudinary->contents($key);
     }
 
@@ -264,7 +250,7 @@ class StorageService
             return $this->b2->exists($key);
         }
 
-        return is_file(public_path($key)) || $this->cloudinary->contents($key) !== null;
+        return $this->cloudinary->contents($key) !== null;
     }
 
     public function mimeType(?string $key): ?string
@@ -281,10 +267,6 @@ class StorageService
 
         if ($this->looksLikePdfKey($key)) {
             return 'application/pdf';
-        }
-
-        if (is_file(public_path($key))) {
-            return mime_content_type(public_path($key)) ?: null;
         }
 
         return $this->cloudinary->mimeType($key) ?: 'image/png';

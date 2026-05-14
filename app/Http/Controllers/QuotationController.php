@@ -20,6 +20,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Throwable;
@@ -290,7 +291,11 @@ class QuotationController extends Controller
             app(BookingFlow::class)->ensureQuotationTokens($quotation);
             $result = $quotationEmail->send($quotation, $validated, $request->user());
         } catch (Throwable $exception) {
-            report($exception);
+            // Production hardening: quotation mail failures are logged with full context.
+            Log::error('Quotation email failed', [
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
 
             if ($request->expectsJson()) {
                 return response()->json([
@@ -405,11 +410,14 @@ class QuotationController extends Controller
                 ->route('quotations.show', $quotation)
                 ->with($agreementResult['emailed'] ? 'toast-success' : 'toast-error', $message);
         } catch (Throwable $exception) {
-            report($exception);
+            Log::error('Service agreement generation failed after quotation approval', [
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
 
             return redirect()
                 ->route('quotations.show', $quotation)
-                ->with('toast-error', 'Quotation approved, but the Service Agreement could not be generated: '.$exception->getMessage());
+                ->with('toast-error', 'Quotation approved, but the Service Agreement could not be generated. Please try again.');
         }
     }
 
@@ -503,7 +511,10 @@ class QuotationController extends Controller
         try {
             $this->notifyCustomerDepositReceived($quotation);
         } catch (Throwable $exception) {
-            report($exception);
+            Log::error('Deposit received notification failed', [
+                'error' => $exception->getMessage(),
+                'trace' => $exception->getTraceAsString(),
+            ]);
         }
 
         if ($request->expectsJson()) {
@@ -654,7 +665,10 @@ class QuotationController extends Controller
                     'attach_pdf' => true,
                 ], auth()->user());
             } catch (Throwable $exception) {
-                report($exception);
+                Log::error('Quotation send action failed', [
+                    'error' => $exception->getMessage(),
+                    'trace' => $exception->getTraceAsString(),
+                ]);
 
                 return redirect()->route('quotations.show', $quotation)
                     ->with('toast-error', 'Quotation saved, but the email could not be sent.');

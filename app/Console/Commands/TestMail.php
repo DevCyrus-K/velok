@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Mail\SimpleTextMail;
 use App\Services\MailConfigService;
 use App\Support\EmailLogRecorder;
 use App\Support\MailSender;
@@ -25,12 +26,12 @@ class TestMail extends Command
             MailConfigService::apply();
             $from = app(MailSender::class)->sender(MailSender::INFO);
 
-            Mail::raw('This is a test email from '.config('app.name').'.', function ($message) use ($email, $from, $subject): void {
-                $message
-                    ->to($email)
-                    ->from($from['address'], $from['name'])
-                    ->subject($subject);
-            });
+            // Queue hardening: test mail uses a queued mailable instead of raw synchronous mail.
+            Mail::to($email)->send(new SimpleTextMail(
+                $subject,
+                'This is a test email from '.config('app.name').'.',
+                $from,
+            ));
             app(EmailLogRecorder::class)->sent($emailLog);
         } catch (Throwable $exception) {
             app(EmailLogRecorder::class)->failed($emailLog, $exception);
