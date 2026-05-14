@@ -25,10 +25,20 @@ RUN install-php-extensions \
 # Install system packages
 RUN apt-get update && apt-get install -y \
     ca-certificates \
+    curl \
+    gnupg \
     git \
     unzip \
     zip \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js (required for npm/vite asset building)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
+
+# Verify Node.js and npm installation
+RUN node --version && npm --version
 
 # Copy composer from composer image
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
