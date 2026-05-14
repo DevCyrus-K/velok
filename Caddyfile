@@ -1,0 +1,47 @@
+{
+  auto_https off
+}
+
+:80 {
+  root * /app/public
+  encode gzip
+
+  # Laravel routing
+  @notfile {
+    not file
+    not dir
+  }
+  rewrite @notfile /index.php?{query}
+
+  # PHP FastCGI
+  php_fastcgi localhost:9000
+
+  # Security headers
+  header Strict-Transport-Security "max-age=31536000; includeSubDomains" always
+  header X-Content-Type-Options "nosniff" always
+  header X-Frame-Options "SAMEORIGIN" always
+  header X-XSS-Protection "1; mode=block" always
+  header Referrer-Policy "strict-origin-when-cross-origin" always
+
+  # Disable directory listing
+  @hidden {
+    path */.*
+  }
+  respond @hidden 403
+
+  # Caching for static assets
+  @static {
+    path /build/*
+    path /images/*
+    path /fonts/*
+  }
+  header @static Cache-Control "public, max-age=31536000, immutable"
+
+  # Prevent access to sensitive files
+  @sensitive {
+    path /.env*
+    path /storage/*
+    path /bootstrap/cache/*
+  }
+  respond @sensitive 403
+}

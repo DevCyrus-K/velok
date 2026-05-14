@@ -1,0 +1,27 @@
+{
+  "php": "8.2.31",
+  "node": "22",
+  "extensions": [
+    "ctype",
+    "curl",
+    "dom",
+    "fileinfo",
+    "filter",
+    "gd",
+    "hash",
+    "mbstring",
+    "openssl",
+    "pcre",
+    "pdo",
+    "pdo_mysql",
+    "session",
+    "tokenizer",
+    "xml"
+  ],
+  "packages": [
+    "ca-certificates",
+    "git",
+    "unzip",
+    "zip"
+  ]
+}
