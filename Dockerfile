@@ -1,5 +1,5 @@
 # Use official PHP image with FrankenPHP
-FROM dunglas/frankenphp:php8.2.31-bookworm
+FROM dunglas/frankenphp:php8.3-bookworm
 
 # Set working directory
 WORKDIR /app
