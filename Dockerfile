@@ -49,11 +49,14 @@ COPY . .
 # Install PHP dependencies
 RUN composer install --optimize-autoloader --no-scripts --no-interaction
 
-# Install Node dependencies
-RUN npm ci && npm prune --omit=dev --ignore-scripts
+# Install Node dependencies (including dev for build)
+RUN npm ci
 
-# Build assets
+# Build assets (must run before pruning dev dependencies, as vite is a dev dependency)
 RUN npm run build
+
+# Prune dev dependencies after build
+RUN npm prune --omit=dev --ignore-scripts
 
 # Create required directories
 RUN mkdir -p storage/framework/{sessions,views,cache,testing} storage/logs bootstrap/cache && \
