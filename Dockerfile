@@ -1,6 +1,10 @@
 # Use official PHP image with FrankenPHP
 FROM dunglas/frankenphp:php8.3-bookworm
 
+# Build cache invalidation - triggers fresh build (2026-05-15T15:30:00Z)
+# Previous builds were using cached npm ci && npm prune command
+# Updated to: install deps → build → prune (correct order for Vite)
+
 # Set working directory
 WORKDIR /app
 
@@ -49,14 +53,17 @@ COPY . .
 # Install PHP dependencies
 RUN composer install --optimize-autoloader --no-scripts --no-interaction
 
-# Install Node dependencies (including dev for build)
-RUN npm ci
+# Install all Node dependencies first (before pruning)
+# This ensures Vite and other dev dependencies are available
+RUN npm ci --verbose
 
-# Build assets (must run before pruning dev dependencies, as vite is a dev dependency)
-RUN npm run build
+# Build frontend assets with Vite
+# Must run BEFORE npm prune, as Vite is a dev dependency
+RUN npm run build --verbose
 
-# Prune dev dependencies after build
-RUN npm prune --omit=dev --ignore-scripts
+# Remove dev dependencies to reduce image size
+# Now safe to remove since build is complete
+RUN npm prune --omit=dev --ignore-scripts --verbose
 
 # Create required directories
 RUN mkdir -p storage/framework/{sessions,views,cache,testing} storage/logs bootstrap/cache && \
