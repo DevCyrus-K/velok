@@ -30,7 +30,7 @@ class AppServiceProvider extends ServiceProvider
     {
         // Skip storage validation during config caching (artisan commands)
         // These commands run during Docker build without full env config
-        if (! $this->app->runningInConsole() || $this->app['config']['app.debug']) {
+        if (! $this->app->runningInConsole()) {
             app(StorageService::class)->validateStorageConfiguration();
         }
         
