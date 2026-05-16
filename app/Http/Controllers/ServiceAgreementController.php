@@ -28,7 +28,23 @@ class ServiceAgreementController extends Controller
                 $quotation->refresh();
             }
 
-            return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($path));
+            try {
+                return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($path));
+            } catch (\Exception $e) {
+                // Fallback: if B2 download fails, generate and serve directly
+                \Log::warning("B2 download failed for service agreement {$path}: {$e->getMessage()}");
+                
+                $pdf = $agreements->generatePdfContent($quotation, auth()->user());
+                $filename = $quotation->service_agreement_filename ?? 'service-agreement-'.now()->format('Y-m-d').'.pdf';
+                
+                return response()
+                    ->streamDownload(function () use ($pdf) {
+                        echo $pdf;
+                    }, $filename, [
+                        'Content-Type' => 'application/pdf',
+                        'Content-Disposition' => 'attachment; filename="'.$filename.'"'
+                    ]);
+            }
         } catch (Throwable $exception) {
             // Production hardening: agreement download failures are logged with full context.
             Log::error('Service agreement download failed', [

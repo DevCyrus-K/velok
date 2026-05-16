@@ -110,6 +110,25 @@ class ServiceAgreementService
         return 'service_agreement_'.$this->quoteId($quotation).'.pdf';
     }
 
+    public function generatePdfContent(Quotation $quotation, ?User $actor = null): string
+    {
+        $quotation->loadMissing('quoteRequest');
+        $this->validateApprovedQuotation($quotation);
+
+        $company = $this->companyProfileForAgreement();
+        $pdf = Pdf::loadView('agreements.service', $this->pdfData($quotation, $company))
+            ->setPaper('a4', 'portrait')
+            ->setOptions([
+                'dpi' => 150,
+                'enable_html5_parser' => true,
+                'isHtml5ParserEnabled' => true,
+                'isRemoteEnabled' => true,
+                'defaultFont' => 'Helvetica',
+            ]);
+
+        return $this->renderPdf($pdf, $company['name']);
+    }
+
     private function sendAgreementEmail(Quotation $quotation, string $path, ?User $actor = null): bool
     {
         $quotation->loadMissing('quoteRequest');
