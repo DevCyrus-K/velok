@@ -105,17 +105,23 @@ class QuotationMail extends Mailable implements ShouldQueue
                 'defaultFont' => 'Inter',
             ])
             ->output();
-        $uploaded = app(StorageService::class)->uploadGeneratedPdf($contents, $filename, 'quotes');
+        
+        try {
+            $uploaded = app(StorageService::class)->uploadGeneratedPdf($contents, $filename, 'quotes');
 
-        if (Schema::hasColumn('quotations', 'quote_pdf_storage_key')) {
-            $this->quotation->update([
-                'quote_pdf_storage_key' => $uploaded['key'],
-                'quote_pdf_storage_file_id' => $uploaded['fileId'],
-                'quote_pdf_storage_url' => $uploaded['url'],
-                'pdf_storage_key' => $uploaded['key'],
-                'pdf_storage_file_id' => $uploaded['fileId'],
-                'pdf_storage_url' => $uploaded['url'],
-            ]);
+            if (Schema::hasColumn('quotations', 'quote_pdf_storage_key')) {
+                $this->quotation->update([
+                    'quote_pdf_storage_key' => $uploaded['key'],
+                    'quote_pdf_storage_file_id' => $uploaded['fileId'],
+                    'quote_pdf_storage_url' => $uploaded['url'],
+                    'pdf_storage_key' => $uploaded['key'],
+                    'pdf_storage_file_id' => $uploaded['fileId'],
+                    'pdf_storage_url' => $uploaded['url'],
+                ]);
+            }
+        } catch (\Exception $e) {
+            // Fallback: log error but continue with email
+            \Log::warning("B2 upload failed for quotation {$this->quotation->id} in email: {$e->getMessage()}");
         }
 
         return [

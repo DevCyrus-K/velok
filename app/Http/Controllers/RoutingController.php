@@ -229,9 +229,21 @@ class RoutingController extends BaseController
         ])
             ->setPaper('a4', 'landscape');
 
-        $uploaded = app(StorageService::class)->uploadGeneratedPdf($pdf->output(), $filename, 'reports');
-
-        return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($uploaded['key']));
+        try {
+            $uploaded = app(StorageService::class)->uploadGeneratedPdf($pdf->output(), $filename, 'reports');
+            return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($uploaded['key']));
+        } catch (\Exception $e) {
+            // Fallback: if B2 upload fails, serve PDF directly
+            \Log::warning("B2 upload failed for report {$report}: {$e->getMessage()}");
+            
+            return response()
+                ->streamDownload(function () use ($pdf) {
+                    echo $pdf->output();
+                }, $filename, [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => 'attachment; filename="'.$filename.'"'
+                ]);
+        }
     }
 
     private function customerData(): array

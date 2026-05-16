@@ -241,22 +241,35 @@ class QuotationController extends Controller
             'download'
         );
 
-        $uploaded = app(StorageService::class)->uploadGeneratedPdf(
-            $pdf->output(),
-            app(PdfDocumentName::class)->quotationFilename($quotation),
-            'quotes'
-        );
+        try {
+            $uploaded = app(StorageService::class)->uploadGeneratedPdf(
+                $pdf->output(),
+                app(PdfDocumentName::class)->quotationFilename($quotation),
+                'quotes'
+            );
 
-        $quotation->update([
-            'quote_pdf_storage_key' => $uploaded['key'],
-            'quote_pdf_storage_file_id' => $uploaded['fileId'],
-            'quote_pdf_storage_url' => $uploaded['url'],
-            'pdf_storage_key' => $uploaded['key'],
-            'pdf_storage_file_id' => $uploaded['fileId'],
-            'pdf_storage_url' => $uploaded['url'],
-        ]);
+            $quotation->update([
+                'quote_pdf_storage_key' => $uploaded['key'],
+                'quote_pdf_storage_file_id' => $uploaded['fileId'],
+                'quote_pdf_storage_url' => $uploaded['url'],
+                'pdf_storage_key' => $uploaded['key'],
+                'pdf_storage_file_id' => $uploaded['fileId'],
+                'pdf_storage_url' => $uploaded['url'],
+            ]);
 
-        return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($uploaded['key']));
+            return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($uploaded['key']));
+        } catch (\Exception $e) {
+            // Fallback: if B2 upload fails, serve PDF directly
+            \Log::warning("B2 upload failed for quotation {$quotation->id}: {$e->getMessage()}");
+            
+            return response()
+                ->streamDownload(function () use ($pdf) {
+                    echo $pdf->output();
+                }, app(PdfDocumentName::class)->quotationFilename($quotation), [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => 'attachment; filename="'.app(PdfDocumentName::class)->quotationFilename($quotation).'"'
+                ]);
+        }
     }
 
     public function send(Request $request, Quotation $quotation, QuotationEmail $quotationEmail): RedirectResponse|JsonResponse

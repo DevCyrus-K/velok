@@ -440,17 +440,30 @@ class QuoteController extends Controller
 
     private function redirectToStoredQuotePdf(Quotation $quotation, string $contents, string $filename)
     {
-        $uploaded = app(StorageService::class)->uploadGeneratedPdf($contents, $filename, 'quotes');
-        $quotation->update([
-            'quote_pdf_storage_key' => $uploaded['key'],
-            'quote_pdf_storage_file_id' => $uploaded['fileId'],
-            'quote_pdf_storage_url' => $uploaded['url'],
-            'pdf_storage_key' => $uploaded['key'],
-            'pdf_storage_file_id' => $uploaded['fileId'],
-            'pdf_storage_url' => $uploaded['url'],
-        ]);
+        try {
+            $uploaded = app(StorageService::class)->uploadGeneratedPdf($contents, $filename, 'quotes');
+            $quotation->update([
+                'quote_pdf_storage_key' => $uploaded['key'],
+                'quote_pdf_storage_file_id' => $uploaded['fileId'],
+                'quote_pdf_storage_url' => $uploaded['url'],
+                'pdf_storage_key' => $uploaded['key'],
+                'pdf_storage_file_id' => $uploaded['fileId'],
+                'pdf_storage_url' => $uploaded['url'],
+            ]);
 
-        return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($uploaded['key']));
+            return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($uploaded['key']));
+        } catch (\Exception $e) {
+            // Fallback: if B2 upload fails, serve PDF directly
+            \Log::warning("B2 upload failed for quotation {$quotation->id}: {$e->getMessage()}");
+            
+            return response()
+                ->streamDownload(function () use ($contents) {
+                    echo $contents;
+                }, $filename, [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => 'attachment; filename="'.$filename.'"'
+                ]);
+        }
     }
 
     private function buildPdfData(?User $user, ?Quotation $quotation = null, ?string $signaturePath = null): array

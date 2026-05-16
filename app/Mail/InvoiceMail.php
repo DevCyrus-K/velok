@@ -88,16 +88,22 @@ class InvoiceMail extends Mailable implements ShouldQueue
                 'defaultFont' => 'Inter',
             ])
             ->output();
-        $uploaded = app(StorageService::class)->uploadGeneratedPdf($contents, $filename, 'invoices');
+        
+        try {
+            $uploaded = app(StorageService::class)->uploadGeneratedPdf($contents, $filename, 'invoices');
 
-        if (Schema::hasColumn('invoices', 'storage_key')) {
-            $this->invoice->update([
-                'storage_key' => $uploaded['key'],
-                'storage_url' => $uploaded['url'],
-                'pdf_storage_key' => $uploaded['key'],
-                'pdf_storage_file_id' => $uploaded['fileId'],
-                'pdf_storage_url' => $uploaded['url'],
-            ]);
+            if (Schema::hasColumn('invoices', 'storage_key')) {
+                $this->invoice->update([
+                    'storage_key' => $uploaded['key'],
+                    'storage_url' => $uploaded['url'],
+                    'pdf_storage_key' => $uploaded['key'],
+                    'pdf_storage_file_id' => $uploaded['fileId'],
+                    'pdf_storage_url' => $uploaded['url'],
+                ]);
+            }
+        } catch (\Exception $e) {
+            // Fallback: log error but continue with email
+            \Log::warning("B2 upload failed for invoice {$this->invoice->id} in email: {$e->getMessage()}");
         }
 
         return [

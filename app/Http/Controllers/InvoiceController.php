@@ -324,21 +324,34 @@ class InvoiceController extends Controller
             'download'
         );
 
-        $uploaded = app(StorageService::class)->uploadGeneratedPdf(
-            $pdf->output(),
-            $this->invoicePdfFilename($invoice),
-            'invoices'
-        );
+        try {
+            $uploaded = app(StorageService::class)->uploadGeneratedPdf(
+                $pdf->output(),
+                $this->invoicePdfFilename($invoice),
+                'invoices'
+            );
 
-        $invoice->update([
-            'storage_key' => $uploaded['key'],
-            'storage_url' => $uploaded['url'],
-            'pdf_storage_key' => $uploaded['key'],
-            'pdf_storage_file_id' => $uploaded['fileId'],
-            'pdf_storage_url' => $uploaded['url'],
-        ]);
+            $invoice->update([
+                'storage_key' => $uploaded['key'],
+                'storage_url' => $uploaded['url'],
+                'pdf_storage_key' => $uploaded['key'],
+                'pdf_storage_file_id' => $uploaded['fileId'],
+                'pdf_storage_url' => $uploaded['url'],
+            ]);
 
-        return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($uploaded['key']));
+            return redirect()->away(app(StorageService::class)->getPDFDownloadUrl($uploaded['key']));
+        } catch (\Exception $e) {
+            // Fallback: if B2 upload fails, serve PDF directly
+            \Log::warning("B2 upload failed for invoice {$invoice->id}: {$e->getMessage()}");
+            
+            return response()
+                ->streamDownload(function () use ($pdf) {
+                    echo $pdf->output();
+                }, $this->invoicePdfFilename($invoice), [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Disposition' => 'attachment; filename="'.$this->invoicePdfFilename($invoice).'"'
+                ]);
+        }
     }
 
     public function send(Request $request, Invoice $invoice): RedirectResponse|JsonResponse
