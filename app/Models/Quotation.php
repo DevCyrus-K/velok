@@ -174,6 +174,11 @@ class Quotation extends Model
         return $this->quoteRequest?->reference() ?: '#QT'.str_pad((string) $this->getKey(), 5, '0', STR_PAD_LEFT);
     }
 
+    public function reference(): string
+    {
+        return $this->quoteRequest?->reference() ?: '#QT'.str_pad((string) $this->getKey(), 5, '0', STR_PAD_LEFT);
+    }
+
     public function getCustomerNameAttribute(): ?string
     {
         return $this->quoteRequest?->full_name;
