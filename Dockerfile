@@ -70,8 +70,7 @@ RUN mkdir -p storage/framework/{sessions,views,cache,testing} storage/logs boots
     chmod -R a+rw storage bootstrap/cache
 
 # Cache Laravel configuration
-RUN php artisan config:cache && \
-    php artisan event:cache && \
+RUN php artisan event:cache && \
     php artisan route:cache && \
     php artisan view:cache
 
