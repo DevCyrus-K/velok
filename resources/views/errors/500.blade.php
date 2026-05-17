@@ -24,10 +24,10 @@
                                         </div>
                                         <h2 class="fs-22 lh-base fw-bold">Server Error</h2>
                                         <p class="text-muted mt-1 mb-4">Something went wrong on our end. <br /> Our team has been notified and will look into it shortly.</p>
-                                        <div class="text-center">
-                                            <a class="btn btn-danger" href="javascript:history.back()">Go Back</a>
-                                            <a class="btn btn-success ms-2" href="{{ route('second', ['dashboard', 'index'])}}">Back to Home</a>
-                                        </div>
+<div class="text-center">
+    <a class="btn btn-danger" href="javascript:history.back()">Go Back</a>
+    <a class="btn btn-success ms-2" href="{{ url('/') }}">Back to Home</a>
+</div>
                                     </div>
                                 </div>
                             </div>
